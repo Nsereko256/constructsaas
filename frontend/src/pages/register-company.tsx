@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type React from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { registerCompany } from '@/api/services';
 import { useAuth } from '@/auth/auth-context';
@@ -13,6 +14,8 @@ export function RegisterCompanyPage() {
   const [form, setForm] = useState({ company_name: '', first_name: '', last_name: '', username: '', email: '', password: '', password_confirm: '' });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
 
   function update(name: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [name]: value }));
@@ -55,8 +58,8 @@ export function RegisterCompanyPage() {
             </div>
             <Field label="Administrator username" required><input className={inputClass} autoComplete="username" value={form.username} onChange={(e) => update('username', e.target.value)} required /></Field>
             <Field label="Email" required><input className={inputClass} type="email" autoComplete="email" value={form.email} onChange={(e) => update('email', e.target.value)} required /></Field>
-            <Field label="Password" required><input className={inputClass} type="password" autoComplete="new-password" value={form.password} onChange={(e) => update('password', e.target.value)} required /></Field>
-            <Field label="Confirm password" required><input className={inputClass} type="password" autoComplete="new-password" value={form.password_confirm} onChange={(e) => update('password_confirm', e.target.value)} required /></Field>
+            <Field label="Password" required><div className="relative"><input className={`${inputClass} pr-12`} type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={form.password} onChange={(e) => update('password', e.target.value)} required /><button type="button" className="absolute inset-y-0 right-0 grid w-11 place-items-center text-muted hover:text-foreground" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></Field>
+            <Field label="Confirm password" required><div className="relative"><input className={`${inputClass} pr-12`} type={showPasswordConfirm ? 'text' : 'password'} autoComplete="new-password" value={form.password_confirm} onChange={(e) => update('password_confirm', e.target.value)} required /><button type="button" className="absolute inset-y-0 right-0 grid w-11 place-items-center text-muted hover:text-foreground" aria-label={showPasswordConfirm ? 'Hide password' : 'Show password'} onClick={() => setShowPasswordConfirm((visible) => !visible)}>{showPasswordConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></Field>
             {error ? <p className="text-sm font-semibold text-critical">{error}</p> : null}
             <Button type="submit" disabled={submitting}>{submitting ? 'Registering...' : 'Register company'}</Button>
           </form>

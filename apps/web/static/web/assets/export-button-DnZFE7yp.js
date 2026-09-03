@@ -1,1 +1,0 @@
-import{j as t,n as r}from"./index-B1f7CbsZ.js";import{D as n}from"./download-BpD8V442.js";function i({label:o="Export",...s}){return t.jsxs(r,{type:"button",variant:"ghost",size:"sm",...s,children:[t.jsx(n,{className:"h-3.5 w-3.5"}),o]})}export{i as E};

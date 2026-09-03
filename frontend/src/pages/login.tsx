@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Field, inputClass } from '@/components/ui/field';
 import { ApiError } from '@/api/client';
+import { Eye, EyeOff } from 'lucide-react';
 
 const schema = z.object({
   username: z.string().min(1, 'Username is required'),
@@ -21,6 +22,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const form = useForm<LoginForm>({ resolver: zodResolver(schema), defaultValues: { username: '', password: '' } });
   const [sessionConflict, setSessionConflict] = useState<LoginForm | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   if (auth.isAuthenticated) return <Navigate to="/dashboard" replace />;
 
@@ -69,7 +71,7 @@ export function LoginPage() {
               <input className={inputClass} autoComplete="username" {...form.register('username')} />
             </Field>
             <Field label="Password" required error={form.formState.errors.password?.message}>
-              <input className={inputClass} type="password" autoComplete="current-password" {...form.register('password')} />
+              <div className="relative"><input className={`${inputClass} pr-12`} type={showPassword ? 'text' : 'password'} autoComplete="current-password" {...form.register('password')} /><button type="button" className="absolute inset-y-0 right-0 grid w-11 place-items-center text-muted hover:text-foreground" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div>
             </Field>
             {form.formState.errors.root ? <p className="text-sm font-semibold text-critical">{form.formState.errors.root.message}</p> : null}
             {sessionConflict ? <div className="grid gap-3 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm"><div><strong>Already signed in elsewhere</strong><p className="mt-1 text-muted">This account has an active session on another device. Continue only if you want to sign it out there.</p></div><div className="flex flex-col gap-2 sm:flex-row"><Button type="button" onClick={() => void endOtherSession()}>Sign out other device and continue</Button><Button type="button" variant="ghost" onClick={() => setSessionConflict(null)}>Cancel</Button></div></div> : null}

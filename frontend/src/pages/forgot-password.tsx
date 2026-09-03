@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import type React from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { confirmPasswordReset, requestPasswordReset } from '@/api/services';
 import { Button } from '@/components/ui/button';
@@ -16,6 +18,8 @@ export function ForgotPasswordPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -56,8 +60,8 @@ export function ForgotPasswordPage() {
           </p>
           <form className="grid gap-4" onSubmit={submit}>
             {isConfirmation ? <>
-              <Field label="New password" required><input className={inputClass} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /></Field>
-              <Field label="Confirm new password" required><input className={inputClass} type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></Field>
+              <Field label="New password" required><div className="relative"><input className={`${inputClass} pr-12`} type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" className="absolute inset-y-0 right-0 grid w-11 place-items-center text-muted hover:text-foreground" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></Field>
+              <Field label="Confirm new password" required><div className="relative"><input className={`${inputClass} pr-12`} type={showConfirmPassword ? 'text' : 'password'} autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /><button type="button" className="absolute inset-y-0 right-0 grid w-11 place-items-center text-muted hover:text-foreground" aria-label={showConfirmPassword ? 'Hide password' : 'Show password'} onClick={() => setShowConfirmPassword((visible) => !visible)}>{showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></Field>
             </> : <Field label="Account email" required><input className={inputClass} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></Field>}
             {error ? <p className="text-sm font-semibold text-critical">{error}</p> : null}
             {message ? <p className="text-sm font-semibold text-primary">{message}</p> : null}
