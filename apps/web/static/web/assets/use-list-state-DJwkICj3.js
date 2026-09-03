@@ -1,1 +1,0 @@
-import{r as s}from"./index-Cd6NiMVC.js";function f(o={}){const[r,t]=s.useState(1),[a,u]=s.useState(""),[c,n]=s.useState(o);return{page:r,setPage:t,search:a,setSearch:e=>{u(e),t(1)},filters:c,setFilter:(e,i)=>{n(S=>({...S,[e]:i})),t(1)},query:{page:r,search:a,...c}}}export{f as u};
