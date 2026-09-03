@@ -27,7 +27,7 @@ from .services import TRANSITIONS, generate_work_order_number, transition_work_o
 
 WRITE_ROLES = {User.ROLE_ADMIN, User.ROLE_PROJECT_MANAGER, User.ROLE_SITE_ENGINEER}
 APPROVER_ROLES = {User.ROLE_ADMIN, User.ROLE_PROJECT_MANAGER}
-FINANCE_REVIEW_ROLES = {User.ROLE_ADMIN, User.ROLE_FINANCE_MANAGER}
+FINANCE_REVIEW_ROLES = {User.ROLE_ADMIN, User.ROLE_FINANCE_OFFICER, User.ROLE_FINANCE_MANAGER}
 
 
 def operational_export_response(*, queryset, kind, title, filename, columns, row_builder, totals):
@@ -82,6 +82,35 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         if not work_order.project_id:
             raise ValidationError({'project': 'Assign a project to this legacy work order before approving it.'})
         return self._transition(request, work_order, WorkOrder.STATUS_APPROVED, approval=True)
+
+    @action(detail=True, methods=['post'], url_path='submit-finance-review')
+    def submit_finance_review(self, request, pk=None):
+        work_order = self.get_object()
+        if request.user.role not in APPROVER_ROLES:
+            raise PermissionDenied('Only a project manager or admin can send work to Finance.')
+        if work_order.status != WorkOrder.STATUS_APPROVED:
+            raise ValidationError({'status': 'Finance review can be requested after technical approval.'})
+        recipients = User.objects.filter(
+            company=work_order.company,
+            role__in=[User.ROLE_FINANCE_OFFICER, User.ROLE_FINANCE_MANAGER, User.ROLE_ADMIN],
+            is_active=True,
+        ).exclude(pk=request.user.pk)
+        for recipient in recipients:
+            send_notification(
+                recipient,
+                Notification.TYPE_SYSTEM,
+                Notification.LEVEL_INFO,
+                f'{work_order.number}: finance review requested',
+                f'{work_order.title} is technically approved and awaiting Finance budget confirmation.',
+                f'/work-orders/{work_order.pk}',
+            )
+        WorkOrderAuditLog.objects.create(
+            work_order=work_order,
+            actor=request.user,
+            action='finance_review_requested',
+            message='Finance review requested.' if recipients.exists() else 'Finance review requested, but no active Finance recipient was found.',
+        )
+        return Response(self.get_serializer(work_order).data)
     @action(detail=True, methods=['post'])
     def assign(self, request, pk=None):
         if request.user.role not in APPROVER_ROLES: raise PermissionDenied('Only a project manager or admin can assign work.')

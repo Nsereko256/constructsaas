@@ -103,6 +103,7 @@ export const api = {
   workOrder: (id: number) => apiRequest<WorkOrder>(`/api/work-orders/${id}/`),
   saveWorkOrder: (body: Partial<WorkOrder>, id?: number) => apiRequest<WorkOrder>(id ? `/api/work-orders/${id}/` : '/api/work-orders/', { method: id ? 'PATCH' : 'POST', body }),
   workOrderTransition: (id: number, action: string, comments = '', details: Record<string, unknown> = {}) => apiRequest<WorkOrder>(`/api/work-orders/${id}/${action}/`, { method: 'POST', body: { comments, ...details } }),
+  submitWorkOrderFinanceReview: (id: number) => apiRequest<WorkOrder>(`/api/work-orders/${id}/submit-finance-review/`, { method: 'POST' }),
   assignWorkOrder: (id: number, body: Partial<WorkOrder>) => apiRequest<WorkOrder>(`/api/work-orders/${id}/assign/`, { method: 'POST', body }),
   acceptWorkOrderAssignment: (id: number, response = '') => apiRequest<WorkOrder>(`/api/work-orders/${id}/accept-assignment/`, { method: 'POST', body: { response } }),
   declineWorkOrderAssignment: (id: number, response: string) => apiRequest<WorkOrder>(`/api/work-orders/${id}/decline-assignment/`, { method: 'POST', body: { response } }),
