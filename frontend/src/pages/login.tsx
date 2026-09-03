@@ -80,6 +80,9 @@ export function LoginPage() {
           <a className="mt-4 block text-sm font-semibold text-primary" href="/forgot-password">
             Forgot password?
           </a>
+          <a className="mt-2 block text-sm font-semibold text-primary" href="/register-company">
+            Register a new company
+          </a>
         </Card>
       </section>
     </main>

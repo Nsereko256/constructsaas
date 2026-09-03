@@ -35,6 +35,43 @@ class CompanySerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class CompanyRegistrationSerializer(serializers.Serializer):
+    company_name = serializers.CharField(max_length=255)
+    username = serializers.CharField(max_length=150)
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, trim_whitespace=False)
+    password_confirm = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate_company_name(self, value):
+        if Company.objects.filter(name__iexact=value.strip()).exists():
+            raise serializers.ValidationError('A company with this name is already registered.')
+        return value.strip()
+
+    def validate_username(self, value):
+        if User.objects.filter(username__iexact=value.strip()).exists():
+            raise serializers.ValidationError('This username is already in use.')
+        return value.strip()
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError({'password_confirm': 'Passwords do not match.'})
+        validate_password(attrs['password'])
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop('password_confirm')
+        password = validated_data.pop('password')
+        company = Company.objects.create(name=validated_data.pop('company_name'))
+        return User.objects.create_user(
+            company=company,
+            role=User.ROLE_ADMIN,
+            password=password,
+            **validated_data,
+        )
+
+
 class WorkflowBadgesSerializer(serializers.Serializer):
     requests = serializers.IntegerField(min_value=0, read_only=True)
     purchase_orders = serializers.IntegerField(min_value=0, read_only=True)

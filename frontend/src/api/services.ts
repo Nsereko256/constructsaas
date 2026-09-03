@@ -49,6 +49,10 @@ export async function confirmPasswordReset(uid: string, token: string, password:
   });
 }
 
+export async function registerCompany(body: { company_name: string; username: string; first_name: string; last_name: string; email: string; password: string; password_confirm: string }) {
+  return apiRequest<{ detail: string; username: string }>('/api/register-company/', { method: 'POST', body });
+}
+
 export function logout() {
   const refresh = getTokens()?.refresh;
   if (refresh) {

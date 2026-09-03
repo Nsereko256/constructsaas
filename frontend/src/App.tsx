@@ -12,6 +12,7 @@ const InventoryMovementsPage = lazy(() => import('@/pages/inventory-movements').
 const SiteCustodyPage = lazy(() => import('@/pages/site-custody').then((module) => ({ default: module.SiteCustodyPage })));
 const BinLocationsPage = lazy(() => import('@/pages/bin-locations').then((module) => ({ default: module.BinLocationsPage })));
 const LoginPage = lazy(() => import('@/pages/login').then((module) => ({ default: module.LoginPage })));
+const RegisterCompanyPage = lazy(() => import('@/pages/register-company').then((module) => ({ default: module.RegisterCompanyPage })));
 const MessagesPage = lazy(() => import('@/pages/messages').then((module) => ({ default: module.MessagesPage })));
 const NotFoundPage = lazy(() => import('@/pages/not-found').then((module) => ({ default: module.NotFoundPage })));
 const NotificationsPage = lazy(() => import('@/pages/notifications').then((module) => ({ default: module.NotificationsPage })));
@@ -58,6 +59,7 @@ export function App() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/app/*" element={<Navigate to="/dashboard" replace />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register-company" element={<RegisterCompanyPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ForgotPasswordPage />} />
         <Route element={<ProtectedRoute />}>

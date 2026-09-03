@@ -110,6 +110,7 @@ from .serializers import (
     ChatMessageSerializer,
     ChatRoomSerializer,
     CompanySerializer,
+    CompanyRegistrationSerializer,
     DashboardResponseSerializer,
     MaterialSerializer,
     NotificationSerializer,
@@ -197,6 +198,21 @@ class PasswordResetRequestAPIView(APIView):
                 fail_silently=False,
             )
         return Response({'detail': 'If that email belongs to an active account, a reset link has been sent.'})
+
+
+class CompanyRegistrationAPIView(APIView):
+    permission_classes = [AllowAny]
+    serializer_class = CompanyRegistrationSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            user = serializer.save()
+        return Response(
+            {'detail': 'Company registered successfully.', 'username': user.username},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class PasswordResetConfirmAPIView(APIView):
