@@ -9,7 +9,7 @@ from rest_framework.exceptions import ValidationError
 from apps.accounts.models import User
 from apps.procurement.models import PurchaseOrder, PurchaseRequest
 
-from .configuration_services import record_finance_audit_event
+from .configuration_services import ensure_finance_settings, record_finance_audit_event
 from .models import (
     BudgetApproval,
     BudgetLine,
@@ -129,7 +129,12 @@ def project_budget_snapshot(project, *, legacy_actual=ZERO):
 
 
 def _settings(company):
-    return FinanceSettings.objects.select_for_update().get(company=company)
+    # Companies created before the finance signal was installed (or restored
+    # from an older database) may not have a settings row yet.  Approval is a
+    # core workflow, so initialize the safe defaults instead of returning a
+    # server error from `.get()`.
+    settings = ensure_finance_settings(company)
+    return FinanceSettings.objects.select_for_update().get(pk=settings.pk)
 
 
 def _check_maker_checker(settings, maker_id, checker):

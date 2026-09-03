@@ -206,6 +206,26 @@ class ProjectBudgetingApiTests(TestCase):
         self.assertEqual(approved.status_code, 200, approved.data)
         self.assertEqual(approved.data['status'], BudgetApproval.STATUS_OVERRIDDEN)
 
+    def test_finance_approval_recreates_missing_company_settings(self):
+        purchase_request = self.fixture.purchase_request(quantity=Decimal('2.00'))
+        self.client.force_authenticate(self.fixture.manager)
+        submitted = self.client.post(
+            f'/api/purchase-requests/{purchase_request.id}/submit-finance/',
+            {'comments': 'No approved project budget exists yet.'},
+            format='json',
+        )
+        self.assertEqual(submitted.status_code, 200, submitted.data)
+        FinanceSettings.objects.filter(company=self.fixture.company).delete()
+
+        self.client.force_authenticate(self.fixture.finance_manager)
+        approved = self.client.post(
+            f'/api/purchase-requests/{purchase_request.id}/finance-approve/',
+            {'override': True, 'comments': 'Authorized after finance settings recovery.'},
+            format='json',
+        )
+        self.assertEqual(approved.status_code, 200, approved.data)
+        self.assertTrue(FinanceSettings.objects.filter(company=self.fixture.company).exists())
+
     def test_approval_threshold_escalates_from_manager_to_admin(self):
         budget, line_ids = self._approved_budget(first='500000.00')
         settings = FinanceSettings.objects.get(company=self.fixture.company)
