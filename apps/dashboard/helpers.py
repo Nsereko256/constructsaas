@@ -88,10 +88,14 @@ def push_dashboard_update(company):
     if not channel_layer:
         return
 
-    async_to_sync(channel_layer.group_send)(
-        f'dashboard_company_{company.id}',
-        {
-            'type': 'dashboard_update',
-            'payload': get_dashboard_payload(company),
-        },
-    )
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f'dashboard_company_{company.id}',
+            {
+                'type': 'dashboard_update',
+                'payload': get_dashboard_payload(company),
+            },
+        )
+    except Exception:
+        # Realtime refresh is optional; it must not fail the business action.
+        pass

@@ -19,6 +19,8 @@ services:
           type: keyvalue
           name: constructsaas-redis
           property: connectionString
+      - key: DJANGO_CHANNEL_LAYER
+        value: inmemory
       - key: DJANGO_ALLOWED_HOSTS
         value: .onrender.com
       - key: FRONTEND_BASE_URL

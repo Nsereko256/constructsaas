@@ -109,8 +109,9 @@ WSGI_APPLICATION = 'construction_saas.wsgi.application'
 ASGI_APPLICATION = 'construction_saas.asgi.application'
 
 REDIS_URL = os.environ.get('REDIS_URL')
+CHANNEL_LAYER_MODE = os.environ.get('DJANGO_CHANNEL_LAYER', 'redis' if REDIS_URL else 'memory').lower()
 
-if REDIS_URL:
+if REDIS_URL and CHANNEL_LAYER_MODE not in {'memory', 'inmemory'}:
     CHANNEL_LAYERS = {
         'default': {
             'BACKEND': 'channels_redis.core.RedisChannelLayer',
@@ -120,7 +121,7 @@ if REDIS_URL:
         }
     }
 else:
-    if not DEBUG:
+    if not DEBUG and not REDIS_URL and CHANNEL_LAYER_MODE not in {'memory', 'inmemory'}:
         raise ImproperlyConfigured('REDIS_URL is required when DJANGO_DEBUG is false.')
     CHANNEL_LAYERS = {
         'default': {
