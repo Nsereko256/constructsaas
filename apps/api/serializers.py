@@ -985,10 +985,15 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
 
     def get_can_create_purchase_order(self, obj) -> bool:
         allowed_statuses = {PurchaseRequest.STATUS_APPROVED, PurchaseRequest.STATUS_PARTIAL_STOCK_ISSUED}
+        # A projectless request created by Procurement is a warehouse
+        # replenishment. It follows the PO -> Finance -> warehouse receipt
+        # route, so it must not be blocked by the project-only rule used for
+        # site demand.
+        is_warehouse_replenishment = obj.project_id is None and obj.requested_by_id and obj.requested_by.role == User.ROLE_PROCUREMENT_OFFICER
         return (
             obj.status in allowed_statuses
             and not self.get_has_purchase_order(obj)
-            and obj.project_id is not None
+            and (obj.project_id is not None or is_warehouse_replenishment)
             and any(PurchaseRequestItemSerializer(item, context=self.context).get_outstanding_quantity(item) > 0 for item in obj.items.all())
         )
 

@@ -1,1 +1,0 @@
-import{j as a,I as t,J as x}from"./index-Bd5gnQda.js";function l({open:o,title:n,children:s,onClose:e}){return a.jsx(t,{open:o,onOpenChange:r=>!r&&e(),children:a.jsx(x,{title:n,className:"max-w-3xl",children:s})})}export{l as F};

@@ -195,7 +195,7 @@ function PurchaseOrderModal({ open, onClose, initialPurchaseRequestId }: { open:
   const [deliveryDestination, setDeliveryDestination] = useState<'WAREHOUSE' | 'SITE'>('WAREHOUSE');
   const [purchaseRequest, setPurchaseRequest] = useState('');
   const [notes, setNotes] = useState('');
-  const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
+  const [expectedDeliveryDate, setExpectedDeliveryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [items, setItems] = useState<PurchaseOrderItemDraft[]>([]);
   const queryClient = useQueryClient();
   const toast = useToast();
