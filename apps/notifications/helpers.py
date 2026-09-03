@@ -94,14 +94,19 @@ def send_notification(user, notification_type, level, title, message, link=None)
 
     channel_layer = get_channel_layer()
     if channel_layer is not None:
-        async_to_sync(channel_layer.group_send)(
-            f'notify_user_{user.id}',
-            {
-                'type': 'notification.message',
-                'notification': serialize_notification(notification),
-                'unread_count': get_unread_count(user, company),
-            },
-        )
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f'notify_user_{user.id}',
+                {
+                    'type': 'notification.message',
+                    'notification': serialize_notification(notification),
+                    'unread_count': get_unread_count(user, company),
+                },
+            )
+        except Exception:
+            # Persisted in-app notifications must not roll back or turn a
+            # completed approval into a 500 when realtime delivery is down.
+            pass
 
     transaction.on_commit(lambda: send_web_push_notification(notification))
 

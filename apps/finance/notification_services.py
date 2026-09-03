@@ -9,7 +9,7 @@ from apps.notifications.models import Notification
 from .models import FinanceSettings, StaffAdvance, SupplierInvoice
 
 
-FINANCE_REVIEW_ROLES = {User.ROLE_FINANCE_MANAGER, User.ROLE_ADMIN}
+FINANCE_REVIEW_ROLES = {User.ROLE_FINANCE_OFFICER, User.ROLE_FINANCE_MANAGER, User.ROLE_ADMIN}
 FINANCE_OPERATIONS_ROLES = {
     User.ROLE_FINANCE_OFFICER,
     User.ROLE_FINANCE_MANAGER,
