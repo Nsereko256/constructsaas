@@ -1,0 +1,26 @@
+.venv*/
+__pycache__/
+*.pyc
+db.sqlite3
+.env
+*.log
+node_modules/
+staticfiles/
+*.tsbuildinfo
+# Local uploads and generated report output; demo database backups remain explicit.
+media/
+finance/expenses/
+finance/invoices/
+finance/reports/
+output/
+tmp/
+*.coverage
+# Local reference, demo, and presentation artifacts
+.demo-backups/
+.reference-zip/
+qa_*/
+work-orders/
+ConstructSaaS_Pitch_Kit/
+HSE SIGNAGE.docx
+~$*.docx
+.git-deploy/

@@ -1,0 +1,85 @@
+import { apiDownload, apiRequest, pageParams } from './client';
+import type {
+  Account, AuditEvent, BankStatementLine, BudgetCategory, CashAccount, CostCentre, Currency, ExpenseCategory, ExpenseClaim, InvoiceAttachment,
+  FinanceDashboard, FinanceReport, FinanceSettings, FinancialApproval, FiscalPeriod, Journal,
+  MatchRun, MonthEndChecklist, Payment, PaymentBatch, PettyCashTransaction, ProjectBudget, StaffAdvance, SupplierInvoice, TaxCode,
+} from './finance-types';
+import type { Paginated } from './types';
+
+const root = '/api/v1/finance';
+const list = <T>(path: string, params: Record<string, unknown> = {}) =>
+  apiRequest<Paginated<T>>(`${root}/${path}/${pageParams(params as Record<string, string | number | boolean | null | undefined>)}`);
+const command = <T>(path: string, body?: unknown) => apiRequest<T>(`${root}/${path}/`, { method: 'POST', body });
+
+export const financeApi = {
+  dashboard: (params = {}) => apiRequest<FinanceDashboard>(`${root}/dashboard/${pageParams(params)}`),
+  settings: () => list<FinanceSettings>('settings'),
+  updateSettings: (id: number, body: Partial<FinanceSettings>) => apiRequest<FinanceSettings>(`${root}/settings/${id}/`, { method: 'PATCH', body }),
+  currencies: (params = {}) => list<Currency>('currencies', params),
+  taxCodes: (params = {}) => list<TaxCode>('tax-codes', params),
+  costCentres: (params = {}) => list<CostCentre>('cost-centres', params),
+  budgetCategories: (params = {}) => list<BudgetCategory>('budget-categories', params),
+  budgets: (params = {}) => list<ProjectBudget>('budgets', params),
+  budget: (id: number) => apiRequest<ProjectBudget>(`${root}/budgets/${id}/`),
+  createBudget: (body: unknown) => apiRequest<ProjectBudget>(`${root}/budgets/`, { method: 'POST', body }),
+  budgetCommand: <T = ProjectBudget>(id: number, action: string, body?: unknown) => command<T>(`budgets/${id}/${action}`, body),
+  approvals: (params = {}) => list<FinancialApproval>('financial-approvals', params),
+  invoices: (params = {}) => list<SupplierInvoice>('supplier-invoices', params),
+  invoice: (id: number) => apiRequest<SupplierInvoice>(`${root}/supplier-invoices/${id}/`),
+  downloadInvoicePdf: (id: number, internalNumber: string) => apiDownload(`${root}/supplier-invoices/${id}/download-pdf/`, `${internalNumber}.pdf`),
+  downloadPayment: (id: number, kind: 'pdf' | 'xlsx', number: string) => apiDownload(`${root}/payments/${id}/download/${kind}/`, `${number}.${kind}`),
+  createInvoice: (body: unknown) => apiRequest<SupplierInvoice>(`${root}/supplier-invoices/`, { method: 'POST', body }),
+  updateInvoice: (id: number, body: unknown) => apiRequest<SupplierInvoice>(`${root}/supplier-invoices/${id}/`, { method: 'PATCH', body }),
+  deleteInvoice: (id: number) => apiRequest<void>(`${root}/supplier-invoices/${id}/`, { method: 'DELETE' }),
+  uploadInvoiceAttachment: (invoice: number, file: File) => { const body = new FormData(); body.append('invoice', String(invoice)); body.append('file', file); return apiRequest(`${root}/invoice-attachments/`, { method: 'POST', body }); },
+  invoiceAttachments: (params = {}) => list<InvoiceAttachment>('invoice-attachments', params),
+  downloadInvoiceAttachment: (id: number, filename: string) => apiDownload(`${root}/invoice-attachments/${id}/download/`, filename),
+  invoiceCommand: <T = SupplierInvoice>(id: number, action: string, body?: unknown) => command<T>(`supplier-invoices/${id}/${action}`, body),
+  matchResults: (id: number) => apiRequest<MatchRun[]>(`${root}/supplier-invoices/${id}/match-results/`),
+  payments: (params = {}) => list<Payment>('payments', params),
+  createPayment: (body: unknown) => apiRequest<Payment>(`${root}/payments/`, { method: 'POST', body }),
+  updatePayment: (id: number, body: unknown) => apiRequest<Payment>(`${root}/payments/${id}/`, { method: 'PATCH', body }),
+  deletePayment: (id: number) => apiRequest<void>(`${root}/payments/${id}/`, { method: 'DELETE' }),
+  paymentCommand: <T = Payment>(id: number, action: string, body?: unknown) => command<T>(`payments/${id}/${action}`, body),
+  paymentBatches: (params = {}) => list<PaymentBatch>('payment-batches', params),
+  createPaymentBatch: (body: unknown) => apiRequest<PaymentBatch>(`${root}/payment-batches/`, { method: 'POST', body }),
+  paymentBatchCommand: <T = PaymentBatch>(id: number, action: 'submit' | 'approve' | 'release' | 'cancel', body?: unknown) => command<T>(`payment-batches/${id}/${action}`, body),
+  downloadPaymentBatch: (id: number, kind: 'pdf' | 'xlsx', number: string) => apiDownload(`${root}/payment-batches/${id}/download/${kind}/`, `${number}.${kind}`),
+  expenseClaims: (params = {}) => list<ExpenseClaim>('expense-claims', params),
+  expenseCategories: (params = {}) => list<ExpenseCategory>('expense-categories', params),
+  createExpenseClaim: (body: unknown) => apiRequest<ExpenseClaim>(`${root}/expense-claims/`, { method: 'POST', body }),
+  updateExpenseClaim: (id: number, body: unknown) => apiRequest<ExpenseClaim>(`${root}/expense-claims/${id}/`, { method: 'PATCH', body }),
+  deleteExpenseClaim: (id: number) => apiRequest<void>(`${root}/expense-claims/${id}/`, { method: 'DELETE' }),
+  expenseCommand: <T = ExpenseClaim>(id: number, action: string, body?: unknown) => command<T>(`expense-claims/${id}/${action}`, body),
+  downloadExpenseClaim: (id: number, kind: 'pdf' | 'xlsx', number: string) => apiDownload(`${root}/expense-claims/${id}/download/${kind}/`, `${number}.${kind}`),
+  staffAdvances: (params = {}) => list<StaffAdvance>('staff-advances', params),
+  createStaffAdvance: (body: unknown) => apiRequest<StaffAdvance>(`${root}/staff-advances/`, { method: 'POST', body }),
+  updateStaffAdvance: (id: number, body: unknown) => apiRequest<StaffAdvance>(`${root}/staff-advances/${id}/`, { method: 'PATCH', body }),
+  deleteStaffAdvance: (id: number) => apiRequest<void>(`${root}/staff-advances/${id}/`, { method: 'DELETE' }),
+  advanceCommand: <T = StaffAdvance>(id: number, action: string, body?: unknown) => command<T>(`staff-advances/${id}/${action}`, body),
+  downloadStaffAdvance: (id: number, kind: 'pdf' | 'xlsx', number: string) => apiDownload(`${root}/staff-advances/${id}/download/${kind}/`, `${number}.${kind}`),
+  cashAccounts: (params = {}) => list<CashAccount>('cash-accounts', params),
+  replenishCashAccount: (id: number, body: unknown) => apiRequest<PettyCashTransaction>(`${root}/cash-accounts/${id}/replenish/`, { method: 'POST', body }),
+  statementLines: (params = {}) => list<BankStatementLine>('bank-statement-lines', params),
+  createStatementLine: (body: unknown) => apiRequest<BankStatementLine>(`${root}/bank-statement-lines/`, { method: 'POST', body }),
+  importStatementCsv: (cashAccount: number, file: File) => { const body = new FormData(); body.append('cash_account', String(cashAccount)); body.append('file', file); return apiRequest<{ created: number; skipped_duplicates: number; errors: Array<{ row: number; detail: string }> }>(`${root}/bank-statement-lines/import-csv/`, { method: 'POST', body }); },
+  statementLineCommand: <T = BankStatementLine>(id: number, action: 'match' | 'unmatch' | 'ignore', body?: unknown) => command<T>(`bank-statement-lines/${id}/${action}`, body),
+  downloadStatementLines: (kind: 'pdf' | 'xlsx', params = {}) => apiDownload(`${root}/bank-statement-lines/download/${kind}/${pageParams(params)}`, `bank-reconciliation-register.${kind}`),
+  pettyCash: (params = {}) => list<PettyCashTransaction>('petty-cash-transactions', params),
+  accounts: (params = {}) => list<Account>('chart-of-accounts', params),
+  fiscalPeriods: (params = {}) => list<FiscalPeriod>('fiscal-periods', params),
+  periodCommand: (id: number, action: 'open' | 'close') => command<FiscalPeriod>(`fiscal-periods/${id}/${action}`),
+  periodChecklist: (id: number) => apiRequest<MonthEndChecklist>(`${root}/fiscal-periods/${id}/checklist/`),
+  journals: (params = {}) => list<Journal>('journals', params),
+  createJournal: (body: unknown) => apiRequest<Journal>(`${root}/journals/`, { method: 'POST', body }),
+  journalCommand: <T = Journal>(id: number, action: string, body?: unknown) => command<T>(`journals/${id}/${action}`, body),
+  auditEvents: (params = {}) => list<AuditEvent>('audit-events', params),
+  report: (slug: string, params = {}) => apiRequest<FinanceReport>(`${root}/reports/${slug}/${pageParams(params)}`),
+  reportDownloadUrl: (slug: string, format: 'csv' | 'xlsx' | 'pdf', params = {}) => `${root}/reports/${slug}/download/${format}/${pageParams(params)}`,
+  downloadReport: (slug: string, format: 'csv' | 'xlsx' | 'pdf', params = {}) => apiDownload(`${root}/reports/${slug}/download/${format}/${pageParams(params)}`, `${slug}.${format}`),
+  createReference: <T>(path: string, body: unknown) => apiRequest<T>(`${root}/${path}/`, { method: 'POST', body }),
+};
+
+export function idempotencyKey(prefix: string) {
+  return `${prefix}-${crypto.randomUUID()}`;
+}

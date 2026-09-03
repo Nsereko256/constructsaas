@@ -1,0 +1,9 @@
+{
+  "name": "ConstructSaaS",
+  "short_name": "Construct",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#F7F8F6",
+  "theme_color": "#087A3E",
+  "description": "Construction inventory, procurement and project operations workspace"
+}

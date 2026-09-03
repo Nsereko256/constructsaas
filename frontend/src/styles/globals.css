@@ -1,0 +1,281 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  font-family: "Barlow", Aptos, "Segoe UI", sans-serif;
+  background: #f8f8f5;
+  color: #26313b;
+  font-variant-numeric: tabular-nums;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 92% -8%, rgb(63 111 159 / 7%), transparent 28rem),
+    radial-gradient(circle at -8% 30%, rgb(63 111 159 / 4%), transparent 24rem),
+    #f8f8f5;
+  line-height: 1.45;
+}
+
+/* A quiet scrollbar keeps long operational queues usable without competing
+   with the content. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(23 32 28 / 22%) transparent;
+}
+
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: rgb(23 32 28 / 22%); border-radius: 999px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* Keep native controls aligned with the component radius tokens. */
+button,
+input,
+select,
+textarea {
+  border-radius: 10px;
+}
+
+/* Inputs embedded inside search/select shells must not render a second box. */
+.inline-search-input {
+  width: auto !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Shared form language. Older screens that have not migrated to inputClass
+   still receive the same polished controls; checkboxes, radios, and files
+   intentionally keep their native affordances. */
+input:not([type='checkbox']):not([type='radio']):not([type='file']),
+select,
+textarea {
+  width: 100%;
+  border-color: rgb(215 221 215 / 90%);
+  background-color: #fff;
+  color: #17201c;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='file']),
+select {
+  min-height: 2.5rem;
+  padding: 0.5rem 0.75rem;
+}
+
+textarea {
+  min-height: 5.5rem;
+  resize: vertical;
+  padding: 0.625rem 0.75rem;
+  line-height: 1.45;
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='file']):hover,
+select:hover,
+textarea:hover {
+  border-color: rgb(102 112 106 / 70%);
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='file']):focus,
+select:focus,
+textarea:focus {
+  border-color: #2878d0;
+  outline: none;
+  box-shadow: 0 0 0 4px rgb(40 120 208 / 10%);
+}
+
+.field-label { min-height: 1.125rem; }
+.field-required {
+  border-radius: 999px;
+  background: rgb(220 60 60 / 9%);
+  color: #b52e2e;
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  padding: 0.2rem 0.38rem;
+  text-transform: uppercase;
+}
+.field-error { margin-top: -0.125rem; }
+.form-modal-body form.grid { padding-bottom: 0.125rem; }
+
+/* Make keyboard focus visible without adding visual noise to every control. */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid #2878d0;
+  outline-offset: 2px;
+}
+
+::placeholder { color: rgb(23 32 28 / 48%); }
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+/* Phone controls stay touch-friendly without making every form look oversized. */
+@media (max-width: 639px) {
+  button {
+    min-height: 44px;
+  }
+
+  input,
+  select,
+  textarea {
+    min-height: 38px;
+  }
+
+  .form-modal-body form.grid {
+    gap: 0.75rem;
+  }
+
+  .form-modal-body textarea {
+    min-height: 6rem;
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    min-height: 18px;
+    min-width: 18px;
+  }
+
+  /* Dense screens should scan cleanly without sacrificing 44px controls. */
+  table {
+    font-size: 0.8125rem;
+  }
+
+  th,
+  td {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+}
+
+/* Dense operational forms: less whitespace, but action buttons remain easy to tap. */
+form.grid {
+  gap: 0.625rem;
+}
+
+/* Shared operational surfaces: compact on desktop, comfortable on touch. */
+.surface-hover {
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.surface-hover:hover {
+  border-color: rgb(63 111 159 / 28%);
+  box-shadow: 0 10px 24px rgb(23 32 28 / 8%);
+}
+
+.app-sheen {
+  position: relative;
+  overflow: hidden;
+}
+
+.app-sheen::before {
+  position: absolute;
+  top: 0;
+  right: 12%;
+  width: 18rem;
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgb(63 111 159 / 55%), transparent);
+  content: '';
+  pointer-events: none;
+}
+
+.interactive-lift {
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.interactive-lift:hover {
+  transform: translateY(-1px);
+  border-color: rgb(63 111 159 / 24%);
+  box-shadow: 0 12px 28px rgb(23 32 28 / 9%);
+}
+
+.request-card {
+  border-left: 3px solid rgb(63 111 159 / 35%);
+  background: linear-gradient(105deg, rgb(63 111 159 / 2%), #fff 38%);
+}
+
+/* Consistent interactive treatment for links and icon-only controls. */
+a { text-underline-offset: 3px; }
+
+button:not(:disabled),
+a,
+select:not(:disabled) { -webkit-tap-highlight-color: transparent; }
+
+::selection {
+  background: rgb(63 111 159 / 18%);
+}
+
+h1, h2, h3, h4 { font-family: "Archivo", "Barlow", sans-serif; letter-spacing: -0.01em; }
+
+.panel {
+  border: 1px solid #DDE1E3;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(38 49 59 / 6%), 0 1px 3px rgb(38 49 59 / 4%);
+}
+
+/* Shared surface from the reference build. Keep cards quiet and consistent;
+   actions and status colors should carry the visual emphasis. */
+.card-surface {
+  border: 1px solid #DDE1E3;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(38 49 59 / 6%), 0 1px 3px rgb(38 49 59 / 4%);
+}
+
+.card-surface-interactive {
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.card-surface-interactive:hover {
+  border-color: rgb(63 111 159 / 28%);
+  background: #fbfcfb;
+  box-shadow: 0 4px 12px rgb(38 49 59 / 8%);
+}
+
+.num { font-variant-numeric: tabular-nums; }
+
+form textarea {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.notification-preview {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: constructsaas-web
+    runtime: python
+    buildCommand: pip install -r requirements.txt && npm --prefix frontend ci && npm --prefix frontend run build && python manage.py collectstatic --noinput
+    startCommand: python manage.py migrate --noinput && python -m daphne -b 0.0.0.0 -p $PORT construction_saas.asgi:application
+    healthCheckPath: /login
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: constructsaas-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: constructsaas-redis
+          property: connectionString
+      - key: DJANGO_ALLOWED_HOSTS
+        value: .onrender.com
+      - key: FRONTEND_BASE_URL
+        value: https://constructsaas-web.onrender.com
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        value: https://constructsaas-web.onrender.com
+      - key: DJANGO_DEFAULT_FROM_EMAIL
+        value: no-reply@constructsaas-web.onrender.com
+
+  - type: keyvalue
+    name: constructsaas-redis
+    ipAllowList: []
+
+databases:
+  - name: constructsaas-db
+    databaseName: constructsaas
+    user: constructsaas
