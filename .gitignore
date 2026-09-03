@@ -19,7 +19,7 @@ tmp/
 .demo-backups/
 .reference-zip/
 qa_*/
-work-orders/
+/work-orders/
 ConstructSaaS_Pitch_Kit/
 HSE SIGNAGE.docx
 ~$*.docx
