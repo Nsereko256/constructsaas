@@ -260,6 +260,9 @@ SIMPLE_JWT = {
 }
 
 if not DEBUG:
+    # Render terminates TLS at its proxy and forwards the original scheme.
+    # Trust this header so Django does not redirect an already-HTTPS request.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
