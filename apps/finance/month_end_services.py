@@ -2,7 +2,7 @@ from django.db.models import Q
 
 from apps.procurement.models import GoodsReceivedNote, SupplierClaim
 
-from .models import BankStatementLine, Payment, SupplierInvoice
+from .models import BankStatementLine, JournalEntry, Payment, SupplierInvoice
 
 
 def checklist(*, company, period):
@@ -31,12 +31,20 @@ def checklist(*, company, period):
     open_claims = SupplierClaim.objects.filter(
         company=company, created_at__date__gte=period.start_date, created_at__date__lte=period.end_date,
     ).exclude(status__in=[SupplierClaim.STATUS_RESOLVED, SupplierClaim.STATUS_CANCELLED])
+    draft_journals = JournalEntry.objects.filter(
+        company=company, date__gte=period.start_date, date__lte=period.end_date,
+        status=JournalEntry.STATUS_DRAFT,
+    )
     checks = [
         {'key': 'unmatched_grns', 'label': 'Received goods without a posted supplier invoice', 'count': unmatched_grns.count(), 'blocking': True},
         {'key': 'unmatched_invoices', 'label': 'Invoices awaiting matching, approval, or posting', 'count': unmatched_invoices.count(), 'blocking': True},
         {'key': 'pending_payments', 'label': 'Draft, submitted, or approved payments not yet posted', 'count': pending_payments.count(), 'blocking': True},
         {'key': 'unreconciled_cash', 'label': 'Unreconciled bank or cash statement lines', 'count': unreconciled.count(), 'blocking': True},
         {'key': 'open_supplier_claims', 'label': 'Unresolved supplier claims raised in the period', 'count': open_claims.count(), 'blocking': True},
+        # Draft journals are surfaced for month-end follow-up, but do not stop
+        # period closure by themselves; the posting guard still prevents them
+        # from being posted after the period is closed.
+        {'key': 'draft_journals', 'label': 'Draft journals dated in the period', 'count': draft_journals.count(), 'blocking': False},
     ]
     return {
         'period': {'id': period.pk, 'name': period.name, 'start_date': period.start_date, 'end_date': period.end_date},

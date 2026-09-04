@@ -386,6 +386,8 @@ def create_supplier_invoice(
         work_order = WorkOrder.objects.filter(pk=getattr(work_order, 'pk', work_order), company=company).first()
         if work_order is None or (po and work_order.project_id and work_order.project_id != po.project_id):
             raise ValidationError({'work_order': ['Work order must belong to the same project as the purchase order.']})
+        if not po and work_order.status not in {WorkOrder.STATUS_VERIFIED, WorkOrder.STATUS_CLOSED}:
+            raise ValidationError({'work_order': ['Direct invoices require a verified or closed work order.']})
     if work_order_site is not None:
         from apps.workorders.models import WorkOrderSite
         work_order_site = WorkOrderSite.objects.filter(
@@ -476,6 +478,10 @@ def submit_invoice(*, invoice, user):
     if locked.status != SupplierInvoice.STATUS_DRAFT:
         raise ValidationError({'status': ['Only draft invoices can be submitted.']})
     if not locked.purchase_order_id:
+        from .configuration_services import ensure_finance_settings
+        settings = ensure_finance_settings(user.company)
+        if settings.require_invoice_attachment and not locked.attachments.exists():
+            raise ValidationError({'attachments': ['Attach the work-order invoice or supporting document before submitting.']})
         locked.status = SupplierInvoice.STATUS_VERIFIED
         locked.submitted_at = timezone.now()
         _save(locked, update_fields=['status', 'submitted_at', 'updated_at'])
@@ -761,7 +767,9 @@ def post_invoice(*, invoice, user, idempotency_key=''):
         company=user.company, event_type=PostingRule.EVENT_SUPPLIER_INVOICE,
     )
     debit_account = rule_debit
-    if not locked.purchase_order_id or locked.purchase_order.delivery_destination != PurchaseOrder.DELIVERY_WAREHOUSE:
+    if not locked.purchase_order_id:
+        debit_account = resolve_mapping(company=user.company, mapping_key='PROJECT_SERVICE_COST')
+    elif locked.purchase_order.delivery_destination != PurchaseOrder.DELIVERY_WAREHOUSE:
         debit_account = resolve_mapping(company=user.company, mapping_key='PROJECT_MATERIAL_COST')
     base_total = base_money(locked.total_amount, locked.exchange_rate)
     base_tax = base_money(locked.tax_amount, locked.exchange_rate)

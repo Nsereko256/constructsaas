@@ -583,7 +583,9 @@ class SupplierInvoiceSerializer(CompanyScopedSerializer):
             raise serializers.ValidationError({
                 'status': 'Financial workflow status can only change through a dedicated action.',
             })
-        if not attrs.get('purchase_order') and not attrs.get('work_order'):
+        purchase_order = attrs.get('purchase_order', getattr(self.instance, 'purchase_order', None))
+        work_order = attrs.get('work_order', getattr(self.instance, 'work_order', None))
+        if not purchase_order and not work_order:
             raise serializers.ValidationError({'purchase_order': 'Select a purchase order or a work order for a direct service invoice.'})
         return super().validate(attrs)
 

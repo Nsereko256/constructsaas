@@ -69,6 +69,7 @@ MAPPING_SYSTEM_KEYS = {
     'INVENTORY_WRITE_OFF': Account.SYSTEM_INVENTORY_WRITE_OFF,
     'LANDED_COST_CLEARING': Account.SYSTEM_LANDED_COST_CLEARING,
     'PROJECT_EXPENSE': Account.SYSTEM_PROJECT_COST,
+    'PROJECT_SERVICE_COST': Account.SYSTEM_PROJECT_COST,
     'PETTY_CASH': Account.SYSTEM_CASH,
     'REALIZED_FX_GAIN_LOSS': Account.SYSTEM_REALIZED_FX,
     'RECOVERABLE_VAT': Account.SYSTEM_RECOVERABLE_VAT,
@@ -193,7 +194,7 @@ def _line_totals(entry):
 
 @transaction.atomic
 def create_draft_journal(*, user, entry_date, description, lines, source_reference='', client_uuid=None):
-    period = _period_for_date(company=user.company, entry_date=entry_date, lock=True)
+    period = _require_open_period(company=user.company, entry_date=entry_date)
     entry = _save(JournalEntry(
         company=user.company,
         number=_number(user.company),
@@ -228,7 +229,7 @@ def update_draft_journal(*, journal, user, values, lines=None):
         raise ValidationError({'status': ['Only draft journals can be edited.']})
     for field, value in values.items():
         setattr(entry, field, value)
-    entry.fiscal_period = _period_for_date(company=user.company, entry_date=entry.date, lock=True)
+    entry.fiscal_period = _require_open_period(company=user.company, entry_date=entry.date)
     _save(entry)
     if lines is not None:
         entry.lines.all().delete()

@@ -159,6 +159,8 @@ class GeneralLedgerApiTests(TestCase):
 
     def test_closed_period_blocks_posting_and_can_be_reopened(self):
         journal_id = self.create_draft()
+        self.assertEqual(self.post_draft(journal_id).status_code, 200)
+        journal_id = self.create_draft()
         period = FiscalPeriod.objects.get(
             company=self.fixture.company,
             start_date__lte=timezone.localdate(),

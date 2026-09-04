@@ -121,11 +121,13 @@ class FinanceApiTests(TestCase):
         )
         self.assertEqual(create.status_code, 201, create.data)
         approval_id = create.data['id']
-        blocked = self.client.post(
+        pending_po = self.client.post(
             f'/api/purchase-orders/from-pr/{purchase_request.id}/',
             {'supplier': self.fixture.supplier.id}, format='json',
         )
-        self.assertEqual(blocked.status_code, 400)
+        # Procurement may prepare a quoted draft PO before Finance review;
+        # approval, dispatch, and receipt remain gated on the budget decision.
+        self.assertEqual(pending_po.status_code, 201, pending_po.data)
         self.assertEqual(
             self.client.post(f'/api/v1/finance/budget-approvals/{approval_id}/submit/').status_code,
             200,
