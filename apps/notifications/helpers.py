@@ -1,4 +1,5 @@
 import asyncio
+from threading import Thread
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -18,6 +19,15 @@ async def _bounded_group_send(channel_layer, group_name, message):
         await asyncio.wait_for(channel_layer.group_send(group_name, message), timeout=1.0)
     except Exception:
         return
+
+
+def _dispatch_realtime(channel_layer, group_name, message):
+    """Deliver realtime updates outside the request/transaction thread."""
+    Thread(
+        target=async_to_sync(_bounded_group_send),
+        args=(channel_layer, group_name, message),
+        daemon=True,
+    ).start()
 
 
 def send_web_push_notification(notification):
@@ -106,7 +116,7 @@ def send_notification(user, notification_type, level, title, message, link=None)
     channel_layer = get_channel_layer()
     if channel_layer is not None:
         try:
-            async_to_sync(_bounded_group_send)(
+            _dispatch_realtime(
                 channel_layer,
                 f'notify_user_{user.id}',
                 {
