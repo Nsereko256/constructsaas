@@ -1818,9 +1818,13 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='confirm-dispatch')
     def confirm_dispatch(self, request, pk=None):
         with transaction.atomic():
-            purchase_order = self.get_queryset().select_for_update().filter(pk=pk).first()
-            if purchase_order is None:
+            visible_purchase_order = self.get_queryset().filter(pk=pk).first()
+            if visible_purchase_order is None:
                 return Response({'detail': 'Purchase order not found.'}, status=status.HTTP_404_NOT_FOUND)
+            # Lock the PO without the nullable joins from the visibility queryset.
+            purchase_order = PurchaseOrder.objects.select_for_update().get(
+                pk=visible_purchase_order.pk, company=request.user.company,
+            )
             if purchase_order.delivery_destination != PurchaseOrder.DELIVERY_SITE:
                 return Response(
                     {'detail': 'Dispatch confirmation is only used for direct-to-site purchase orders.'},
@@ -2078,9 +2082,13 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def receive(self, request, pk=None):
         with transaction.atomic():
-            purchase_order = self.get_queryset().select_for_update().filter(pk=pk).first()
-            if purchase_order is None:
+            visible_purchase_order = self.get_queryset().filter(pk=pk).first()
+            if visible_purchase_order is None:
                 return Response({'detail': 'Purchase order not found.'}, status=status.HTTP_404_NOT_FOUND)
+            # Lock the PO without the nullable joins from the visibility queryset.
+            purchase_order = PurchaseOrder.objects.select_for_update().get(
+                pk=visible_purchase_order.pk, company=request.user.company,
+            )
             from apps.procurement.amendments import PurchaseOrderAmendment
             if purchase_order.amendments.filter(status=PurchaseOrderAmendment.STATUS_SUBMITTED).exists():
                 return Response({'detail': 'Finance must decide the pending PO amendment before receipt can be recorded.'}, status=status.HTTP_400_BAD_REQUEST)
