@@ -634,7 +634,7 @@ def approve_purchase_order(*, purchase_order, user):
     approval = BudgetApproval.objects.select_for_update().filter(
         purchase_request_id=po.purchase_request_id,
         company=user.company,
-    ).select_related('project_budget', 'budget_line').first()
+    ).first()
     if approval and approval.project_budget_id:
         if approval.status not in {BudgetApproval.STATUS_APPROVED, BudgetApproval.STATUS_OVERRIDDEN}:
             raise ValidationError({'purchase_request': ['The linked request has not passed finance approval.']})
