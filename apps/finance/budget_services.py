@@ -514,12 +514,25 @@ def review_purchase_request_finance(
     if decision == BudgetApproval.STATUS_OVERRIDDEN:
         from .notification_services import purchase_order_exceeding_budget
 
-        transaction.on_commit(lambda: purchase_order_exceeding_budget(approval))
+        transaction.on_commit(lambda: _safe_budget_override_notification(approval))
     elif decision == BudgetApproval.STATUS_RETURNED:
         from .notification_services import purchase_request_returned_for_correction
 
         transaction.on_commit(lambda: purchase_request_returned_for_correction(approval))
     return approval
+
+
+def _safe_budget_override_notification(approval):
+    """Keep optional follow-up notifications from failing a completed approval."""
+    try:
+        from .notification_services import purchase_order_exceeding_budget
+
+        purchase_order_exceeding_budget(approval)
+    except Exception:
+        # The approval and its audit record are already committed. Notification
+        # delivery is auxiliary and must never turn that successful action into
+        # a server error.
+        return
 
 
 def _po_total(po):
