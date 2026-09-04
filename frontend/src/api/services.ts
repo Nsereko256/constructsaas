@@ -55,10 +55,9 @@ export async function registerCompany(body: { company_name: string; username: st
 
 export async function logout() {
   const refresh = getTokens()?.refresh;
-  if (refresh) {
-    await apiRequest('/api/token/logout/', { method: 'POST', body: { refresh }, keepalive: true }).catch(() => undefined);
-  }
+  const request = refresh ? apiRequest('/api/token/logout/', { method: 'POST', body: { refresh }, keepalive: true }).catch(() => undefined) : Promise.resolve();
   clearTokens();
+  await request;
 }
 
 export const api = {
