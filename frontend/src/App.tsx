@@ -17,6 +17,7 @@ const MessagesPage = lazy(() => import('@/pages/messages').then((module) => ({ d
 const NotFoundPage = lazy(() => import('@/pages/not-found').then((module) => ({ default: module.NotFoundPage })));
 const NotificationsPage = lazy(() => import('@/pages/notifications').then((module) => ({ default: module.NotificationsPage })));
 const ProcurementRequestsPage = lazy(() => import('@/pages/procurement-requests').then((module) => ({ default: module.ProcurementRequestsPage })));
+const ProcurementPage = lazy(() => import('@/pages/procurement').then((module) => ({ default: module.ProcurementPage })));
 const ProcurementRfqsPage = lazy(() => import('@/pages/procurement-rfqs').then((module) => ({ default: module.ProcurementRfqsPage })));
 const PurchaseOrdersPage = lazy(() => import('@/pages/purchase-orders').then((module) => ({ default: module.PurchaseOrdersPage })));
 const SupplierClaimsPage = lazy(() => import('@/pages/supplier-claims').then((module) => ({ default: module.SupplierClaimsPage })));
@@ -73,6 +74,7 @@ export function App() {
             <Route path="/work-orders/progress" element={<WorkOrderProgressPage />} />
             <Route path="/work-orders/invoices" element={<WorkOrderInvoicesPage />} />
             <Route path="/work-orders/:workOrderId" element={<WorkOrdersPage />} />
+            <Route path="/procurement" element={<ProcurementPage />} />
             <Route path="/procurement/requests" element={<ProcurementRequestsPage />} />
             <Route path="/procurement/rfqs" element={<ProcurementRfqsPage />} />
             <Route path="/procurement/purchase-orders" element={<PurchaseOrdersPage />} />
