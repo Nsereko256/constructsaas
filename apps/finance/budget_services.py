@@ -695,9 +695,11 @@ def cancel_purchase_order(*, purchase_order, user, comments):
 @transaction.atomic
 def convert_invoice_commitment_to_actual(*, invoice, user):
     po = invoice.purchase_order
+    # Do not join nullable budget relations while locking. PostgreSQL rejects
+    # FOR UPDATE queries that include nullable-side outer joins.
     approval = BudgetApproval.objects.select_for_update().filter(
         purchase_request_id=po.purchase_request_id, company=invoice.company,
-    ).select_related('project_budget', 'budget_line').first()
+    ).first()
     if not approval or not approval.budget_line_id:
         return
     budget = ProjectBudget.objects.select_for_update().get(pk=approval.project_budget_id, company=invoice.company)
