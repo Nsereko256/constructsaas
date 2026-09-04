@@ -326,7 +326,8 @@ def reject_payment(*, payment, user, reason):
 
 @transaction.atomic
 def post_payment(*, payment, user, idempotency_key):
-    locked = Payment.objects.select_for_update().select_related('source_account', 'currency').get(
+    # Lock the voucher without joining nullable account/currency relations.
+    locked = Payment.objects.select_for_update().get(
         pk=payment.pk, company=user.company,
     )
     existing = JournalEntry.objects.filter(
@@ -338,7 +339,7 @@ def post_payment(*, payment, user, idempotency_key):
         raise ValidationError({'status': ['Only approved payments can be posted.']})
     if PaymentApproval.objects.filter(company=user.company, idempotency_key=f'post:{idempotency_key}').exists():
         raise ValidationError({'idempotency_key': ['This posting key has already been used.']})
-    allocations = list(locked.allocations.select_for_update().select_related('invoice__project'))
+    allocations = list(locked.allocations.select_for_update())
     from .ledger_services import resolve_mapping, resolve_rule_accounts
     from .models import PostingRule
 
