@@ -493,6 +493,14 @@ def review_purchase_request_finance(
     line = None
     if approval.budget_line_id:
         line = BudgetLine.objects.select_for_update().get(pk=approval.budget_line_id, company=user.company)
+    if decision == BudgetApproval.STATUS_APPROVED:
+        from .approval_routing_services import require_approver
+        require_approver(
+            user=user, company=approval.company,
+            document_type='PURCHASE_REQUEST', amount=approval.requested_amount,
+            project=request.project,
+            budget_category=line.category if line else None,
+        )
     requires_override = line is None or approval.requested_amount > budget_line_summary(line)['available_balance']
     if decision == BudgetApproval.STATUS_APPROVED and requires_override:
         if not override:
