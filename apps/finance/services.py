@@ -350,7 +350,9 @@ def create_supplier_invoice(
             ):
                 raise ValidationError({'idempotency_key': ['This key was already used for a different invoice.']})
             return existing
-    po = PurchaseOrder.objects.select_for_update().select_related('supplier', 'project').get(
+    # Lock the PO without joining nullable relations. PostgreSQL rejects
+    # FOR UPDATE when the generated query includes a nullable-side outer join.
+    po = PurchaseOrder.objects.select_for_update().get(
         pk=purchase_order.pk,
         company=company,
     )
