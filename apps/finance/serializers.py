@@ -354,7 +354,11 @@ class BudgetTransactionSerializer(serializers.ModelSerializer):
 
 class FinancialApprovalSerializer(serializers.ModelSerializer):
     purchase_request_number = serializers.CharField(source='purchase_request.number', read_only=True)
-    project_name = serializers.CharField(source='purchase_request.project.name', read_only=True)
+    project_name = serializers.SerializerMethodField()
+
+    def get_project_name(self, obj):
+        project = getattr(obj.purchase_request, 'project', None)
+        return project.name if project else ''
 
     class Meta:
         model = FinancialApproval
