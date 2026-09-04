@@ -695,18 +695,36 @@ def cancel_purchase_order(*, purchase_order, user, comments):
 @transaction.atomic
 def convert_invoice_commitment_to_actual(*, invoice, user):
     po = invoice.purchase_order
-    # Direct work-order invoices have no purchase-order commitment to convert.
     if po is None:
-        return
-    # Do not join nullable budget relations while locking. PostgreSQL rejects
-    # FOR UPDATE queries that include nullable-side outer joins.
-    approval = BudgetApproval.objects.select_for_update().filter(
-        purchase_request_id=po.purchase_request_id, company=invoice.company,
-    ).first()
-    if not approval or not approval.budget_line_id:
-        return
-    budget = ProjectBudget.objects.select_for_update().get(pk=approval.project_budget_id, company=invoice.company)
-    line = BudgetLine.objects.select_for_update().get(pk=approval.budget_line_id, company=invoice.company)
+        # Direct work-order invoices can still hit project actuals when Finance
+        # has supplied a cost centre that maps unambiguously to one approved
+        # project-budget line. Never guess when the mapping is ambiguous.
+        project_id = invoice.project_id or getattr(invoice.work_order, 'project_id', None)
+        if not project_id or not invoice.cost_centre_id:
+            return
+        candidates = list(BudgetLine.objects.select_for_update().filter(
+            company=invoice.company,
+            budget__project_id=project_id,
+            budget__status=ProjectBudget.STATUS_APPROVED,
+            category__cost_centre_id=invoice.cost_centre_id,
+        ).select_related('budget'))
+        if len(candidates) != 1:
+            if len(candidates) > 1:
+                raise ValidationError({'cost_centre': ['The cost centre maps to multiple approved budget lines; select a more specific budget allocation before posting.']})
+            return
+        budget = candidates[0].budget
+        line = candidates[0]
+        approval = None
+    else:
+        # Do not join nullable budget relations while locking. PostgreSQL rejects
+        # FOR UPDATE queries that include nullable-side outer joins.
+        approval = BudgetApproval.objects.select_for_update().filter(
+            purchase_request_id=po.purchase_request_id, company=invoice.company,
+        ).first()
+        if not approval or not approval.budget_line_id:
+            return
+        budget = ProjectBudget.objects.select_for_update().get(pk=approval.project_budget_id, company=invoice.company)
+        line = BudgetLine.objects.select_for_update().get(pk=approval.budget_line_id, company=invoice.company)
     if BudgetTransaction.objects.filter(
         company=invoice.company, idempotency_key=f'invoice:{invoice.pk}:actual',
     ).exists():
@@ -718,7 +736,7 @@ def convert_invoice_commitment_to_actual(*, invoice, user):
     invoice_base_total = base_money(invoice.total_amount, invoice.exchange_rate)
     release = min(open_amount, invoice_base_total)
     final_available = money(budget_line_summary(line)['available_balance'] + release - invoice_base_total)
-    if final_available < ZERO and approval.status != BudgetApproval.STATUS_OVERRIDDEN:
+    if final_available < ZERO and (approval is None or approval.status != BudgetApproval.STATUS_OVERRIDDEN):
         raise ValidationError({'total_amount': ['Posting this invoice would exceed the approved budget.']})
     if release > ZERO:
         _transaction(
@@ -765,7 +783,7 @@ def reverse_invoice_actual(*, invoice, user):
     released = BudgetTransaction.objects.filter(
         company=invoice.company, idempotency_key=f'invoice:{invoice.pk}:commitment-release',
     ).first()
-    if released and invoice.purchase_order.status != PurchaseOrder.STATUS_CANCELLED:
+    if released and (not invoice.purchase_order_id or invoice.purchase_order.status != PurchaseOrder.STATUS_CANCELLED):
         _transaction(
             company=invoice.company, budget=budget, line=line,
             transaction_type=BudgetTransaction.TYPE_COMMITMENT, amount=-released.amount, user=user,
