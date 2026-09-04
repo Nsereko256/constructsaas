@@ -162,6 +162,14 @@ def review_budget_approval(*, approval, user, approve, reason=''):
     )
     if locked.status != BudgetApproval.STATUS_SUBMITTED:
         raise ValidationError({'status': ['Only submitted budget approvals can be reviewed.']})
+    if approve:
+        from .approval_routing_services import require_approver
+        require_approver(
+            user=user, company=locked.company,
+            document_type='BUDGET', amount=locked.requested_amount,
+            project=locked.purchase_request.project,
+            budget_category=locked.budget_line.category if locked.budget_line_id else None,
+        )
     reason = reason.strip()
     if not approve and not reason:
         raise ValidationError({'reason': ['A rejection reason is required.']})
@@ -688,6 +696,12 @@ def approve_invoice(*, invoice, user):
     settings = FinanceSettings.objects.get(company=user.company)
     if settings.maker_checker_enforced and locked.created_by_id == user.id:
         raise ValidationError({'non_field_errors': ['Maker-checker policy prevents the preparer approving this invoice.']})
+    from .approval_routing_services import require_approver
+    require_approver(
+        user=user, company=locked.company,
+        document_type='SUPPLIER_INVOICE', amount=locked.total_amount,
+        project=locked.project,
+    )
     latest_run = locked.match_runs.first()
     if latest_run:
         if latest_run.status == latest_run.STATUS_BLOCKED:

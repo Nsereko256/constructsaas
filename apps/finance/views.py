@@ -137,6 +137,7 @@ from .permissions import (
     FinanceFoundationPermission,
     FinancePreparationPermission,
     FinanceProcurementWritePermission,
+    FinanceReviewPermission,
 )
 from .serializers import (
     AccountSerializer,
@@ -525,9 +526,9 @@ class SupplierInvoiceViewSet(DraftDeletionMixin, CompanyScopedMixin, viewsets.Mo
             permission = FinanceCompanyPermission
         elif self.action in {'approve_exception', 'reject_exception'}:
             permission = FinanceManagerOnlyPermission
-        elif self.action in {
-            'approve', 'reject', 'post', 'pay', 'reverse', 'create_credit_note',
-        }:
+        elif self.action in {'approve', 'reject'}:
+            permission = FinanceReviewPermission
+        elif self.action in {'post', 'pay', 'reverse', 'create_credit_note'}:
             permission = FinanceAdminPermission
         else:
             # Invoice capture, matching and submission are finance preparation
@@ -780,7 +781,9 @@ class PaymentViewSet(DraftDeletionMixin, CompanyScopedMixin, viewsets.ModelViewS
     def get_permissions(self):
         if self.action in {'list', 'retrieve', 'voucher', 'download'}:
             permission = FinanceCompanyPermission
-        elif self.action in {'approve', 'reject', 'post', 'reverse'}:
+        elif self.action in {'approve', 'reject'}:
+            permission = FinanceReviewPermission
+        elif self.action in {'post', 'reverse'}:
             permission = FinanceAdminPermission
         else:
             permission = FinancePreparationPermission

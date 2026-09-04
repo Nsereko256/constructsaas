@@ -274,6 +274,12 @@ def approve_payment(*, payment, user, authorize_advance=False, advance_reason=''
     settings = FinanceSettings.objects.select_for_update().get(company=user.company)
     if settings.maker_checker_enforced and locked.created_by_id == user.pk:
         raise ValidationError({'non_field_errors': ['Maker-checker policy prevents self-approval.']})
+    from .approval_routing_services import require_approver
+    require_approver(
+        user=user, company=locked.company,
+        document_type='PAYMENT', amount=locked.amount,
+        project=locked.invoice.project if locked.invoice_id else None,
+    )
     allocations = list(locked.allocations.select_for_update().select_related('invoice').order_by('invoice_id'))
     invoices = {invoice.pk: invoice for invoice in SupplierInvoice.objects.select_for_update().filter(
         pk__in=[allocation.invoice_id for allocation in allocations], company=user.company,

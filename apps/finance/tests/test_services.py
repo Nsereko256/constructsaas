@@ -9,7 +9,7 @@ from apps.procurement.models import PurchaseRequest
 
 from .. import services
 from ..factories import FinanceFixtureFactory
-from ..models import BudgetApproval, JournalEntry, Payment, ProjectCost, SupplierInvoice, ThreeWayMatch
+from ..models import ApprovalMatrixRule, BudgetApproval, JournalEntry, Payment, ProjectCost, SupplierInvoice, ThreeWayMatch
 
 
 class FinanceServiceTests(TestCase):
@@ -56,6 +56,26 @@ class FinanceServiceTests(TestCase):
         self.assertEqual(result.status, ThreeWayMatch.STATUS_EXCEPTION)
         self.assertEqual(invoice.status, SupplierInvoice.STATUS_SUBMITTED)
         self.assertTrue(result.exceptions)
+
+    def test_invoice_approval_uses_configured_matrix_role(self):
+        po, po_item = self.fixture.received_purchase_order()
+        invoice = services.create_supplier_invoice(
+            company=self.fixture.company, user=self.fixture.procurement,
+            **self.fixture.invoice_payload(po, po_item, idempotency_key='matrix-invoice'),
+        )
+        services.submit_invoice(invoice=invoice, user=self.fixture.procurement)
+        services.match_invoice(invoice=invoice, user=self.fixture.procurement, idempotency_key='matrix-match')
+        ApprovalMatrixRule.objects.create(
+            company=self.fixture.company,
+            document_type=ApprovalMatrixRule.DOCUMENT_INVOICE,
+            stage=ApprovalMatrixRule.STAGE_FINAL,
+            approver_role=self.fixture.finance_manager.role,
+            project=self.fixture.project,
+            minimum_amount=Decimal('0.00'),
+        )
+        with self.assertRaises(DjangoValidationError):
+            services.approve_invoice(invoice=invoice, user=self.fixture.finance_officer)
+        services.approve_invoice(invoice=invoice, user=self.fixture.finance_manager)
 
     def test_post_payment_and_reversals_are_balanced_and_idempotent(self):
         invoice = self._posted_invoice()
