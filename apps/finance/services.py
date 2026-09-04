@@ -729,7 +729,9 @@ def _create_journal(*, company, user, date, description, source_type, source_obj
 
 @transaction.atomic
 def post_invoice(*, invoice, user, idempotency_key=''):
-    locked = SupplierInvoice.objects.select_for_update().select_related('purchase_order').get(
+    # Keep the posting lock query free of joins; related objects are loaded
+    # lazily below and this remains safe on PostgreSQL deployments.
+    locked = SupplierInvoice.objects.select_for_update().get(
         pk=invoice.pk,
         company=user.company,
     )
