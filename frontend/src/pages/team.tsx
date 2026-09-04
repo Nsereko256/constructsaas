@@ -16,6 +16,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { Field, inputClass } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
 import { useListState } from '@/hooks/use-list-state';
+import { WorkspaceTabs } from '@/components/common/workspace-hub';
 
 const roles = Object.keys(ROLE_LABELS) as Role[];
 
@@ -47,6 +48,7 @@ export function TeamPage() {
 
   return (
     <div className="grid gap-4">
+      <WorkspaceTabs links={[{ href: '/team', label: 'Team access' }, { href: '/team/project-staffing', label: 'Project staffing' }]} />
       <PageToolbar title="Team access" subtitle="Admins grant access to every role in the company." search={list.search} onSearch={list.setSearch}>
         <select className={inputClass} value={list.filters.role} onChange={(event) => list.setFilter('role', event.target.value)}>
           <option value="">All roles</option>

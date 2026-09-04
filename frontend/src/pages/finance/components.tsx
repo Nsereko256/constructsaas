@@ -2,12 +2,13 @@ import { AlertCircle, ArrowUpRight, Download } from 'lucide-react';
 import type React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { financeApi } from '@/modules/finance/api';
-import { Link, Navigate, NavLink } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { can } from '@/api/roles';
 import { useAuth } from '@/auth/auth-context';
 import { Badge, statusTone } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { WorkspaceTabs } from '@/components/common/workspace-hub';
 import { formatDate } from '@/lib/utils';
 
 export const financeTabs = [
@@ -45,13 +46,7 @@ export function FinancePage({ eyebrow, title, description, actions, children }: 
             </div>
             {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
           </div>
-          <nav className="flex overflow-x-auto px-2" aria-label="Finance navigation">
-            {tabs.map(([label, href]) => (
-              <NavLink key={href} to={href} end={href === '/finance'} className={({ isActive }) => cn('whitespace-nowrap rounded-t-lg border-b-2 border-transparent px-2.5 py-2 text-[11px] font-bold text-muted hover:bg-primary/5 hover:text-foreground sm:px-3 sm:py-2.5 sm:text-xs', isActive && 'border-primary bg-primary/5 text-primary')}>
-                {label}
-              </NavLink>
-            ))}
-          </nav>
+          <div className="px-2 pb-2 pt-1"><WorkspaceTabs links={tabs.map(([label, href]) => ({ label, href }))} /></div>
         </section>
         {children}
       </div>

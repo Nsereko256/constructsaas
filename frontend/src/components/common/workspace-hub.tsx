@@ -9,9 +9,16 @@ export type WorkspaceLink = {
   icon: LucideIcon;
 };
 
-export function WorkspaceTabs({ links }: { links: WorkspaceLink[] }) {
+export type WorkspaceTab = {
+  label: string;
+  href: string;
+  icon?: LucideIcon;
+  description?: string;
+};
+
+export function WorkspaceTabs({ links }: { links: WorkspaceTab[] }) {
   return <nav aria-label="Workspace sections" className="flex gap-1 overflow-x-auto rounded-xl border border-border bg-surface p-1">
-    {links.map(({ href, label, icon: Icon }) => <NavLink key={href} end={href.split('/').length <= 2} to={href} className={({ isActive }) => `flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${isActive ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted hover:bg-muted/10 hover:text-foreground'}`}><Icon className="h-3.5 w-3.5" />{label}</NavLink>)}
+    {links.map(({ href, label, icon: Icon }) => <NavLink key={href} end={href.split('/').length <= 2} to={href} className={({ isActive }) => `flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${isActive ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted hover:bg-muted/10 hover:text-foreground'}`}>{Icon ? <Icon className="h-3.5 w-3.5" /> : null}{label}</NavLink>)}
   </nav>;
 }
 
