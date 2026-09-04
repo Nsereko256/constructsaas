@@ -20,7 +20,7 @@ export type NavItem = {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   roles: Role[];
-  section?: 'Operations' | 'Finance' | 'Workspace';
+  section?: 'Operations' | 'Finance' | 'Team & Settings';
   badgeKey?: keyof WorkflowBadges;
 };
 
@@ -32,15 +32,15 @@ export const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: Home, roles: all, section: 'Operations' },
   { label: 'Projects', href: '/projects', icon: Building2, roles: all },
   { label: 'Procurement', href: '/procurement', icon: PackageCheck, roles: all },
-  { label: 'Work orders', href: '/work-orders', icon: Wrench, roles: all, badgeKey: 'work_orders' },
+  { label: 'Work Orders', href: '/work-orders', icon: Wrench, roles: all, badgeKey: 'work_orders' },
   { label: 'Inventory', href: '/inventory', icon: Boxes, roles: all, badgeKey: 'inventory' },
   { label: 'Suppliers', href: '/suppliers', icon: Users, roles: ['admin', 'procurement_officer'] },
   { label: 'Messages', href: '/messages', icon: MessageSquare, roles: ['admin', 'project_manager', 'site_engineer'] },
   { label: 'Notifications', href: '/notifications', icon: Bell, roles: all },
   { label: 'Reports', href: '/reports', icon: FileBarChart, roles: reports },
   { label: 'Finance', href: '/finance', icon: Landmark, roles: financeStakeholders, section: 'Finance' },
-  { label: 'Team', href: '/team', icon: ShieldCheck, roles: ['admin', 'project_manager'], section: 'Workspace' },
-  { label: 'Settings', href: '/settings', icon: Settings, roles: ['admin'], section: 'Workspace' },
+  { label: 'Team', href: '/team', icon: ShieldCheck, roles: ['admin', 'project_manager'], section: 'Team & Settings' },
+  { label: 'Settings', href: '/settings', icon: Settings, roles: ['admin'], section: 'Team & Settings' },
 ];
 
 export function visibleNav(role: Role | null) {
