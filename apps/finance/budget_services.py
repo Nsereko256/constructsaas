@@ -514,7 +514,10 @@ def review_purchase_request_finance(
     if decision == BudgetApproval.STATUS_OVERRIDDEN:
         from .notification_services import purchase_order_exceeding_budget
 
-        transaction.on_commit(lambda: _safe_budget_override_notification(approval))
+        # Notification delivery is auxiliary.  Keep the approval committed
+        # even if a deployment has a broken channel layer or another failure
+        # while Django is running commit callbacks.
+        transaction.on_commit(lambda: _safe_budget_override_notification(approval), robust=True)
     elif decision == BudgetApproval.STATUS_RETURNED:
         from .notification_services import purchase_request_returned_for_correction
 
