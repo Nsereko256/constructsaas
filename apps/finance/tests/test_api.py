@@ -5,7 +5,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from ..factories import FinanceFixtureFactory
-from ..models import BudgetApproval, JournalEntry, Payment, SupplierInvoice
+from ..models import ApprovalMatrixRule, BudgetApproval, JournalEntry, Payment, SupplierInvoice
 
 
 class FinanceApiTests(TestCase):
@@ -136,3 +136,22 @@ class FinanceApiTests(TestCase):
         approved = self.client.post(f'/api/v1/finance/budget-approvals/{approval_id}/approve/')
         self.assertEqual(approved.status_code, 200)
         self.assertEqual(approved.data['status'], BudgetApproval.STATUS_APPROVED)
+
+    def test_approval_matrix_rules_are_company_scoped_and_configurable(self):
+        self.client.force_authenticate(self.fixture.admin)
+        response = self.client.post('/api/v1/finance/approval-matrix-rules/', {
+            'document_type': ApprovalMatrixRule.DOCUMENT_INVOICE,
+            'stage': ApprovalMatrixRule.STAGE_FINAL,
+            'approver_role': 'finance_manager',
+            'project': self.fixture.project.pk,
+            'minimum_amount': '100.00',
+            'maximum_amount': '1000000.00',
+            'due_hours': 24,
+            'escalation_hours': 48,
+            'is_active': True,
+        }, format='json')
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['project'], self.fixture.project.pk)
+        self.assertEqual(
+            self.client.get('/api/v1/finance/approval-matrix-rules/').data['count'], 1,
+        )

@@ -1,7 +1,7 @@
 import { apiDownload, apiRequest, pageParams } from './client';
 import type {
   Account, AuditEvent, BankStatementLine, BudgetCategory, CashAccount, CostCentre, Currency, ExpenseCategory, ExpenseClaim, InvoiceAttachment,
-  FinanceDashboard, FinanceReport, FinanceSettings, FinancialApproval, FiscalPeriod, Journal,
+  ApprovalMatrixRule, FinanceDashboard, FinanceReport, FinanceSettings, FinancialApproval, FiscalPeriod, Journal,
   MatchRun, MonthEndChecklist, Payment, PaymentBatch, PettyCashTransaction, ProjectBudget, StaffAdvance, SupplierInvoice, TaxCode,
 } from './finance-types';
 import type { Paginated } from './types';
@@ -15,6 +15,8 @@ export const financeApi = {
   dashboard: (params = {}) => apiRequest<FinanceDashboard>(`${root}/dashboard/${pageParams(params)}`),
   settings: () => list<FinanceSettings>('settings'),
   updateSettings: (id: number, body: Partial<FinanceSettings>) => apiRequest<FinanceSettings>(`${root}/settings/${id}/`, { method: 'PATCH', body }),
+  approvalMatrixRules: (params = {}) => list<ApprovalMatrixRule>('approval-matrix-rules', params),
+  createApprovalMatrixRule: (body: unknown) => apiRequest<ApprovalMatrixRule>(`${root}/approval-matrix-rules/`, { method: 'POST', body }),
   currencies: (params = {}) => list<Currency>('currencies', params),
   taxCodes: (params = {}) => list<TaxCode>('tax-codes', params),
   costCentres: (params = {}) => list<CostCentre>('cost-centres', params),

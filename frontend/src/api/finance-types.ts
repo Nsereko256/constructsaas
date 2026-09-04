@@ -112,6 +112,20 @@ export type FinanceSettings = {
   require_payment_attachment: boolean;
 };
 
+export type ApprovalMatrixRule = {
+  id: number;
+  document_type: string;
+  stage: string;
+  approver_role: string;
+  project: number | null;
+  budget_category: number | null;
+  minimum_amount: Money;
+  maximum_amount: Money | null;
+  due_hours: number;
+  escalation_hours: number;
+  is_active: boolean;
+};
+
 export type InvoiceItem = {
   id: number;
   purchase_order_item: number | null;

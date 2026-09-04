@@ -66,6 +66,7 @@ from .models import (
     Account,
     AccountMapping,
     AdvanceRetirement,
+    ApprovalMatrixRule,
     BudgetApproval,
     BudgetCategory,
     BudgetRevision,
@@ -143,6 +144,7 @@ from .serializers import (
     AccountSerializer,
     AccountMappingSerializer,
     AdvanceRetirementSerializer,
+    ApprovalMatrixRuleSerializer,
     BudgetApprovalSerializer,
     BudgetCategorySerializer,
     BudgetRevisionRequestSerializer,
@@ -237,6 +239,18 @@ class FinanceSettingsViewSet(CompanyScopedMixin, viewsets.ModelViewSet):
     serializer_class = FinanceSettingsSerializer
     permission_classes = [FinanceFoundationPermission]
     http_method_names = ['get', 'patch', 'head', 'options']
+
+
+@extend_schema_view(
+    list=extend_schema(tags=['Finance - Settings'], summary='List approval matrix rules'),
+    retrieve=extend_schema(tags=['Finance - Settings'], summary='Retrieve an approval matrix rule'),
+    create=extend_schema(tags=['Finance - Settings'], summary='Create an approval matrix rule'),
+    partial_update=extend_schema(tags=['Finance - Settings'], summary='Update an approval matrix rule'),
+)
+class ApprovalMatrixRuleViewSet(FoundationConfigurationViewSet):
+    queryset = ApprovalMatrixRule.objects.select_related('project', 'budget_category')
+    serializer_class = ApprovalMatrixRuleSerializer
+    http_method_names = ['get', 'post', 'patch', 'head', 'options']
 
 
 @extend_schema_view(

@@ -5,6 +5,7 @@ from .views import (
     AccountViewSet,
     AccountMappingViewSet,
     AdvanceRetirementViewSet,
+    ApprovalMatrixRuleViewSet,
     BudgetApprovalViewSet,
     BudgetCategoryViewSet,
     BudgetRevisionViewSet,
@@ -59,6 +60,7 @@ app_name = 'finance_api'
 
 router = DefaultRouter()
 router.register('settings', FinanceSettingsViewSet, basename='settings')
+router.register('approval-matrix-rules', ApprovalMatrixRuleViewSet, basename='approval-matrix-rule')
 router.register('currencies', CurrencyViewSet, basename='currency')
 router.register('tax-codes', TaxCodeViewSet, basename='tax-code')
 router.register('cost-centres', CostCentreViewSet, basename='cost-centre')

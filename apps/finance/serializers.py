@@ -20,6 +20,7 @@ from .models import (
     Account,
     AccountMapping,
     AdvanceRetirement,
+    ApprovalMatrixRule,
     BudgetApproval,
     BudgetCategory,
     BudgetLine,
@@ -115,6 +116,32 @@ class FinanceSettingsSerializer(CompanyScopedSerializer):
             instance=instance,
             user=self.context['request'].user,
             values=validated_data,
+        )
+
+
+class ApprovalMatrixRuleSerializer(CompanyScopedSerializer):
+    class Meta:
+        model = ApprovalMatrixRule
+        fields = [
+            'id', 'company', 'document_type', 'stage', 'approver_role', 'project',
+            'budget_category', 'minimum_amount', 'maximum_amount', 'due_hours',
+            'escalation_hours', 'is_active', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'company', 'created_at', 'updated_at']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['project'].queryset = self.company_queryset(Project)
+        self.fields['budget_category'].queryset = self.company_queryset(BudgetCategory)
+
+    def create(self, validated_data):
+        return configuration_services.create_reference_record(
+            model=ApprovalMatrixRule, user=self.context['request'].user, values=validated_data,
+        )
+
+    def update(self, instance, validated_data):
+        return configuration_services.update_reference_record(
+            instance=instance, user=self.context['request'].user, values=validated_data,
         )
 
 
