@@ -114,10 +114,10 @@ export type FinanceSettings = {
 
 export type InvoiceItem = {
   id: number;
-  purchase_order_item: number;
-  material: number;
-  material_name: string;
-  material_code: string;
+  purchase_order_item: number | null;
+  material: number | null;
+  material_name: string | null;
+  material_code: string | null;
   description: string;
   quantity: string;
   unit_price: Money;
@@ -131,10 +131,14 @@ export type SupplierInvoice = {
   version: number;
   supplier: number;
   supplier_name: string;
-  purchase_order: number;
-  purchase_order_number: string;
+  purchase_order: number | null;
+  purchase_order_number: string | null;
   project: number | null;
   project_name: string;
+  work_order: number | null;
+  work_order_number: string | null;
+  work_order_site: number | null;
+  work_order_site_name: string | null;
   internal_number: string;
   invoice_number: string;
   invoice_date: string;

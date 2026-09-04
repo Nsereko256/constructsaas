@@ -507,6 +507,8 @@ class SupplierInvoiceItemSerializer(serializers.ModelSerializer):
         super().__init__(*args, **kwargs)
         request = self.context.get('request')
         company_id = getattr(getattr(request, 'user', None), 'company_id', None)
+        self.fields['purchase_order_item'].required = False
+        self.fields['purchase_order_item'].allow_null = True
         self.fields['purchase_order_item'].queryset = PurchaseOrderItem.objects.filter(
             purchase_order__company_id=company_id,
         )
@@ -557,6 +559,8 @@ class SupplierInvoiceSerializer(CompanyScopedSerializer):
         self.fields['purchase_order'].queryset = self.company_queryset(PurchaseOrder).filter(
             supplier__isnull=False,
         )
+        self.fields['purchase_order'].required = False
+        self.fields['purchase_order'].allow_null = True
         self.fields['cost_centre'].queryset = self.company_queryset(CostCentre, is_active=True)
         from apps.workorders.models import WorkOrder
         self.fields['work_order'].queryset = WorkOrder.objects.filter(company_id=getattr(getattr(self.context.get('request'), 'user', None), 'company_id', None))
@@ -579,6 +583,8 @@ class SupplierInvoiceSerializer(CompanyScopedSerializer):
             raise serializers.ValidationError({
                 'status': 'Financial workflow status can only change through a dedicated action.',
             })
+        if not attrs.get('purchase_order') and not attrs.get('work_order'):
+            raise serializers.ValidationError({'purchase_order': 'Select a purchase order or a work order for a direct service invoice.'})
         return super().validate(attrs)
 
     def create(self, validated_data):

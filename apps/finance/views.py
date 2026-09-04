@@ -585,7 +585,7 @@ class SupplierInvoiceViewSet(DraftDeletionMixin, CompanyScopedMixin, viewsets.Mo
     def download_pdf(self, request, pk=None):
         invoice = self.get_object()
         rows = [{
-            'material': f'{item.material.code} / {item.material.name}',
+            'material': f'{item.material.code} / {item.material.name}' if item.material_id else 'Work-order service',
             'description': item.description or '-',
             'quantity': item.quantity,
             'unit_price': f'{invoice.currency} {item.unit_price:,.2f}',
@@ -600,7 +600,8 @@ class SupplierInvoiceViewSet(DraftDeletionMixin, CompanyScopedMixin, viewsets.Mo
         }
         subtitle = ' | '.join(filter(None, [
             f'Supplier: {invoice.supplier.name}', f'Supplier reference: {invoice.invoice_number}',
-            f'PO: {invoice.purchase_order.number}', f'Invoice date: {invoice.invoice_date.isoformat()}',
+            f'PO: {invoice.purchase_order.number}' if invoice.purchase_order_id else 'Direct work-order invoice',
+            f'Invoice date: {invoice.invoice_date.isoformat()}',
             f'Due: {invoice.due_date.isoformat() if invoice.due_date else "-"}',
         ]))
         return pdf_table_response(

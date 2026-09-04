@@ -950,6 +950,8 @@ class SupplierInvoice(OfflineDraftMixin):
     purchase_order = models.ForeignKey(
         'procurement.PurchaseOrder',
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         related_name='supplier_invoices',
     )
     project = models.ForeignKey(
@@ -1127,9 +1129,11 @@ class SupplierInvoiceItem(models.Model):
     purchase_order_item = models.ForeignKey(
         'procurement.PurchaseOrderItem',
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         related_name='supplier_invoice_items',
     )
-    material = models.ForeignKey('materials.Material', on_delete=models.PROTECT, related_name='supplier_invoice_items')
+    material = models.ForeignKey('materials.Material', on_delete=models.PROTECT, null=True, blank=True, related_name='supplier_invoice_items')
     description = models.CharField(max_length=255, blank=True)
     quantity = models.DecimalField(max_digits=14, decimal_places=2)
     unit_price = models.DecimalField(max_digits=16, decimal_places=2)

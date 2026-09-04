@@ -281,16 +281,18 @@ def _record_invoice_action(invoice, user, action, comments='', idempotency_key='
 
 
 def _normalize_invoice_items(company, po, items):
-    po_items = {item.id: item for item in po.items.select_related('material')}
+    po_items = {item.id: item for item in po.items.select_related('material')} if po else {}
     tax_codes = {item.id: item for item in TaxCode.objects.filter(company=company, is_active=True)}
     seen = set()
     normalized = []
     for index, raw in enumerate(items):
         po_item_id = getattr(raw.get('purchase_order_item'), 'id', raw.get('purchase_order_item'))
         po_item = po_items.get(po_item_id)
-        if not po_item:
+        if po and not po_item:
             raise ValidationError({'items': [{index: {'purchase_order_item': ['Item is not on this purchase order.']}}]})
-        if po_item_id in seen:
+        if not po and (po_item_id or not raw.get('description', '').strip()):
+            raise ValidationError({'items': [{index: {'description': ['A description is required for a direct work-order invoice.']}}]})
+        if po and po_item_id in seen:
             raise ValidationError({'items': [{index: {'purchase_order_item': ['Each PO item may appear once.']}}]})
         seen.add(po_item_id)
         quantity = money(raw['quantity'])
@@ -324,7 +326,7 @@ def _replace_invoice_items(invoice, normalized):
     for item in normalized:
         line = SupplierInvoiceItem(
             company=invoice.company, invoice=invoice, purchase_order_item=item['po_item'],
-            material=item['po_item'].material, description=item['description'], quantity=item['quantity'],
+            material=item['po_item'].material if item['po_item'] else None, description=item['description'], quantity=item['quantity'],
             unit_price=item['unit_price'], tax_amount=item['tax_amount'],
         )
         _save(line)
@@ -334,7 +336,7 @@ def _replace_invoice_items(invoice, normalized):
 
 @transaction.atomic
 def create_supplier_invoice(
-    *, company, user, purchase_order, supplier, invoice_number, invoice_date, items,
+    *, company, user, purchase_order=None, supplier, invoice_number, invoice_date, items,
     due_date=None, currency='UGX', exchange_rate=Decimal('1'), cost_centre=None,
     discount_amount=ZERO, withholding_amount=ZERO, freight_amount=ZERO, other_charges_amount=ZERO,
     notes='', idempotency_key='', client_uuid=None, work_order=None, work_order_site=None,
@@ -344,7 +346,7 @@ def create_supplier_invoice(
         existing = SupplierInvoice.objects.filter(company=company, idempotency_key=idempotency_key).first()
         if existing:
             if (
-                existing.purchase_order_id != purchase_order.id
+                existing.purchase_order_id != getattr(purchase_order, 'id', purchase_order)
                 or existing.supplier_id != supplier.id
                 or existing.invoice_number != invoice_number.strip()
             ):
@@ -352,14 +354,11 @@ def create_supplier_invoice(
             return existing
     # Lock the PO without joining nullable relations. PostgreSQL rejects
     # FOR UPDATE when the generated query includes a nullable-side outer join.
-    po = PurchaseOrder.objects.select_for_update().get(
-        pk=purchase_order.pk,
-        company=company,
-    )
+    po = PurchaseOrder.objects.select_for_update().get(pk=purchase_order.pk, company=company) if purchase_order else None
     from apps.procurement.amendments import PurchaseOrderAmendment
-    if po.amendments.filter(status=PurchaseOrderAmendment.STATUS_SUBMITTED).exists():
+    if po and po.amendments.filter(status=PurchaseOrderAmendment.STATUS_SUBMITTED).exists():
         raise ValidationError({'purchase_order': ['Finance must decide the pending PO amendment before an invoice can be recorded.']})
-    if not po.supplier_id or po.supplier_id != supplier.id or supplier.company_id != company.id:
+    if supplier.company_id != company.id or (po and (not po.supplier_id or po.supplier_id != supplier.id)):
         raise ValidationError({'supplier': ['Supplier must match the purchase order.']})
     if not items:
         raise ValidationError({'items': ['At least one invoice item is required.']})
@@ -385,12 +384,12 @@ def create_supplier_invoice(
     if work_order is not None:
         from apps.workorders.models import WorkOrder
         work_order = WorkOrder.objects.filter(pk=getattr(work_order, 'pk', work_order), company=company).first()
-        if work_order is None or (work_order.project_id and work_order.project_id != po.project_id):
+        if work_order is None or (po and work_order.project_id and work_order.project_id != po.project_id):
             raise ValidationError({'work_order': ['Work order must belong to the same project as the purchase order.']})
     if work_order_site is not None:
         from apps.workorders.models import WorkOrderSite
         work_order_site = WorkOrderSite.objects.filter(
-            pk=getattr(work_order_site, 'pk', work_order_site), work_order=work_order, project=po.project,
+            pk=getattr(work_order_site, 'pk', work_order_site), work_order=work_order, project=work_order.project,
         ).first()
         if work_order_site is None:
             raise ValidationError({'work_order_site': ['Site package must belong to the selected work order and purchase order project.']})
@@ -398,7 +397,7 @@ def create_supplier_invoice(
         company=company,
         supplier=supplier,
         purchase_order=po,
-        project=po.project,
+        project=po.project if po else (work_order.project if work_order else None),
         work_order=work_order,
         work_order_site=work_order_site,
         cost_centre=cost_centre,
@@ -476,6 +475,12 @@ def submit_invoice(*, invoice, user):
     )
     if locked.status != SupplierInvoice.STATUS_DRAFT:
         raise ValidationError({'status': ['Only draft invoices can be submitted.']})
+    if not locked.purchase_order_id:
+        locked.status = SupplierInvoice.STATUS_VERIFIED
+        locked.submitted_at = timezone.now()
+        _save(locked, update_fields=['status', 'submitted_at', 'updated_at'])
+        _record_invoice_action(locked, user, InvoiceApproval.ACTION_VERIFY, comments='Direct work-order invoice submitted for finance approval.')
+        return locked
     if not locked.items.exists():
         raise ValidationError({'items': ['An invoice must contain at least one item.']})
     from .configuration_services import ensure_finance_settings
@@ -756,7 +761,7 @@ def post_invoice(*, invoice, user, idempotency_key=''):
         company=user.company, event_type=PostingRule.EVENT_SUPPLIER_INVOICE,
     )
     debit_account = rule_debit
-    if locked.purchase_order.delivery_destination != PurchaseOrder.DELIVERY_WAREHOUSE:
+    if not locked.purchase_order_id or locked.purchase_order.delivery_destination != PurchaseOrder.DELIVERY_WAREHOUSE:
         debit_account = resolve_mapping(company=user.company, mapping_key='PROJECT_MATERIAL_COST')
     base_total = base_money(locked.total_amount, locked.exchange_rate)
     base_tax = base_money(locked.tax_amount, locked.exchange_rate)
