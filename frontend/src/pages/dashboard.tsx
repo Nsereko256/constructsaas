@@ -3,10 +3,9 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { DashboardData } from '@/api/types';
 import { connectSocket } from '@/api/ws';
-import { AlertTriangle, ArrowRight, Boxes, ClipboardCheck, ClipboardList, FolderKanban, PackageCheck, ReceiptText, TrendingUp, Wallet, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Boxes, CalendarDays, CheckCircle2, ClipboardCheck, ClipboardList, CircleDollarSign, FolderKanban, Gauge, PackageCheck, ReceiptText, ShieldAlert, TrendingUp, Wallet, type LucideIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Role, WorkflowBadges } from '@/api/types';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '@/api/services';
 import { qk } from '@/api/queryKeys';
 import { Badge, statusTone } from '@/components/ui/badge';
@@ -15,7 +14,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatUGX } from '@/lib/utils';
 import { mergeDashboardUpdate, normalizeDashboardData } from '@/lib/dashboard';
 import { useAuth } from '@/auth/auth-context';
-import { ActionCentre } from '@/components/layout/action-centre';
 
 const roleIntro = {
   admin: 'Portfolio control across projects, procurement, inventory and teams.',
@@ -40,7 +38,7 @@ const roleWorkspace: Record<Role, { title: string; queueHeading?: string; readOn
 };
 
 export function DashboardPage() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const queryClient = useQueryClient();
   const dashboard = useQuery({ queryKey: qk.dashboard, queryFn: api.dashboard });
   const workflow = useQuery({ queryKey: qk.workflowBadges, queryFn: api.workflowBadges });
@@ -83,15 +81,22 @@ export function DashboardPage() {
     { label: 'Low-stock alerts', value: data.low_stock_count, icon: AlertTriangle },
   ];
   const queueIcons: Partial<Record<keyof WorkflowBadges, LucideIcon>> = { requests: ClipboardList, deliveries: ReceiptText, inventory: Boxes, purchase_orders: PackageCheck, supplier_invoices: ReceiptText, payments: Wallet, ledger: ClipboardCheck, budgets: TrendingUp };
+  const priorityCount = workspace.queue.reduce((total, item) => total + (workflow.data?.[item.badge] || 0), 0);
+  const budgetRows = data.project_budget_vs_actual.slice(0, 6).map((project) => {
+    const budget = Number(project.budget || 0);
+    const used = Number(project.actual_expenditure || 0) + Number(project.open_commitments || 0);
+    return { ...project, used, utilization: budget ? Math.min(100, Math.round((used / budget) * 100)) : 0, atRisk: budget > 0 && used > budget };
+  });
 
   return (
     <div className="grid gap-2.5 sm:gap-5">
-      <section className="app-sheen rounded-2xl border border-border/70 bg-white/70 px-3 py-3 shadow-sm sm:px-4 sm:py-4">
-        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary sm:text-sm">{role?.replace(/_/g, ' ')}</p>
-        <h2 className="mt-0.5 text-xl font-black tracking-tight sm:mt-1 sm:text-2xl">{workspace.title}</h2>
-        <p className="mt-1 line-clamp-2 text-sm text-muted sm:text-base">{role ? roleIntro[role] : roleIntro.admin}</p>
+      <section className="app-sheen overflow-hidden rounded-2xl border border-primary/15 bg-white px-4 py-4 shadow-panel sm:px-6 sm:py-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-primary">Company command centre</p><h2 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">Good day, {user?.first_name || user?.username || 'there'}</h2><p className="mt-1 max-w-2xl text-sm text-muted sm:text-base">{role ? roleIntro[role] : roleIntro.admin}</p></div>
+          <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold text-muted"><CalendarDays className="h-4 w-4 text-primary" />{new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date())}</div>
+        </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-3"><div className={`flex items-center gap-2 rounded-xl border p-3 ${priorityCount ? 'border-warning/30 bg-warning/5' : 'border-success/25 bg-success/5'}`}><span className={`grid h-8 w-8 place-items-center rounded-lg ${priorityCount ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success'}`}>{priorityCount ? <ShieldAlert className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}</span><span><strong className="block text-sm">{priorityCount ? `${priorityCount} action${priorityCount === 1 ? '' : 's'} need attention` : 'Operations are clear'}</strong><span className="text-xs text-muted">Your role-based queue</span></span></div><div className="flex items-center gap-2 rounded-xl border border-border bg-background p-3"><span className="grid h-8 w-8 place-items-center rounded-lg bg-primary/10 text-primary"><Gauge className="h-4 w-4" /></span><span><strong className="block text-sm">{data.active_projects} active project{data.active_projects === 1 ? '' : 's'}</strong><span className="text-xs text-muted">Across the company</span></span></div><div className="flex items-center gap-2 rounded-xl border border-border bg-background p-3"><span className="grid h-8 w-8 place-items-center rounded-lg bg-info/10 text-info"><CircleDollarSign className="h-4 w-4" /></span><span><strong className="block text-sm">{data.low_stock_count ? `${data.low_stock_count} stock alerts` : 'Stock position healthy'}</strong><span className="text-xs text-muted">Inventory signal</span></span></div></div>
       </section>
-      <ActionCentre role={role} workflow={workflow.data} />
       <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         {kpis.map((kpi) => (
           <Card key={kpi.label}>
@@ -103,44 +108,25 @@ export function DashboardPage() {
           </Card>
         ))}
       </section>
-      <section className="hidden gap-3 sm:gap-5 md:grid xl:grid-cols-[1.35fr_0.65fr]">
-        {!isFieldRole ? <Card>
-          <CardHeader>
-            <CardTitle>Portfolio budget utilization</CardTitle>
-          </CardHeader>
-          <CardContent className="h-48 p-2.5 sm:h-80 sm:p-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.project_budget_vs_actual}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="code" />
-                <YAxis tickFormatter={(value) => `${Number(value) / 1000000}m`} />
-                <Tooltip formatter={(value) => formatUGX(String(value))} />
-                <Bar dataKey="actual_expenditure" fill="#087A3E" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card> : <Card>
-          <CardHeader><CardTitle>{role === 'storekeeper' ? 'Warehouse focus' : 'Site focus'}</CardTitle></CardHeader>
-          <CardContent className="grid gap-2.5 p-2.5 text-sm text-muted sm:gap-3 sm:p-4">
-            <p>{role === 'storekeeper' ? 'Keep receipts, stock issues and supplier exceptions current. Stock updates only after confirmed receipt.' : 'Keep requests tied to the right project and confirm only materials physically received on site.'}</p>
-            <div className="flex items-center gap-2 border border-info/20 bg-info/5 p-2.5 text-xs text-foreground sm:p-3 sm:text-sm"><ReceiptText className="h-4 w-4 shrink-0 text-info sm:h-5 sm:w-5" />Offline actions remain on this device until they sync successfully.</div>
-          </CardContent>
-        </Card>}
+      <section aria-label="Operations pipeline" className="rounded-2xl border border-border bg-white p-3 shadow-panel sm:p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-primary">End-to-end control</p><h3 className="mt-0.5 text-base font-black">Operations pipeline</h3></div><Link className="text-xs font-bold text-primary hover:underline" to="/procurement">Open Procurement</Link></div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">{[
+          ['Requests', workflow.data?.requests || 0, '/procurement/requests'], ['POs', workflow.data?.purchase_orders || 0, '/procurement/purchase-orders'], ['Deliveries', workflow.data?.deliveries || 0, '/procurement/deliveries'], ['Stock alerts', workflow.data?.inventory || 0, '/inventory'], ['Invoices', workflow.data?.supplier_invoices || 0, '/finance/payables'], ['Payments', workflow.data?.payments || 0, '/finance/payments'],
+        ].map(([label, count, href], index) => <Link key={String(label)} to={String(href)} className="group relative rounded-xl border border-border bg-background p-3 hover:border-primary/40 hover:bg-primary/[0.03]"><span className="absolute left-0 top-0 h-0.5 w-full rounded-full bg-primary/30 group-hover:bg-primary" /><p className="text-[10px] font-bold uppercase tracking-wide text-muted">{label}</p><strong className="mt-1 block text-xl font-black">{count}</strong><p className="mt-1 text-[11px] text-muted">{Number(count) ? 'Needs attention' : 'No open items'}</p>{index < 5 ? <span className="absolute -right-2 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-white px-0.5 text-muted lg:block">›</span> : null}</Link>)}
+        </div>
+      </section>
+      <section className="grid gap-3 sm:gap-5 xl:grid-cols-[1.25fr_0.75fr]">
         <Card>
-          <CardHeader>
-            <CardTitle>Inventory alerts requiring attention</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2 p-2.5 sm:gap-3 sm:p-4">
-            {data.low_stock_materials.slice(0, 6).map((material) => (
-              <div key={material.id} className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0 sm:gap-3 sm:pb-3">
-                <div>
-                  <strong className="text-sm">{material.name}</strong>
-                  <p className="text-xs text-muted">{material.code}</p>
-                </div>
-                <Badge tone="warning">Low stock</Badge>
-              </div>
-            ))}
-            {!data.low_stock_materials.length ? <p className="text-sm text-muted">No urgent material alerts.</p> : null}
+          <CardHeader><div className="flex items-center justify-between gap-3"><div><CardTitle>Portfolio health</CardTitle><p className="mt-1 text-xs text-muted">Committed and actual spend against approved project budgets.</p></div><Link className="text-xs font-bold text-primary hover:underline" to="/projects">View projects</Link></div></CardHeader>
+          <CardContent className="grid gap-3 p-3 sm:p-4">
+            {budgetRows.map((project) => <div key={project.id}><div className="flex items-center justify-between gap-3 text-sm"><span className="min-w-0 truncate"><strong>{project.code}</strong><span className="ml-2 text-muted">{project.name}</span></span><span className={`shrink-0 font-bold ${project.atRisk ? 'text-critical' : 'text-primary'}`}>{project.atRisk ? 'Over budget' : `${project.utilization}% used`}</span></div><div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${project.atRisk ? 'bg-critical' : project.utilization > 80 ? 'bg-warning' : 'bg-primary'}`} style={{ width: `${project.utilization}%` }} /></div><p className="mt-1 text-[11px] text-muted">Actual {formatUGX(project.actual_expenditure)} · Committed {formatUGX(project.open_commitments)} · Available {formatUGX(project.remaining_budget)}</p></div>)}
+            {!budgetRows.length ? <div className="rounded-xl border border-dashed border-border bg-background p-5 text-center"><Gauge className="mx-auto h-6 w-6 text-muted" /><strong className="mt-2 block text-sm">No approved project budgets yet</strong><p className="mt-1 text-xs text-muted">Create and approve a project budget to see portfolio health here.</p><Link className="mt-3 inline-block text-xs font-bold text-primary hover:underline" to="/finance/budgets">Open Finance budgets</Link></div> : null}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>{isFieldRole ? (role === 'storekeeper' ? 'Warehouse focus' : 'Site focus') : 'Inventory alerts'}</CardTitle></CardHeader>
+          <CardContent className="grid gap-2.5 p-3 text-sm sm:p-4">
+            {isFieldRole ? <><p className="text-muted">{role === 'storekeeper' ? 'Keep receipts, stock issues and supplier exceptions current.' : 'Keep requests tied to the right project and confirm materials physically received on site.'}</p><div className="flex items-center gap-2 rounded-xl border border-info/20 bg-info/5 p-3 text-xs"><ReceiptText className="h-4 w-4 shrink-0 text-info" />Offline actions remain on this device until they sync.</div></> : <>{data.low_stock_materials.slice(0, 5).map((material) => <div key={material.id} className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0"><span className="min-w-0 truncate"><strong>{material.name}</strong><span className="ml-2 text-xs text-muted">{material.code}</span></span><Badge tone="warning">Low stock</Badge></div>)}{!data.low_stock_materials.length ? <div className="rounded-xl border border-success/20 bg-success/5 p-4 text-center"><CheckCircle2 className="mx-auto h-5 w-5 text-success" /><strong className="mt-1 block text-sm">Inventory is healthy</strong><p className="mt-1 text-xs text-muted">No materials are below their minimum stock level.</p></div> : null}<Link className="text-xs font-bold text-primary hover:underline" to="/inventory">Review inventory</Link></>}
           </CardContent>
         </Card>
       </section>
