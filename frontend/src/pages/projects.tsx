@@ -1,7 +1,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Plus, Trash2 } from 'lucide-react';
+import { Building2, Plus, Trash2, Users } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 import { api } from '@/api/services';
 import { Project, User } from '@/api/types';
@@ -19,6 +19,7 @@ import { Pagination } from '@/components/common/pagination';
 import { EngineerPicker } from '@/components/common/engineer-picker';
 import { useListState } from '@/hooks/use-list-state';
 import { formatUGX } from '@/lib/utils';
+import { WorkspaceTabs } from '@/components/common/workspace-hub';
 
 const columns: ColumnDef<Project>[] = [
   {
@@ -49,6 +50,7 @@ export function ProjectsPage() {
 
   return (
     <div className="grid gap-4">
+      <WorkspaceTabs links={[{ href: '/projects', label: 'Projects', description: 'Portfolio and budgets', icon: Building2 }, { href: '/projects/sites', label: 'Sites', description: 'Project locations', icon: Building2 }, { href: '/team/project-staffing', label: 'Project staffing', description: 'People and assignments', icon: Users }]} />
       <PageToolbar title="Projects" subtitle="Searchable project portfolio with assignment and budget signals." search={list.search} onSearch={list.setSearch}>
         <Button variant="secondary" asChild><Link to="/projects/sites">Manage sites</Link></Button>
         <select className={inputClass} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}>

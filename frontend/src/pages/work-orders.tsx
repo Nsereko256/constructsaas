@@ -1,4 +1,4 @@
-import { CheckCircle2, ClipboardPlus, Play, Plus, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, ClipboardPlus, FileText, Play, Plus, ShieldCheck, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
@@ -16,6 +16,7 @@ import { Field, inputClass } from '@/components/ui/field';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useToast } from '@/components/ui/toast';
 import { WorkOrderOperations } from '@/components/work-orders/work-order-operations';
+import { WorkspaceTabs } from '@/components/common/workspace-hub';
 
 const labels: Record<string, string> = { submit: 'Submit', approve: 'Technical approve', assign: 'Assign', 'accept-assignment': 'Accept contractor assignment', start: 'Start work', complete: 'Mark complete', verify: 'Verify', close: 'Close', reject: 'Reject', hold: 'Put on hold', cancel: 'Cancel' };
 
@@ -31,6 +32,7 @@ export function WorkOrdersPage() {
   const refresh = () => { void queryClient.refetchQueries({ queryKey: ['work-orders'], type: 'all' }); void queryClient.refetchQueries({ queryKey: ['work-order', workOrderId], type: 'all' }); void queryClient.refetchQueries({ queryKey: qk.workOrderMetrics, type: 'all' }); void queryClient.refetchQueries({ queryKey: qk.workOrderActionQueue, type: 'all' }); };
   const visibleOrders = (orders.data?.results || []).filter((order) => status !== 'ACTIVE' || !['CLOSED', 'REJECTED', 'CANCELLED'].includes(order.status));
   return <div className="grid gap-3 sm:gap-4">
+    <WorkspaceTabs links={[{ href: '/work-orders', label: 'Work orders', description: 'Create and manage work', icon: ClipboardPlus }, { href: '/work-orders/progress', label: 'Site progress', description: 'Track execution', icon: TrendingUp }, { href: '/work-orders/invoices', label: 'Invoices', description: 'Review billings', icon: FileText }]} />
     <PageToolbar title="Work orders" subtitle="Scope, budget, assignment, execution, site close-out, and financial traceability in one controlled record."><select className={inputClass} value={status} onChange={(e) => setStatus(e.target.value)}><option value="ACTIVE">Active work (default)</option><option value="ALL">All statuses</option>{['DRAFT','SUBMITTED','APPROVED','ASSIGNED','IN_PROGRESS','COMPLETED','VERIFIED','CLOSED','REJECTED','ON_HOLD','CANCELLED'].map((item) => <option key={item}>{item}</option>)}</select><ExportButton label="Excel" onClick={() => void api.downloadWorkOrders('xlsx', status !== 'ACTIVE' && status !== 'ALL' ? { status } : {})} /><ExportButton label="PDF" onClick={() => void api.downloadWorkOrders('pdf', status !== 'ACTIVE' && status !== 'ALL' ? { status } : {})} />{canWrite ? <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" />New work order</Button> : null}</PageToolbar>
     <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">{[['Open', metrics.data?.open], ['In progress', metrics.data?.in_progress], ['Overdue', metrics.data?.overdue], ['Completed', metrics.data?.completed]].map(([label, value]) => <Card key={String(label)}><CardContent className="p-3 sm:p-3.5"><p className="text-[10px] font-bold uppercase tracking-wide text-muted">{label}</p><p className="mt-1 text-xl font-black">{value ?? '–'}</p></CardContent></Card>)}</div>
     {(actionQueue.data?.requires_action || []).length ? <Card className="border-warning/30"><CardContent className="p-3"><p className="text-[10px] font-black uppercase tracking-[0.14em] text-warning">Action required</p><p className="mt-0.5 text-sm font-bold">Work orders assigned to your role</p><div className="mt-2 grid gap-2">{actionQueue.data!.requires_action.slice(0, 5).map((order) => <button key={order.id} className="flex items-center justify-between gap-2 rounded-xl border border-warning/20 bg-warning/5 p-2.5 text-left text-sm hover:bg-warning/10" onClick={() => setSelected(order)}><span className="min-w-0 truncate"><strong>{order.number}</strong> · {order.title}</span><Badge tone={statusTone(order.status)}>{order.status_display}</Badge></button>)}</div></CardContent></Card> : null}

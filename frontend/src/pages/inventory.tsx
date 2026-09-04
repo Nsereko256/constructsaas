@@ -1,6 +1,6 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, Plus, Trash2 } from 'lucide-react';
+import { Boxes, Download, Plus, ReceiptText, Route, Trash2 } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 import { api } from '@/api/services';
 import type { Material } from '@/api/types';
@@ -17,6 +17,7 @@ import { Field, inputClass } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
 import { useListState } from '@/hooks/use-list-state';
 import { formatNumber, formatUGX } from '@/lib/utils';
+import { WorkspaceTabs } from '@/components/common/workspace-hub';
 
 const units = ['bag', 'ton', 'kg', 'litre', 'piece', 'metre', 'sqm', 'cbm'];
 
@@ -76,6 +77,7 @@ export function InventoryPage() {
 
   return (
     <div className="grid gap-4">
+      <WorkspaceTabs links={[{ href: '/inventory', label: 'Stock', description: 'Materials and valuation', icon: Boxes }, { href: '/inventory/bin-locations', label: 'Bin locations', description: 'Storage map', icon: ReceiptText }, { href: '/inventory/movements', label: 'Movements', description: 'Stock transfers', icon: Route }, { href: '/inventory/site-custody', label: 'Site custody', description: 'Issued materials', icon: ReceiptText }]} />
       <PageToolbar title="Inventory" subtitle="Materials, categories, stock thresholds and current valuation." search={list.search} onSearch={list.setSearch}>
         <select className={inputClass} value={list.filters.category} onChange={(event) => list.setFilter('category', event.target.value)}>
           <option value="">All categories</option>

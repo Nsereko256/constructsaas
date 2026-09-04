@@ -1,6 +1,6 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
+import { FileWarning, Plus, Trash2, Users } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 import { api } from '@/api/services';
 import type { Supplier } from '@/api/types';
@@ -15,6 +15,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { Field, inputClass } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
 import { useListState } from '@/hooks/use-list-state';
+import { WorkspaceTabs } from '@/components/common/workspace-hub';
 
 export function SuppliersPage() {
   const { role } = useAuth();
@@ -61,6 +62,7 @@ export function SuppliersPage() {
 
   return (
     <div className="grid gap-4">
+      <WorkspaceTabs links={[{ href: '/suppliers', label: 'Suppliers & contractors', description: 'Vendor directory', icon: Users }, { href: '/procurement/supplier-claims', label: 'Claims', description: 'Supplier issues', icon: FileWarning }]} />
       <PageToolbar title="Suppliers" subtitle="Approved vendor contacts and performance notes." search={list.search} onSearch={list.setSearch}>
         <select className={inputClass} value={list.filters.rating} onChange={(event) => list.setFilter('rating', event.target.value)}>
           <option value="">All ratings</option>
