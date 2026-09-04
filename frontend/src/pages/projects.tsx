@@ -1,7 +1,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Building2, Plus, Trash2, Users } from 'lucide-react';
+import { Building2, CheckCircle2, CircleDollarSign, Plus, Target, Trash2, Users } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 import { api } from '@/api/services';
 import { Project, User } from '@/api/types';
@@ -11,6 +11,7 @@ import { useAuth } from '@/auth/auth-context';
 import { FormModal } from '@/components/common/form-modal';
 import { Badge, statusTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/data-table';
 import { Field, inputClass } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
@@ -47,11 +48,19 @@ export function ProjectsPage() {
   const list = useListState({ status: '', is_active: 'true' });
   const [open, setOpen] = useState(false);
   const projects = useQuery({ queryKey: qk.projects(list.query), queryFn: () => api.projects(list.query) });
+  const projectRows = projects.data?.results || [];
+  const activeCount = projectRows.filter((project) => project.is_active && project.status !== 'completed').length;
+  const totalBudget = projectRows.reduce((total, project) => total + Number(project.budget || 0), 0);
+  const averageProgress = projectRows.length ? Math.round(projectRows.reduce((total, project) => total + Number(project.progress_percent || 0), 0) / projectRows.length) : 0;
 
   return (
     <div className="grid gap-4">
       <WorkspaceTabs links={[{ href: '/projects', label: 'Projects', description: 'Portfolio and budgets', icon: Building2 }, { href: '/projects/sites', label: 'Sites', description: 'Project locations', icon: Building2 }, { href: '/team/project-staffing', label: 'Project staffing', description: 'People and assignments', icon: Users }]} />
-      <PageToolbar title="Projects" subtitle="Searchable project portfolio with assignment and budget signals." search={list.search} onSearch={list.setSearch}>
+      <section className="rounded-2xl border border-border bg-white px-4 py-4 shadow-panel sm:px-6 sm:py-5"><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">ConstructSaaS · Operations</p><div className="mt-1 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-2xl font-black tracking-tight sm:text-3xl">Projects overview</h2><p className="mt-1 max-w-2xl text-sm text-muted">Track delivery progress, budget position, sites, and accountable project teams.</p></div><Button onClick={() => setOpen(true)} disabled={!can.approvePr(role)}><Plus className="h-4 w-4" />New project</Button></div></section>
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+        {[{ label: 'Active projects', value: activeCount, icon: Building2, tone: 'bg-info/10 text-info' }, { label: 'Total projects', value: projectRows.length, icon: CheckCircle2, tone: 'bg-success/10 text-success' }, { label: 'Portfolio budget', value: formatUGX(totalBudget), icon: CircleDollarSign, tone: 'bg-warning/10 text-warning' }, { label: 'Average progress', value: `${averageProgress}%`, icon: Target, tone: 'bg-primary/10 text-primary' }].map((item) => <Card key={item.label}><CardContent className="flex items-center gap-2.5 p-3 sm:p-4"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${item.tone}`}><item.icon className="h-4 w-4" /></span><div className="min-w-0"><p className="truncate text-[10px] font-bold uppercase tracking-wide text-muted">{item.label}</p><strong className="block truncate text-lg font-black sm:text-xl">{item.value}</strong></div></CardContent></Card>)}
+      </section>
+      <PageToolbar title="Project register" subtitle="Searchable project portfolio with assignment and budget signals." search={list.search} onSearch={list.setSearch}>
         <Button variant="secondary" asChild><Link to="/projects/sites">Manage sites</Link></Button>
         <select className={inputClass} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}>
           <option value="">All statuses</option>
@@ -62,7 +71,7 @@ export function ProjectsPage() {
         </select>
         {can.approvePr(role) ? <Button onClick={() => setOpen(true)}>Create project</Button> : null}
       </PageToolbar>
-      <DataTable columns={columns} data={projects.data?.results || []} emptyTitle={projects.isLoading ? 'Loading projects...' : 'No projects found'} />
+      <DataTable columns={columns} data={projectRows} emptyTitle={projects.isLoading ? 'Loading projects...' : 'No projects found'} mobileSummaryStacked />
       <Pagination page={list.page} setPage={list.setPage} data={projects.data} />
       <ProjectModal open={open} onClose={() => setOpen(false)} />
     </div>
