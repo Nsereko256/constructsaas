@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     login,
     logout,
     sessionMessage,
-    sessionCheckFailed: Boolean(meQuery.isError && !sessionInvalid),
+    sessionCheckFailed: Boolean(tokens && meQuery.isError && !sessionInvalid),
     retrySession: () => { void meQuery.refetch(); },
   };
 
