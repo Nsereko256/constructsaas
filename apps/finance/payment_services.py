@@ -193,7 +193,9 @@ def update_draft_payment(*, payment, user, values):
 
 @transaction.atomic
 def allocate_payment(*, payment, user, invoice, amount):
-    locked = Payment.objects.select_for_update().select_related('currency').get(
+    # Lock the payment without joining nullable account/currency relations.
+    # PostgreSQL rejects FOR UPDATE when a nullable-side outer join is present.
+    locked = Payment.objects.select_for_update().get(
         pk=payment.pk, company=user.company,
     )
     if locked.status != Payment.STATUS_DRAFT:
