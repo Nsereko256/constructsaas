@@ -9,7 +9,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import type { Role, WorkflowBadges } from '@/api/types';
 import { api } from '@/api/services';
 import { qk } from '@/api/queryKeys';
-import { Badge, statusTone } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatUGX } from '@/lib/utils';
@@ -64,6 +64,16 @@ export function DashboardPage() {
 
   const data = normalizeDashboardData(dashboard.data);
   const workspace = role ? roleWorkspace[role] : roleWorkspace.admin;
+  const primaryAction: Record<Role, { label: string; href: string }> = {
+    admin: { label: 'Open action queue', href: '/procurement/requests' },
+    project_manager: { label: 'Review approvals', href: '/procurement/requests?action_queue=my_requests' },
+    procurement_officer: { label: 'Open buying queue', href: '/procurement/requests?action_queue=my_requests' },
+    storekeeper: { label: 'Receive deliveries', href: '/procurement/deliveries?action_queue=warehouse_receipts' },
+    site_engineer: { label: 'Update site work', href: '/work-orders/progress' },
+    finance_officer: { label: 'Prepare finance review', href: '/finance/payables' },
+    finance_manager: { label: 'Review finance approvals', href: '/finance/payables' },
+    finance_viewer: { label: 'View finance position', href: '/finance' },
+  };
   const isFieldRole = role === 'site_engineer' || role === 'storekeeper';
   const isFinanceRole = role?.startsWith('finance_');
   const kpis = isFieldRole ? [
@@ -92,16 +102,13 @@ export function DashboardPage() {
   const totalUsed = data.project_budget_vs_actual.reduce((total, project) => total + Number(project.actual_expenditure || 0) + Number(project.open_commitments || 0), 0);
   const budgetChart = [{ name: 'Used', value: Math.min(totalUsed, totalBudget) }, { name: 'Available', value: Math.max(totalBudget - totalUsed, 0) }].filter((item) => item.value > 0);
   const inventoryChart = [{ name: 'Healthy', value: Math.max(data.total_active_materials - data.low_stock_count, 0) }, { name: 'Low stock', value: data.low_stock_count }].filter((item) => item.value > 0);
-  const pipeline: Array<{ label: string; count: number; href: string; icon: LucideIcon }> = [
-    { label: 'Requests', count: workflow.data?.requests || 0, href: '/procurement/requests', icon: ClipboardList }, { label: 'POs', count: workflow.data?.purchase_orders || 0, href: '/procurement/purchase-orders', icon: PackageCheck }, { label: 'Deliveries', count: workflow.data?.deliveries || 0, href: '/procurement/deliveries', icon: ReceiptText }, { label: 'Stock alerts', count: workflow.data?.inventory || 0, href: '/inventory', icon: Boxes }, { label: 'Invoices', count: workflow.data?.supplier_invoices || 0, href: '/finance/payables', icon: CircleDollarSign }, { label: 'Payments', count: workflow.data?.payments || 0, href: '/finance/payments', icon: Wallet },
-  ];
 
   return (
     <div className="grid gap-2.5 sm:gap-5">
       <section className="app-sheen overflow-hidden rounded-2xl border border-primary/15 bg-white px-4 py-4 shadow-panel sm:px-6 sm:py-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-primary">Company command centre</p><h2 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">Good day, {user?.first_name || user?.username || 'there'}</h2><p className="mt-1 max-w-2xl text-sm text-muted sm:text-base">{role ? roleIntro[role] : roleIntro.admin}</p></div>
-          <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold text-muted"><CalendarDays className="h-4 w-4 text-primary" />{new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date())}</div>
+          <div className="flex flex-wrap items-center justify-end gap-2"><div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold text-muted"><CalendarDays className="h-4 w-4 text-primary" />{new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date())}</div><Link className="rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-primary/90" to={(role && primaryAction[role] ? primaryAction[role] : primaryAction.admin).href}>{(role && primaryAction[role] ? primaryAction[role] : primaryAction.admin).label}</Link></div>
         </div>
         <div className="mt-4 grid gap-2 sm:grid-cols-3"><div className={`flex items-center gap-2 rounded-xl border p-3 ${priorityCount ? 'border-warning/30 bg-warning/5' : 'border-success/25 bg-success/5'}`}><span className={`grid h-8 w-8 place-items-center rounded-lg ${priorityCount ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success'}`}>{priorityCount ? <ShieldAlert className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}</span><span><strong className="block text-sm">{priorityCount ? `${priorityCount} action${priorityCount === 1 ? '' : 's'} need attention` : 'Operations are clear'}</strong><span className="text-xs text-muted">Your role-based queue</span></span></div><div className="flex items-center gap-2 rounded-xl border border-border bg-background p-3"><span className="grid h-8 w-8 place-items-center rounded-lg bg-primary/10 text-primary"><Gauge className="h-4 w-4" /></span><span><strong className="block text-sm">{data.active_projects} active project{data.active_projects === 1 ? '' : 's'}</strong><span className="text-xs text-muted">Across the company</span></span></div><div className="flex items-center gap-2 rounded-xl border border-border bg-background p-3"><span className="grid h-8 w-8 place-items-center rounded-lg bg-info/10 text-info"><CircleDollarSign className="h-4 w-4" /></span><span><strong className="block text-sm">{data.low_stock_count ? `${data.low_stock_count} stock alerts` : 'Stock position healthy'}</strong><span className="text-xs text-muted">Inventory signal</span></span></div></div>
       </section>
@@ -115,11 +122,6 @@ export function DashboardPage() {
             </CardContent>
           </Card>
         ))}
-      </section>
-      <section aria-label="Operations pipeline" className="rounded-2xl border border-border bg-white p-3 shadow-panel sm:p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-primary">End-to-end control</p><h3 className="mt-0.5 text-base font-black">Operations pipeline</h3></div><Link className="text-xs font-bold text-primary hover:underline" to="/procurement">Open Procurement</Link></div>
-        <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-3 sm:gap-2 lg:grid-cols-6">{pipeline.map(({ label, count, href, icon: Icon }, index) => <Link key={label} to={href} className={`group relative overflow-hidden rounded-xl border p-2 transition-all hover:-translate-y-0.5 hover:shadow-lift sm:rounded-2xl sm:p-3.5 ${count ? 'border-[#D89B24] bg-[#FFF8E6] hover:border-[#A96F00]' : 'border-[#7FB995] bg-[#F2FAF5] hover:border-[#2E8B57]'}`}><span className={`absolute inset-x-0 top-0 h-0.5 sm:h-1 ${count ? 'bg-[#D89B24]' : 'bg-[#2E8B57]'}`} /><div className="flex items-start justify-between gap-1"><span className={`grid h-6 w-6 place-items-center rounded-lg sm:h-8 sm:w-8 sm:rounded-xl ${count ? 'bg-[#FFE6A6] text-[#6B4300]' : 'bg-[#D8F0E1] text-[#17663A]'}`}><Icon className="h-3 w-3 sm:h-4 sm:w-4" /></span><span className="text-[9px] font-black text-[#52615A] sm:text-[10px]">0{index + 1}</span></div><p className="mt-2 text-[9px] font-black uppercase tracking-[0.08em] text-[#52615A] sm:mt-3 sm:text-[10px] sm:tracking-[0.1em]">{label}</p><strong className="mt-0.5 block text-xl font-black tracking-tight text-[#17231C] sm:text-2xl">{count}</strong><span className={`mt-1 inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-bold sm:mt-2 sm:px-2 sm:py-1 sm:text-[10px] ${count ? 'bg-[#FFE6A6] text-[#6B4300]' : 'bg-[#D8F0E1] text-[#17663A]'}`}>{count ? 'Needs attention' : 'All clear'}</span>{index < 5 ? <span className="absolute -right-1.5 top-1/2 z-10 hidden h-3 w-3 -translate-y-1/2 rotate-45 border-r border-t border-[#B7C8BC] bg-[#F7FBF8] lg:block" /> : null}</Link>)}
-        </div>
       </section>
       <section className="grid gap-3 sm:gap-5 xl:grid-cols-[1.25fr_0.75fr]">
         <Card>
@@ -157,42 +159,7 @@ export function DashboardPage() {
             })}
           </CardContent>
         </Card>
-        <Card className="hidden md:block">
-          <CardHeader>
-            <CardTitle>Recent activity</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2 p-2.5 sm:gap-3 sm:p-4">
-            {data.recent_stock_movements.slice(0, 8).map((movement) => (
-              <div key={movement.id} className="flex min-h-12 items-center justify-between gap-2 border-b border-border py-2 last:border-0 sm:min-h-14 sm:gap-3">
-                <div>
-                  <strong className="text-sm">{movement.material?.name || 'Material movement'}</strong>
-                  <p className="text-xs text-muted sm:text-sm">{movement.project?.name || 'General stock'}</p>
-                </div>
-                <Badge tone={statusTone(movement.movement_type)}>{movement.movement_type_display}</Badge>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
       </section>
-      <details className="border border-border bg-white md:hidden">
-        <summary className="cursor-pointer px-3 py-2.5 text-sm font-bold text-primary">More dashboard insights</summary>
-        <div className="grid gap-3 border-t border-border p-2.5">
-          <div>
-            <strong className="text-sm">Inventory alerts requiring attention</strong>
-            <div className="mt-2 grid gap-2">
-              {data.low_stock_materials.slice(0, 3).map((material) => <div key={material.id} className="flex items-center justify-between gap-2 border-b border-border pb-2"><span className="min-w-0 truncate text-sm">{material.name}</span><Badge tone="warning">Low stock</Badge></div>)}
-              {!data.low_stock_materials.length ? <p className="text-sm text-muted">No urgent material alerts.</p> : null}
-            </div>
-          </div>
-          <div>
-            <strong className="text-sm">Recent activity</strong>
-            <div className="mt-2 grid gap-2">
-              {data.recent_stock_movements.slice(0, 4).map((movement) => <div key={movement.id} className="flex items-center justify-between gap-2 border-b border-border pb-2"><span className="min-w-0 truncate text-sm">{movement.material?.name || 'Material movement'}</span><Badge tone={statusTone(movement.movement_type)}>{movement.movement_type_display}</Badge></div>)}
-              {!data.recent_stock_movements.length ? <p className="text-sm text-muted">No recent activity.</p> : null}
-            </div>
-          </div>
-        </div>
-      </details>
     </div>
   );
 }
