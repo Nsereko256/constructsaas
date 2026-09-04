@@ -101,12 +101,12 @@ export function DashboardPage() {
   const budgetChart = [{ name: 'Used', value: Math.min(totalUsed, totalBudget) }, { name: 'Available', value: Math.max(totalBudget - totalUsed, 0) }].filter((item) => item.value > 0);
   const inventoryChart = [{ name: 'Healthy', value: Math.max(data.total_active_materials - data.low_stock_count, 0) }, { name: 'Low stock', value: data.low_stock_count }].filter((item) => item.value > 0);
   const pipeline = [
-    { label: 'Requests', count: data.pending_purchase_requests, href: '/procurement/requests', tone: 'warning', icon: ClipboardList },
-    { label: 'POs', count: workflow.data?.purchase_orders || 0, href: '/procurement/purchase-orders', tone: 'info', icon: PackageCheck },
-    { label: 'Deliveries', count: workflow.data?.deliveries || 0, href: '/procurement/deliveries', tone: 'info', icon: Truck },
-    { label: 'Stock', count: data.low_stock_count, href: '/inventory', tone: 'critical', icon: Boxes },
-    { label: 'Invoices', count: workflow.data?.supplier_invoices || 0, href: '/finance/payables', tone: 'success', icon: ReceiptText },
-    { label: 'Payments', count: workflow.data?.payments || 0, href: '/finance/payments', tone: 'success', icon: Wallet },
+    { label: 'Requests', count: data.pending_purchase_requests, status: 'Needs attention', href: '/procurement/requests' },
+    { label: 'POs', count: workflow.data?.purchase_orders || 0, status: 'Open', href: '/procurement/purchase-orders' },
+    { label: 'Deliveries', count: workflow.data?.deliveries || 0, status: 'In transit', href: '/procurement/deliveries' },
+    { label: 'Stock', count: data.low_stock_count, status: data.low_stock_count ? 'Low stock' : 'Healthy', href: '/inventory' },
+    { label: 'Invoices', count: workflow.data?.supplier_invoices || 0, status: 'All clear', href: '/finance/payables' },
+    { label: 'Payments', count: workflow.data?.payments || 0, status: 'All clear', href: '/finance/payments' },
   ] as const;
   const attentionItems = [
     { label: 'Requests awaiting approval', detail: 'Purchase requests', count: workflow.data?.requests || 0, href: '/procurement/requests', tone: 'warning', icon: ClipboardList },
@@ -150,8 +150,10 @@ export function DashboardPage() {
       </section>
       <Card>
         <CardHeader><CardTitle>Procurement pipeline</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 sm:gap-3 lg:grid-cols-6 sm:p-4">
-          {pipeline.map((item, index) => <Link key={item.label} to={item.href} className="group relative rounded-xl border border-border bg-white p-2.5 transition hover:border-primary/40 hover:shadow-sm sm:p-3"><span className={`grid h-8 w-8 place-items-center rounded-full ${item.tone === 'critical' ? 'bg-critical/10 text-critical' : item.tone === 'success' ? 'bg-success/10 text-success' : item.tone === 'warning' ? 'bg-warning/10 text-warning' : 'bg-info/10 text-info'}`}><item.icon className="h-4 w-4" /></span><span className="mt-2 block text-[10px] font-bold uppercase tracking-wide text-muted">{item.label}</span><strong className="mt-0.5 block text-xl font-black">{item.count}</strong><span className={`text-[11px] ${item.count ? item.tone === 'critical' ? 'text-critical' : item.tone === 'success' ? 'text-success' : 'text-warning' : 'text-muted'}`}>{item.count ? 'Needs attention' : 'All clear'}</span>{index < pipeline.length - 1 ? <ChevronRight className="absolute -right-3 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-muted lg:block" /> : null}</Link>)}
+        <CardContent className="overflow-x-auto p-3 sm:p-4">
+          <div className="flex min-w-[690px] items-start">
+            {pipeline.map((item, index) => <div key={item.label} className="relative flex min-w-0 flex-1 flex-col items-center"><div className="flex w-full items-center"><Link to={item.href} aria-label={`${item.label}: ${item.count}`} className={`relative z-10 mx-auto grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-black transition hover:scale-105 ${item.count ? 'bg-primary text-white' : 'bg-muted text-foreground'}`}>{index + 1}</Link>{index < pipeline.length - 1 ? <span className="h-px flex-1 bg-border" /> : null}</div><Link to={item.href} className="mt-1 text-center text-xs font-semibold text-foreground hover:text-primary">{item.label}</Link><Link to={item.href} className="text-lg font-black text-foreground hover:text-primary">{item.count}</Link><Link to={item.href} className={`text-[11px] ${item.count ? item.status === 'Low stock' ? 'text-critical' : item.status === 'In transit' ? 'text-warning' : 'text-muted' : 'text-success'}`}>{item.status}</Link></div>)}
+          </div>
         </CardContent>
       </Card>
       <section className="grid gap-3 sm:gap-5 xl:grid-cols-2">
