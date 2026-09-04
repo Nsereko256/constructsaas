@@ -1,3 +1,5 @@
+import asyncio
+
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 import json
@@ -8,6 +10,14 @@ from django.db import models, transaction
 from apps.accounts.models import User
 from apps.materials.models import Material
 from .models import Notification, WebPushSubscription
+
+
+async def _bounded_group_send(channel_layer, group_name, message):
+    """Keep a dead Redis channel from blocking a completed HTTP workflow."""
+    try:
+        await asyncio.wait_for(channel_layer.group_send(group_name, message), timeout=1.0)
+    except Exception:
+        return
 
 
 def send_web_push_notification(notification):
@@ -68,7 +78,8 @@ def push_unread_count(user, company=None):
     if channel_layer is None:
         return
 
-    async_to_sync(channel_layer.group_send)(
+    async_to_sync(_bounded_group_send)(
+        channel_layer,
         f'notify_user_{user.id}',
         {
             'type': 'notification.count',
@@ -95,7 +106,8 @@ def send_notification(user, notification_type, level, title, message, link=None)
     channel_layer = get_channel_layer()
     if channel_layer is not None:
         try:
-            async_to_sync(channel_layer.group_send)(
+            async_to_sync(_bounded_group_send)(
+                channel_layer,
                 f'notify_user_{user.id}',
                 {
                     'type': 'notification.message',
