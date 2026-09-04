@@ -5,6 +5,7 @@ import type { DashboardData } from '@/api/types';
 import { connectSocket } from '@/api/ws';
 import { AlertTriangle, ArrowRight, Boxes, CalendarDays, CheckCircle2, ClipboardCheck, ClipboardList, CircleDollarSign, FolderKanban, Gauge, PackageCheck, ReceiptText, ShieldAlert, TrendingUp, Wallet, type LucideIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import type { Role, WorkflowBadges } from '@/api/types';
 import { api } from '@/api/services';
 import { qk } from '@/api/queryKeys';
@@ -87,6 +88,10 @@ export function DashboardPage() {
     const used = Number(project.actual_expenditure || 0) + Number(project.open_commitments || 0);
     return { ...project, used, utilization: budget ? Math.min(100, Math.round((used / budget) * 100)) : 0, atRisk: budget > 0 && used > budget };
   });
+  const totalBudget = data.project_budget_vs_actual.reduce((total, project) => total + Number(project.budget || 0), 0);
+  const totalUsed = data.project_budget_vs_actual.reduce((total, project) => total + Number(project.actual_expenditure || 0) + Number(project.open_commitments || 0), 0);
+  const budgetChart = [{ name: 'Used', value: Math.min(totalUsed, totalBudget) }, { name: 'Available', value: Math.max(totalBudget - totalUsed, 0) }].filter((item) => item.value > 0);
+  const inventoryChart = [{ name: 'Healthy', value: Math.max(data.total_active_materials - data.low_stock_count, 0) }, { name: 'Low stock', value: data.low_stock_count }].filter((item) => item.value > 0);
 
   return (
     <div className="grid gap-2.5 sm:gap-5">
@@ -118,15 +123,19 @@ export function DashboardPage() {
       <section className="grid gap-3 sm:gap-5 xl:grid-cols-[1.25fr_0.75fr]">
         <Card>
           <CardHeader><div className="flex items-center justify-between gap-3"><div><CardTitle>Portfolio health</CardTitle><p className="mt-1 text-xs text-muted">Committed and actual spend against approved project budgets.</p></div><Link className="text-xs font-bold text-primary hover:underline" to="/projects">View projects</Link></div></CardHeader>
-          <CardContent className="grid gap-3 p-3 sm:p-4">
+          <CardContent className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[1fr_190px]">
+            <div className="grid gap-3">
             {budgetRows.map((project) => <div key={project.id}><div className="flex items-center justify-between gap-3 text-sm"><span className="min-w-0 truncate"><strong>{project.code}</strong><span className="ml-2 text-muted">{project.name}</span></span><span className={`shrink-0 font-bold ${project.atRisk ? 'text-critical' : 'text-primary'}`}>{project.atRisk ? 'Over budget' : `${project.utilization}% used`}</span></div><div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${project.atRisk ? 'bg-critical' : project.utilization > 80 ? 'bg-warning' : 'bg-primary'}`} style={{ width: `${project.utilization}%` }} /></div><p className="mt-1 text-[11px] text-muted">Actual {formatUGX(project.actual_expenditure)} · Committed {formatUGX(project.open_commitments)} · Available {formatUGX(project.remaining_budget)}</p></div>)}
             {!budgetRows.length ? <div className="rounded-xl border border-dashed border-border bg-background p-5 text-center"><Gauge className="mx-auto h-6 w-6 text-muted" /><strong className="mt-2 block text-sm">No approved project budgets yet</strong><p className="mt-1 text-xs text-muted">Create and approve a project budget to see portfolio health here.</p><Link className="mt-3 inline-block text-xs font-bold text-primary hover:underline" to="/finance/budgets">Open Finance budgets</Link></div> : null}
+            </div>
+            {budgetChart.length ? <DonutChart title="Budget position" data={budgetChart} colors={['#2878D0', '#087A3E']} center={formatUGX(Math.max(totalBudget - totalUsed, 0).toString())} /> : null}
           </CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle>{isFieldRole ? (role === 'storekeeper' ? 'Warehouse focus' : 'Site focus') : 'Inventory alerts'}</CardTitle></CardHeader>
-          <CardContent className="grid gap-2.5 p-3 text-sm sm:p-4">
-            {isFieldRole ? <><p className="text-muted">{role === 'storekeeper' ? 'Keep receipts, stock issues and supplier exceptions current.' : 'Keep requests tied to the right project and confirm materials physically received on site.'}</p><div className="flex items-center gap-2 rounded-xl border border-info/20 bg-info/5 p-3 text-xs"><ReceiptText className="h-4 w-4 shrink-0 text-info" />Offline actions remain on this device until they sync.</div></> : <>{data.low_stock_materials.slice(0, 5).map((material) => <div key={material.id} className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0"><span className="min-w-0 truncate"><strong>{material.name}</strong><span className="ml-2 text-xs text-muted">{material.code}</span></span><Badge tone="warning">Low stock</Badge></div>)}{!data.low_stock_materials.length ? <div className="rounded-xl border border-success/20 bg-success/5 p-4 text-center"><CheckCircle2 className="mx-auto h-5 w-5 text-success" /><strong className="mt-1 block text-sm">Inventory is healthy</strong><p className="mt-1 text-xs text-muted">No materials are below their minimum stock level.</p></div> : null}<Link className="text-xs font-bold text-primary hover:underline" to="/inventory">Review inventory</Link></>}
+          <CardContent className="grid gap-4 p-3 text-sm sm:p-4 lg:grid-cols-[1fr_150px]">
+            {isFieldRole ? <><div><p className="text-muted">{role === 'storekeeper' ? 'Keep receipts, stock issues and supplier exceptions current.' : 'Keep requests tied to the right project and confirm materials physically received on site.'}</p><div className="mt-3 flex items-center gap-2 rounded-xl border border-info/20 bg-info/5 p-3 text-xs"><ReceiptText className="h-4 w-4 shrink-0 text-info" />Offline actions remain on this device until they sync.</div></div></> : <div className="grid gap-2.5">{data.low_stock_materials.slice(0, 5).map((material) => <div key={material.id} className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0"><span className="min-w-0 truncate"><strong>{material.name}</strong><span className="ml-2 text-xs text-muted">{material.code}</span></span><Badge tone="warning">Low stock</Badge></div>)}{!data.low_stock_materials.length ? <div className="rounded-xl border border-success/20 bg-success/5 p-4 text-center"><CheckCircle2 className="mx-auto h-5 w-5 text-success" /><strong className="mt-1 block text-sm">Inventory is healthy</strong><p className="mt-1 text-xs text-muted">No materials are below their minimum stock level.</p></div> : null}<Link className="text-xs font-bold text-primary hover:underline" to="/inventory">Review inventory</Link></div>}
+            {!isFieldRole && inventoryChart.length ? <DonutChart title="Stock health" data={inventoryChart} colors={['#087A3E', '#D58B00']} center={String(data.total_active_materials)} /> : null}
           </CardContent>
         </Card>
       </section>
@@ -185,4 +194,8 @@ export function DashboardPage() {
       </details>
     </div>
   );
+}
+
+function DonutChart({ title, data, colors, center }: { title: string; data: Array<{ name: string; value: number }>; colors: string[]; center: string }) {
+  return <div className="min-w-0"><p className="text-center text-[10px] font-bold uppercase tracking-wide text-muted">{title}</p><div className="relative mx-auto mt-1 h-36 w-full max-w-[180px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data} dataKey="value" nameKey="name" innerRadius={42} outerRadius={62} paddingAngle={3} stroke="none"><Cell fill={colors[0]} /><Cell fill={colors[1]} /></Pie><Tooltip formatter={(value) => Number(value).toLocaleString()} /></PieChart></ResponsiveContainer><div className="pointer-events-none absolute inset-0 grid place-items-center px-5 text-center text-xs font-black leading-tight">{center}</div></div><div className="flex justify-center gap-3 text-[10px] text-muted">{data.map((item, index) => <span key={item.name} className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-full" style={{ backgroundColor: colors[index] }} />{item.name}</span>)}</div></div>;
 }
