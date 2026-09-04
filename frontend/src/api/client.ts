@@ -42,9 +42,9 @@ export function clearTokens() {
   sessionStorage.removeItem(REFRESH_KEY);
 }
 
-function endLocalSession() {
+function endLocalSession(reason = 'Your session has expired. Please sign in again.') {
   clearTokens();
-  window.dispatchEvent(new Event('construct:session-ended'));
+  window.dispatchEvent(new CustomEvent('construct:session-ended', { detail: { reason } }));
 }
 
 function apiUrl(path: string) {
@@ -74,21 +74,31 @@ function errorMessage(payload: ApiErrorPayload | null, fallback: string) {
   return fallback;
 }
 
+let refreshPromise: Promise<string | null> | null = null;
+
 async function refreshAccessToken() {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
   const tokens = getTokens();
   if (!tokens?.refresh) return null;
-  const response = await fetch(apiUrl('/api/token/refresh/'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ refresh: tokens.refresh }),
-  });
-  if (!response.ok) {
-    endLocalSession();
+  try {
+    const response = await fetch(apiUrl('/api/token/refresh/'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ refresh: tokens.refresh }),
+    });
+    if (!response.ok) {
+      endLocalSession('Your session expired or was ended on another device. Please sign in again.');
+      return null;
+    }
+    const data = (await response.json()) as { access: string; refresh?: string };
+    setTokens({ access: data.access, refresh: data.refresh || tokens.refresh });
+    return data.access;
+  } catch {
     return null;
   }
-  const data = (await response.json()) as { access: string; refresh?: string };
-  setTokens({ access: data.access, refresh: data.refresh || tokens.refresh });
-  return data.access;
+  })();
+  try { return await refreshPromise; } finally { refreshPromise = null; }
 }
 
 export async function apiRequest<T>(path: string, init: ApiRequestInit = {}, retry = true): Promise<T> {

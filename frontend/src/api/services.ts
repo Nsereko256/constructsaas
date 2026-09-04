@@ -53,10 +53,10 @@ export async function registerCompany(body: { company_name: string; username: st
   return apiRequest<{ detail: string; username: string }>('/api/register-company/', { method: 'POST', body });
 }
 
-export function logout() {
+export async function logout() {
   const refresh = getTokens()?.refresh;
   if (refresh) {
-    void apiRequest('/api/token/logout/', { method: 'POST', body: { refresh } }).catch(() => undefined);
+    await apiRequest('/api/token/logout/', { method: 'POST', body: { refresh }, keepalive: true }).catch(() => undefined);
   }
   clearTokens();
 }

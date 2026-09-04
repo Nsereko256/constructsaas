@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { useAuth } from '@/auth/auth-context';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ type LoginForm = z.infer<typeof schema>;
 export function LoginPage() {
   const auth = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const form = useForm<LoginForm>({ resolver: zodResolver(schema), defaultValues: { username: '', password: '' } });
   const [sessionConflict, setSessionConflict] = useState<LoginForm | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -29,7 +30,8 @@ export function LoginPage() {
   async function onSubmit(values: LoginForm) {
     try {
       await auth.login(values.username, values.password);
-      navigate('/dashboard', { replace: true });
+      const from = (location.state as { from?: { pathname?: string; search?: string; hash?: string } } | null)?.from;
+      navigate(from?.pathname ? `${from.pathname}${from.search || ''}${from.hash || ''}` : '/dashboard', { replace: true });
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         setSessionConflict(values);
@@ -43,7 +45,8 @@ export function LoginPage() {
     if (!sessionConflict) return;
     try {
       await auth.login(sessionConflict.username, sessionConflict.password, true);
-      navigate('/dashboard', { replace: true });
+      const from = (location.state as { from?: { pathname?: string; search?: string; hash?: string } } | null)?.from;
+      navigate(from?.pathname ? `${from.pathname}${from.search || ''}${from.hash || ''}` : '/dashboard', { replace: true });
     } catch (error) {
       setSessionConflict(null);
       form.setError('root', { message: error instanceof Error ? error.message : 'Could not end the other session.' });
@@ -66,6 +69,7 @@ export function LoginPage() {
         <Card className="w-full max-w-md p-6">
           <h2 className="text-2xl font-black tracking-tight">Sign in</h2>
           <p className="mt-1 text-sm text-muted">Use your company account to continue.</p>
+          {auth.sessionMessage ? <p className="mt-4 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-foreground">{auth.sessionMessage}</p> : null}
           <form className="mt-6 grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
             <Field label="Username" required error={form.formState.errors.username?.message}>
               <input className={inputClass} autoComplete="username" {...form.register('username')} />
