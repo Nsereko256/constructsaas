@@ -34,7 +34,7 @@ export const can = {
   prepareFinance: (role?: Role | null) => hasRole(role, ['finance_officer', 'finance_manager', 'admin']),
   manageFinance: (role?: Role | null) => hasRole(role, ['finance_manager', 'admin']),
   submitPrToFinance: (role?: Role | null) => hasRole(role, ['project_manager', 'procurement_officer', 'finance_officer', 'admin']),
-  reviewPrFinance: (role?: Role | null) => hasRole(role, ['finance_officer', 'finance_manager', 'admin']),
+  reviewPrFinance: (role?: Role | null) => hasRole(role, ['finance_manager', 'admin']),
 };
 
 export function canReceivePurchaseOrder(role: Role | null | undefined, order: PurchaseOrder) {
