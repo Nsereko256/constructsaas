@@ -303,7 +303,7 @@ def record_goods_received_note(*, purchase_order, user, receipt_date, items=None
             'accepted': row['accepted'] or Decimal('0.00'),
             'dispositioned': row['dispositioned'] or Decimal('0.00'),
         }
-        for row in GoodsReceivedNoteItem.objects.select_for_update().filter(
+        for row in GoodsReceivedNoteItem.objects.filter(
             company=user.company, purchase_order_item__in=po_items,
             goods_received_note__status=GoodsReceivedNote.STATUS_ACCEPTED,
         ).values('purchase_order_item').annotate(
