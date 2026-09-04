@@ -284,9 +284,10 @@ def receive_valued_stock(*, user, goods_received_note_item, warehouse=None, allo
         WAREHOUSE_WRITE_ROLES | ({User.ROLE_SITE_ENGINEER} if allow_site_receiver else set()),
     )
     grn_item_id = getattr(goods_received_note_item, 'pk', goods_received_note_item)
-    grn_item = GoodsReceivedNoteItem.objects.select_for_update().select_related(
-        'goods_received_note__purchase_order', 'purchase_order_item__material',
-    ).filter(
+    # Lock only the GRN item row.  PostgreSQL rejects FOR UPDATE queries that
+    # include an outer join to a nullable related table; the related records
+    # are loaded separately below as needed.
+    grn_item = GoodsReceivedNoteItem.objects.select_for_update().filter(
         pk=grn_item_id, company=user.company,
         goods_received_note__status=GoodsReceivedNote.STATUS_ACCEPTED,
     ).first()
