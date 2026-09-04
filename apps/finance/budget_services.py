@@ -467,7 +467,11 @@ def review_purchase_request_finance(
     *, purchase_request, user, decision, comments='', override=False,
 ):
     request = PurchaseRequest.objects.select_for_update().get(pk=purchase_request.pk, company=user.company)
-    approval = BudgetApproval.objects.select_for_update().select_related('budget_line', 'project_budget').get(
+    # Do not join nullable budget relations while taking the row lock.  PostgreSQL
+    # rejects FOR UPDATE when the query includes an outer join to a nullable side.
+    # The related records are fetched separately below only when a budget line
+    # is actually attached.
+    approval = BudgetApproval.objects.select_for_update().get(
         purchase_request=request, company=user.company,
     )
     allowed = {BudgetApproval.STATUS_SUBMITTED, BudgetApproval.STATUS_HOLD}
