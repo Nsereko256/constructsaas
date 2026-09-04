@@ -9,7 +9,7 @@ from apps.notifications.models import Notification
 from .models import WorkOrder, WorkOrderAuditLog, WorkOrderTask
 
 TRANSITIONS = {
-    WorkOrder.STATUS_DRAFT: {WorkOrder.STATUS_SUBMITTED, WorkOrder.STATUS_CANCELLED},
+    WorkOrder.STATUS_DRAFT: {WorkOrder.STATUS_SUBMITTED, WorkOrder.STATUS_ASSIGNED, WorkOrder.STATUS_CANCELLED},
     WorkOrder.STATUS_SUBMITTED: {WorkOrder.STATUS_APPROVED, WorkOrder.STATUS_REJECTED, WorkOrder.STATUS_ON_HOLD, WorkOrder.STATUS_CANCELLED},
     WorkOrder.STATUS_APPROVED: {WorkOrder.STATUS_ASSIGNED, WorkOrder.STATUS_ON_HOLD, WorkOrder.STATUS_CANCELLED},
     WorkOrder.STATUS_ASSIGNED: {WorkOrder.STATUS_IN_PROGRESS, WorkOrder.STATUS_ON_HOLD, WorkOrder.STATUS_CANCELLED},

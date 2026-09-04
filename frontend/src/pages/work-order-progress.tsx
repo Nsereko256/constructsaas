@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '@/api/services';
 import type { WorkOrderSite } from '@/api/types';
+import { useAuth } from '@/auth/auth-context';
 import { FormModal } from '@/components/common/form-modal';
 import { PageToolbar } from '@/components/common/page-toolbar';
 import { Badge, statusTone } from '@/components/ui/badge';
@@ -11,16 +12,21 @@ import { Field, inputClass } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
 
 export function WorkOrderProgressPage() {
+  const { role } = useAuth();
   const [selected, setSelected] = useState<WorkOrderSite | null>(null);
   const [status, setStatus] = useState('');
   const sites = useQuery({ queryKey: ['work-order-sites', status], queryFn: () => api.workOrderSites(status ? { status } : {}) });
+  const queryClient = useQueryClient();
+  const siteTransition = useMutation({ mutationFn: ({ id, nextStatus }: { id: number; nextStatus: string }) => api.transitionWorkOrderSite(id, { status: nextStatus }), onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['work-order-sites'] }); } });
+  const manager = role === 'admin' || role === 'project_manager';
+  const canWrite = manager || role === 'site_engineer';
   return <div className="grid gap-4">
     <PageToolbar title="Site work progress" subtitle="Update physical-site progress, record blockers, and see which work packages are falling behind.">
-      <select className={inputClass} value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All statuses</option><option value="ASSIGNED">Assigned</option><option value="IN_PROGRESS">In progress</option><option value="ON_HOLD">On hold</option></select>
+      <select className={inputClass} value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All statuses</option><option value="DRAFT">Draft</option><option value="ASSIGNED">Assigned</option><option value="IN_PROGRESS">In progress</option><option value="ON_HOLD">On hold</option></select>
       <Button variant="secondary" onClick={() => api.downloadWorkOrderProgress('xlsx', status ? { status } : {})}>Excel</Button><Button variant="secondary" onClick={() => api.downloadWorkOrderProgress('pdf', status ? { status } : {})}>PDF</Button>
     </PageToolbar>
     {sites.isError ? <Card><CardContent className="p-4 text-sm text-critical">Site progress could not be loaded. Refresh the page or try again.</CardContent></Card> : null}
-    <div className="grid gap-3">{(sites.data?.results || []).map((site) => <Card key={site.id}><CardContent className="grid gap-3 p-3 sm:grid-cols-[1fr_auto] sm:p-4"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong>{site.project_name} · {site.project_site_name}</strong><Badge tone={statusTone(site.status)}>{site.status_display}</Badge></div><p className="mt-1 text-sm">{site.title || 'Work package'} · {site.progress_percent}% reported · {site.task_progress_percent}% tasks</p><div className="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${site.progress_percent}%` }} /></div><div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4"><Metric label="Forecast" value={site.forecast_cost} /><Metric label="Committed" value={site.committed_cost} /><Metric label="Remaining" value={site.remaining_estimated_budget} /><Metric label="Close-out" value={`${site.closeout_completion_percent}%`} /></div><p className="mt-2 text-xs text-muted">{site.progress_notes || 'No progress note yet.'}</p></div><Button size="sm" variant="secondary" onClick={() => setSelected(site)}>Update progress</Button></CardContent></Card>)}{!sites.isLoading && !(sites.data?.results || []).length ? <Card><CardContent className="p-6 text-center text-sm text-muted">No site work packages match this view.</CardContent></Card> : null}</div>
+    <div className="grid gap-3">{(sites.data?.results || []).map((site) => <Card key={site.id}><CardContent className="grid gap-3 p-3 sm:grid-cols-[1fr_auto] sm:p-4"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong>{site.project_name} · {site.project_site_name}</strong><Badge tone={statusTone(site.status)}>{site.status_display}</Badge></div><p className="mt-1 text-sm">{site.title || 'Work package'} · {site.progress_percent}% reported · {site.task_progress_percent}% tasks</p><div className="mt-2 h-2 overflow-hidden rounded-lg bg-muted"><div className="h-full rounded-lg bg-primary" style={{ width: `${site.progress_percent}%` }} /></div><div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4"><Metric label="Forecast" value={site.forecast_cost} /><Metric label="Committed" value={site.committed_cost} /><Metric label="Remaining" value={site.remaining_estimated_budget} /><Metric label="Close-out" value={`${site.closeout_completion_percent}%`} /></div><p className="mt-2 text-xs text-muted">{site.progress_notes || 'No progress note yet.'}</p></div><div className="flex flex-wrap gap-2">{site.status === 'DRAFT' && manager ? <Button size="sm" variant="secondary" disabled={siteTransition.isPending} onClick={() => siteTransition.mutate({ id: site.id, nextStatus: 'ASSIGNED' })}>Assign</Button> : null}{site.status === 'ASSIGNED' && canWrite ? <Button size="sm" variant="secondary" disabled={siteTransition.isPending} onClick={() => siteTransition.mutate({ id: site.id, nextStatus: 'IN_PROGRESS' })}>Start</Button> : null}{site.status !== 'DRAFT' ? <Button size="sm" variant="secondary" onClick={() => setSelected(site)}>Update progress</Button> : null}</div></CardContent></Card>)}{!sites.isLoading && !(sites.data?.results || []).length ? <Card><CardContent className="p-6 text-center text-sm">No site work packages match this view.</CardContent></Card> : null}</div>
     {selected ? <ProgressModal site={selected} onClose={() => setSelected(null)} /> : null}
   </div>;
 }
