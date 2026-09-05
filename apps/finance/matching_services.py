@@ -172,6 +172,8 @@ def run_invoice_match(*, invoice, user, idempotency_key=''):
         SupplierInvoice.objects.select_for_update().select_related('purchase_order')
         .prefetch_related('items__purchase_order_item').get(pk=invoice.pk, company=user.company)
     )
+    if not locked.purchase_order_id:
+        raise ValidationError({'purchase_order': ['Direct work-order invoices do not require three-way matching.']})
     if locked.status not in {SupplierInvoice.STATUS_SUBMITTED, SupplierInvoice.STATUS_MATCH_EXCEPTION}:
         raise ValidationError({'status': ['Only submitted or match-exception invoices can be matched.']})
     po = PurchaseOrder.objects.select_for_update().get(pk=locked.purchase_order_id, company=user.company)
