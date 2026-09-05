@@ -271,7 +271,7 @@ class DashboardAPIView(APIView):
             accessible_projects(
                 request.user,
                 Project.objects.filter(is_active=True),
-            ).select_related('manager')
+            ).select_related('manager').prefetch_related('sites', 'goals')
         ).order_by('name')
         project_list = list(projects)
         approved_budgets = {
@@ -284,6 +284,19 @@ class DashboardAPIView(APIView):
         }
         project_budget_rows = []
         for project in project_list:
+            goals = list(project.goals.all())
+            sites = [site for site in project.sites.all() if site.is_active]
+            if goals:
+                total_weight = sum(goal.weight for goal in goals)
+                actual_progress = round(float(sum(goal.weight * goal.completion_percent for goal in goals) / total_weight), 1) if total_weight else 0
+            else:
+                actual_progress = round((sum(site.status == ProjectSite.STATUS_COMPLETED for site in sites) / len(sites) * 100), 1) if sites else 0
+            if project.start_date and project.end_date and project.end_date > project.start_date:
+                elapsed_days = (today - project.start_date).days
+                duration_days = (project.end_date - project.start_date).days
+                planned_progress = round(max(0, min(100, elapsed_days / duration_days * 100)), 1)
+            else:
+                planned_progress = 100 if project.status == Project.STATUS_COMPLETED else 0
             finance_budget = approved_budgets.get(project.id)
             if finance_budget:
                 budget_summary = budget_services.project_budget_summary(finance_budget)
@@ -306,6 +319,8 @@ class DashboardAPIView(APIView):
                 'open_commitments': budget_summary['open_commitments'],
                 'remaining_budget': budget_summary['available_balance'],
                 'budget_source': budget_source,
+                'planned_progress': planned_progress,
+                'actual_progress': actual_progress,
             })
 
         return Response(

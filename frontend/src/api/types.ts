@@ -416,5 +416,7 @@ export type DashboardData = {
     open_commitments: string;
     remaining_budget: string;
     budget_source: 'finance' | 'legacy';
+    planned_progress?: number;
+    actual_progress?: number;
   }>;
 };
