@@ -57,7 +57,6 @@ export function ProjectsPage() {
   const portfolioRows = portfolio.data?.results || projectRows;
   const activeCount = portfolioRows.filter((project) => project.is_active && project.status === 'active').length;
   const totalBudget = portfolioRows.reduce((total, project) => total + Number(project.budget || 0), 0);
-  const averageProgress = portfolioRows.length ? Math.round(portfolioRows.reduce((total, project) => total + Number(project.progress_percent || 0), 0) / portfolioRows.length) : 0;
   const actionTotal = Object.values(workflow.data || {}).reduce((total, count) => total + Number(count || 0), 0);
   const statusCounts = { all: portfolioRows.length, active: portfolioRows.filter((project) => project.status === 'active').length, planning: portfolioRows.filter((project) => project.status === 'planning').length, completed: portfolioRows.filter((project) => project.status === 'completed').length };
   const today = new Date();

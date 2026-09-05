@@ -102,7 +102,7 @@ export function AppShell() {
           <Button variant="ghost" size="sm" className="md:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation">
             <Menu className="h-5 w-5" />
           </Button>
-          {currentNav ? location.pathname.startsWith('/projects') ? <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted">{currentNav.label}</p> : <div className="min-w-0"><p className="hidden text-[10px] font-bold uppercase tracking-[0.14em] text-muted sm:block">ConstructSaaS</p><p className="truncate text-sm font-bold sm:text-base">{currentNav.label}</p></div> : null}
+          {currentNav ? location.pathname.startsWith('/projects') || location.pathname === '/procurement' ? <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted">{currentNav.label}</p> : <div className="min-w-0"><p className="hidden text-[10px] font-bold uppercase tracking-[0.14em] text-muted sm:block">ConstructSaaS</p><p className="truncate text-sm font-bold sm:text-base">{currentNav.label}</p></div> : null}
           <div className="ml-auto" />
           <label className="flex min-w-0 items-center gap-2 text-xs">
             <span className="sr-only">Active site</span>
@@ -126,7 +126,7 @@ export function AppShell() {
         </header>
         <main className="app-sheen min-h-[calc(100vh-4rem)] min-w-0 p-2.5 sm:p-4 md:px-5 md:py-2"><div className="mx-auto max-w-[1600px]">
           {site ? <div className="mb-3 rounded-md border border-info/20 bg-info/5 px-3 py-2 text-xs text-info">Site scope: <strong>{site.project_name} · {site.name}</strong>. Use “All sites” to return to the company view.</div> : null}
-          {location.pathname !== '/dashboard' && !location.pathname.startsWith('/projects') ? <ActionCentre role={role} workflow={workflowBadges.data} /> : null}
+          {location.pathname !== '/dashboard' && !location.pathname.startsWith('/projects') && location.pathname !== '/procurement' ? <ActionCentre role={role} workflow={workflowBadges.data} /> : null}
           <Outlet />
         </div></main>
       </div>

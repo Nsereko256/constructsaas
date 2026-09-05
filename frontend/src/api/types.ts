@@ -262,6 +262,8 @@ export type PurchaseOrder = {
   received_by_username: string | null;
   received_at: string | null;
   total_cost: string;
+  created_at: string;
+  updated_at: string;
   pending_preapproval_edit: {
     id: number;
     version: number;

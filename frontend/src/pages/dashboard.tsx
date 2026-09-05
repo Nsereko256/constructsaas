@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { DashboardData } from '@/api/types';
 import { connectSocket } from '@/api/ws';
-import { AlertTriangle, CalendarDays, ChevronRight, ClipboardCheck, ClipboardList, FolderKanban, PackageCheck, ReceiptText, Truck, Wallet } from 'lucide-react';
+import { AlertTriangle, CalendarDays, ChevronRight, ClipboardCheck, ClipboardList, FolderKanban, PackageCheck, ReceiptText, Wallet } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import type { Role } from '@/api/types';
