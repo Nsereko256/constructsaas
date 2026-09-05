@@ -12,7 +12,6 @@ import { qk } from '@/api/queryKeys';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatUGX } from '@/lib/utils';
 import { mergeDashboardUpdate, normalizeDashboardData } from '@/lib/dashboard';
 import { useAuth } from '@/auth/auth-context';
 
@@ -97,9 +96,6 @@ export function DashboardPage() {
     const utilization = budget ? Math.min(100, Math.round((used / budget) * 100)) : 0;
     return { ...project, used, utilization, plannedProgress: Number(project.planned_progress ?? utilization), actualProgress: Number(project.actual_progress ?? utilization), atRisk: budget > 0 && used > budget };
   });
-  const totalBudget = data.project_budget_vs_actual.reduce((total, project) => total + Number(project.budget || 0), 0);
-  const totalUsed = data.project_budget_vs_actual.reduce((total, project) => total + Number(project.actual_expenditure || 0) + Number(project.open_commitments || 0), 0);
-  const budgetChart = [{ name: 'Used', value: Math.min(totalUsed, totalBudget) }, { name: 'Available', value: Math.max(totalBudget - totalUsed, 0) }].filter((item) => item.value > 0);
   const inventoryChart = [{ name: 'Healthy', value: Math.max(data.total_active_materials - data.low_stock_count, 0) }, { name: 'Low stock', value: data.low_stock_count }].filter((item) => item.value > 0);
   const pipeline = [
     { label: 'Requests', count: data.pending_purchase_requests, status: 'Needs attention', href: '/procurement/requests' },
@@ -133,13 +129,13 @@ export function DashboardPage() {
       </section>
       <section className="grid gap-3 sm:gap-5 xl:grid-cols-[1.2fr_0.8fr]">
         <Card>
-          <CardHeader><div className="flex items-center justify-between gap-3"><div><CardTitle>Projects overview</CardTitle><p className="mt-1 text-xs text-muted">Planned progress versus actual delivery across active projects.</p></div><div className="hidden items-center gap-3 text-[10px] font-semibold text-muted sm:flex"><span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm bg-muted" />Planned</span><span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm bg-primary" />Actual</span><Link className="ml-2 inline-flex items-center text-xs font-bold text-primary hover:underline" to="/projects">View all <ChevronRight className="h-3.5 w-3.5" /></Link></div></div></CardHeader>
-          <CardContent className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[1fr_190px]">
+          <CardHeader><div className="flex items-center justify-between gap-3"><div><CardTitle>Projects overview</CardTitle><p className="mt-1 text-xs text-muted">Planned progress versus actual delivery across active projects.</p></div><div className="flex items-center gap-3 text-[10px] font-semibold text-muted"><span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm" style={{ backgroundColor: '#D9DDDE' }} />Planned</span><span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm" style={{ backgroundColor: '#0F7075' }} />Actual</span><Link className="ml-2 hidden items-center text-xs font-bold text-primary hover:underline sm:inline-flex" to="/projects">View all <ChevronRight className="h-3.5 w-3.5" /></Link></div></div></CardHeader>
+          <CardContent className="p-3 sm:p-4">
             <div className="grid gap-3">
-            {budgetRows.map((project) => <Link key={project.id} to={`/projects/${project.id}/progress`} className="block rounded-lg px-1 py-0.5 transition hover:bg-primary/[0.035]"><div className="flex items-center justify-between gap-3 text-sm"><span className="min-w-0 truncate"><strong>{project.name}</strong><span className="ml-2 text-xs text-muted">{project.code}</span></span><span className={`shrink-0 text-xs font-bold ${project.actualProgress < project.plannedProgress ? 'text-warning' : 'text-primary'}`}>{project.actualProgress}%</span></div><div className="relative mt-1.5 h-3 overflow-hidden rounded-sm bg-muted/60"><div className="absolute inset-y-0 left-0 rounded-sm bg-muted" style={{ width: `${project.plannedProgress}%` }} /><div className={`relative h-full rounded-sm ${project.atRisk ? 'bg-critical' : 'bg-primary'}`} style={{ width: `${project.actualProgress}%` }} /></div><p className="mt-1 text-[11px] text-muted">Planned {project.plannedProgress}% · Actual {project.actualProgress}% · Budget {formatUGX(project.budget)}</p></Link>)}
-            {!budgetRows.length ? <div className="rounded-xl border border-dashed border-border bg-background p-5 text-center"><Gauge className="mx-auto h-6 w-6 text-muted" /><strong className="mt-2 block text-sm">No approved project budgets yet</strong><p className="mt-1 text-xs text-muted">Create and approve a project budget to see portfolio health here.</p><Link className="mt-3 inline-block text-xs font-bold text-primary hover:underline" to="/finance/budgets">Open Finance budgets</Link></div> : null}
+            {budgetRows.map((project) => <Link key={project.id} to={`/projects/${project.id}/progress`} className="grid grid-cols-[minmax(92px,0.32fr)_minmax(0,1fr)_38px] items-center gap-2 rounded-lg px-1 py-0.5 transition hover:bg-primary/[0.035] sm:grid-cols-[minmax(150px,0.34fr)_minmax(0,1fr)_42px] sm:gap-3"><span className="min-w-0"><strong className="block truncate text-xs sm:text-sm">{project.name}</strong><span className="block truncate text-[10px] text-muted">{project.code}</span></span><span className="grid gap-1"><span className="block h-2 rounded-sm" style={{ width: `${project.plannedProgress}%`, backgroundColor: '#D9DDDE' }} /><span className={`block h-2 rounded-sm ${project.atRisk ? 'bg-critical' : ''}`} style={{ width: `${project.actualProgress}%`, backgroundColor: project.atRisk ? undefined : '#0F7075' }} /></span><span className={`text-right text-xs font-bold ${project.actualProgress < project.plannedProgress ? 'text-warning' : 'text-[#0F7075]'}`}>{project.actualProgress}%</span></Link>)}
+            {!budgetRows.length ? <div className="rounded-xl border border-dashed border-border bg-background p-5 text-center"><Gauge className="mx-auto h-6 w-6 text-muted" /><strong className="mt-2 block text-sm">No project progress yet</strong><p className="mt-1 text-xs text-muted">Add project dates and goals or sites to see planned versus actual delivery here.</p><Link className="mt-3 inline-block text-xs font-bold text-primary hover:underline" to="/projects">Open projects</Link></div> : null}
+            {budgetRows.length ? <div className="grid grid-cols-[minmax(92px,0.32fr)_minmax(0,1fr)_38px] items-center gap-2 sm:grid-cols-[minmax(150px,0.34fr)_minmax(0,1fr)_42px] sm:gap-3"><span /><span className="flex justify-between text-[10px] text-muted"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></span><span /></div> : null}
             </div>
-            {budgetChart.length ? <DonutChart title="Budget position" data={budgetChart} colors={['#2878D0', '#087A3E']} center={formatUGX(Math.max(totalBudget - totalUsed, 0).toString())} /> : null}
           </CardContent>
         </Card>
         <Card>
