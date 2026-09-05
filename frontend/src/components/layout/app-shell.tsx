@@ -39,7 +39,7 @@ export function AppShell() {
       <aside
         className={cn(
           'fixed inset-y-0 left-0 z-40 flex w-[min(82vw,296px)] flex-col border-r border-sidebar-border bg-sidebar py-3 text-white transition-all md:w-auto md:translate-x-0',
-          collapsed ? 'w-[62px]' : 'w-[170px]',
+          collapsed ? 'md:!w-[62px]' : 'md:!w-[170px]',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
@@ -98,12 +98,12 @@ export function AppShell() {
       </aside>
 
       <div className={cn('transition-all', collapsed ? 'md:pl-[62px]' : 'md:pl-[170px]')}>
-        <header className="sticky top-0 z-30 flex min-h-[54px] items-center gap-2 border-b border-border bg-white/95 px-3 backdrop-blur sm:gap-3 sm:px-5">
+        <header className="sticky top-0 z-30 flex min-h-[48px] items-center gap-2 border-b border-border bg-white/95 px-3 backdrop-blur sm:gap-3 sm:px-5">
           <Button variant="ghost" size="sm" className="md:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation">
             <Menu className="h-5 w-5" />
           </Button>
           {currentNav ? <div className="min-w-0"><p className="hidden text-[10px] font-bold uppercase tracking-[0.14em] text-muted sm:block">ConstructSaaS</p><p className="truncate text-sm font-bold sm:text-base">{currentNav.label}</p></div> : null}
-          <div className="ml-auto hidden min-w-0 truncate text-xs text-muted sm:block">Signed in as <span className="font-semibold text-foreground">{user?.role_display || 'User'}</span></div>
+          <div className="ml-auto" />
           <label className="flex min-w-0 items-center gap-2 text-xs">
             <span className="sr-only">Active site</span>
             <select aria-label="Active site" className="max-w-[180px] rounded-md border border-border bg-white px-2 py-1.5 text-xs" value={siteId || ''} onChange={(event) => setSiteId(event.target.value ? Number(event.target.value) : null)} disabled={sitesLoading}>
@@ -124,7 +124,7 @@ export function AppShell() {
           <div className="hidden items-center gap-2 lg:flex"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#5C322E] text-xs font-bold text-white">{(user?.first_name || user?.username || 'U').slice(0, 1).toUpperCase()}</span><div className="text-right text-xs"><strong className="block">{user?.username}</strong><span className="inline-flex items-center gap-1 text-muted"><ShieldCheck className="h-3 w-3" />{user?.role_display}</span></div></div>
           <Button variant="ghost" size="sm" className="px-2 sm:px-3" onClick={logout} aria-label="Logout"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Logout</span></Button>
         </header>
-        <main className="app-sheen min-h-[calc(100vh-4rem)] min-w-0 p-2.5 sm:p-4 md:p-6"><div className="mx-auto max-w-[1600px]">
+        <main className="app-sheen min-h-[calc(100vh-4rem)] min-w-0 p-2.5 sm:p-4 md:px-5 md:py-2"><div className="mx-auto max-w-[1600px]">
           {site ? <div className="mb-3 rounded-md border border-info/20 bg-info/5 px-3 py-2 text-xs text-info">Site scope: <strong>{site.project_name} · {site.name}</strong>. Use “All sites” to return to the company view.</div> : null}
           {location.pathname !== '/dashboard' ? <ActionCentre role={role} workflow={workflowBadges.data} /> : null}
           <Outlet />

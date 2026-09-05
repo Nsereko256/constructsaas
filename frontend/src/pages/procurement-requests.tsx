@@ -34,7 +34,7 @@ export function ProcurementRequestsPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const list = useListState({ status: '', priority: '', project: '', action_queue: searchParams.get('action_queue') || '' });
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => searchParams.get('create') === '1' && can.submitPr(role));
   const [rejecting, setRejecting] = useState<PurchaseRequest | null>(null);
   const [returning, setReturning] = useState<PurchaseRequest | null>(null);
   const [financeSubmission, setFinanceSubmission] = useState<PurchaseRequest | null>(null);

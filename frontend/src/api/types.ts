@@ -397,6 +397,7 @@ export type DashboardMovement = {
 };
 
 export type DashboardData = {
+  inventory_health?: Array<{ name: string; count: number; color: string }>;
   total_active_materials: number;
   active_projects: number;
   low_stock_count: number;

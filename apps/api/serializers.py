@@ -1622,3 +1622,4 @@ class DashboardResponseSerializer(serializers.Serializer):
     low_stock_materials = serializers.ListField(child=serializers.DictField())
     pending_purchase_requests_list = serializers.ListField(child=serializers.DictField())
     project_budget_vs_actual = serializers.ListField(child=serializers.DictField())
+    inventory_health = serializers.ListField(child=serializers.DictField(), read_only=True)

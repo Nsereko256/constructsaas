@@ -326,6 +326,11 @@ class DashboardAPIView(APIView):
         return Response(
             {
                 'total_active_materials': active_materials.count(),
+                'inventory_health': [
+                    {'name': 'Healthy (OK)', 'count': active_materials.filter(current_stock_value__gt=F('min_stock_level')).count(), 'color': '#0F7075'},
+                    {'name': 'Low stock', 'count': active_materials.filter(current_stock_value__gt=0, current_stock_value__lte=F('min_stock_level')).count(), 'color': '#E99A17'},
+                    {'name': 'Out of stock', 'count': active_materials.filter(current_stock_value__lte=0).count(), 'color': '#D34C5C'},
+                ],
                 'active_projects': len(project_list),
                 'low_stock_count': low_stock_materials.count(),
                 'pending_purchase_requests': pending_purchase_requests.count(),
