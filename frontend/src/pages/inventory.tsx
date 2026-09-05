@@ -1,7 +1,8 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Boxes, Download, Plus, ReceiptText, Route, Trash2 } from 'lucide-react';
+import { Boxes, Download, PackageOpen, Plus, ReceiptText, Route, Trash2 } from 'lucide-react';
 import { FormEvent, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '@/api/services';
 import type { Material } from '@/api/types';
 import { qk } from '@/api/queryKeys';
@@ -77,7 +78,7 @@ export function InventoryPage() {
 
   return (
     <div className="grid gap-4">
-      <WorkspaceTabs links={[{ href: '/inventory', label: 'Stock', description: 'Materials and valuation', icon: Boxes }, { href: '/inventory/bin-locations', label: 'Bin locations', description: 'Storage map', icon: ReceiptText }, { href: '/inventory/movements', label: 'Movements', description: 'Stock transfers', icon: Route }, { href: '/inventory/site-custody', label: 'Site custody', description: 'Issued materials', icon: ReceiptText }]} />
+      <WorkspaceTabs links={[{ href: '/inventory', label: 'Stock', description: 'Materials and valuation', icon: Boxes }, { href: '/inventory/bin-locations', label: 'Bin locations', description: 'Storage map', icon: ReceiptText }, { href: '/inventory/movements', label: 'Movements', description: 'Stock transfers', icon: Route }, { href: '/inventory/site-custody', label: 'Site custody', description: 'Dispatch and consumption', icon: ReceiptText }]} />
       <PageToolbar title="Inventory" subtitle="Materials, categories, stock thresholds and current valuation." search={list.search} onSearch={list.setSearch}>
         <select className={inputClass} value={list.filters.category} onChange={(event) => list.setFilter('category', event.target.value)}>
           <option value="">All categories</option>
@@ -90,6 +91,7 @@ export function InventoryPage() {
         </select>
         <Button variant="secondary" onClick={() => void download('pdf')}><Download className="h-4 w-4" />PDF</Button>
         <Button variant="secondary" onClick={() => void download('xlsx')}><Download className="h-4 w-4" />Excel</Button>
+        {['storekeeper', 'admin'].includes(role || '') ? <Button asChild><Link to="/procurement/requests?action_queue=my_requests"><PackageOpen className="h-4 w-4" />Issue stock</Link></Button> : null}
         {allowed ? (
           <>
             <Button variant="secondary" onClick={() => setCategoryOpen(true)}><Plus className="h-4 w-4" />Category</Button>
