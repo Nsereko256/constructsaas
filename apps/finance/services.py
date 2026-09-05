@@ -436,7 +436,7 @@ def create_supplier_invoice(
 
 @transaction.atomic
 def update_draft_invoice(*, invoice, user, values, items=None):
-    locked = SupplierInvoice.objects.select_for_update().select_related('purchase_order').get(
+    locked = SupplierInvoice.objects.select_for_update().get(
         pk=invoice.pk, company=user.company,
     )
     if locked.status != SupplierInvoice.STATUS_DRAFT:
@@ -627,7 +627,7 @@ def verify_invoice(*, invoice, user, idempotency_key=''):
                 raise ValidationError({'idempotency_key': ['This key was already used for a different verification.']})
             return existing
     locked = (
-        SupplierInvoice.objects.select_for_update().select_related('purchase_order')
+        SupplierInvoice.objects.select_for_update()
         .prefetch_related('items__purchase_order_item').get(pk=invoice.pk, company=user.company)
     )
     if locked.status != SupplierInvoice.STATUS_SUBMITTED:
@@ -688,7 +688,7 @@ def verify_invoice(*, invoice, user, idempotency_key=''):
 
 @transaction.atomic
 def approve_invoice(*, invoice, user):
-    locked = SupplierInvoice.objects.select_for_update().select_related('purchase_order').get(
+    locked = SupplierInvoice.objects.select_for_update().get(
         pk=invoice.pk, company=user.company,
     )
     if locked.status not in {SupplierInvoice.STATUS_MATCHED, SupplierInvoice.STATUS_VERIFIED}:

@@ -168,8 +168,11 @@ def run_invoice_match(*, invoice, user, idempotency_key=''):
             if existing.invoice_id != invoice.pk:
                 raise ValidationError({'idempotency_key': ['This key was used for another match run.']})
             return existing
+    # Keep the row lock on the invoice only. purchase_order is nullable for
+    # direct work-order invoices, and PostgreSQL rejects FOR UPDATE queries
+    # that try to lock the nullable side of that outer join.
     locked = (
-        SupplierInvoice.objects.select_for_update().select_related('purchase_order')
+        SupplierInvoice.objects.select_for_update()
         .prefetch_related('items__purchase_order_item').get(pk=invoice.pk, company=user.company)
     )
     if not locked.purchase_order_id:
