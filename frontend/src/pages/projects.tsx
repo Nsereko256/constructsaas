@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Building2, CalendarDays, CircleDollarSign, MoreVertical, Plus, Search, Target, Trash2 } from 'lucide-react';
+import { AlertTriangle, Building2, CalendarDays, CircleDollarSign, Grid2X2, List, MoreVertical, Plus, Search, Target, Trash2, Upload } from 'lucide-react';
 import { FormEvent, useState, type CSSProperties } from 'react';
 import { api } from '@/api/services';
 import { financeApi } from '@/api/finance-services';
@@ -13,7 +13,6 @@ import { Badge, statusTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field, inputClass } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
-import { ExportButton } from '@/components/common/export-button';
 import { EngineerPicker } from '@/components/common/engineer-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useListState } from '@/hooks/use-list-state';
@@ -32,10 +31,23 @@ function downloadProjects(rows: Project[]) {
   URL.revokeObjectURL(url);
 }
 
+function formatCompactUGX(value: number) {
+  if (value >= 1_000_000_000) return `UGX ${(value / 1_000_000_000).toFixed(value >= 10_000_000_000 ? 1 : 2).replace(/\.0+$/, '')}B`;
+  if (value >= 1_000_000) return `UGX ${(value / 1_000_000).toFixed(value >= 100_000_000 ? 0 : 1).replace(/\.0$/, '')}M`;
+  return formatUGX(value);
+}
+
+function projectCondition(project: Project, today: Date) {
+  if (project.end_date && new Date(project.end_date) < today && project.status !== 'completed') return 'delayed';
+  if (project.status === 'on_hold' || Number(project.budget_available_balance || 0) < 0) return 'at-risk';
+  return 'on-track';
+}
+
 export function ProjectsPage() {
   const { role } = useAuth();
-  const list = useListState({ status: '', is_active: 'true' });
+  const list = useListState({ status: '', manager: '', is_active: 'true' });
   const [open, setOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const projectQuery = { ...list.query, page_size: 4 };
   const projects = useQuery({ queryKey: qk.projects(projectQuery), queryFn: () => api.projects(projectQuery) });
   const portfolio = useQuery({ queryKey: qk.projects({ is_active: 'true', page_size: 100 }), queryFn: () => api.projects({ is_active: 'true', page_size: 100 }) });
@@ -43,37 +55,37 @@ export function ProjectsPage() {
   const goals = useQuery({ queryKey: ['project-goals', 'portfolio'], queryFn: () => api.projectGoals({ page_size: 100 }) });
   const projectRows = projects.data?.results || [];
   const portfolioRows = portfolio.data?.results || projectRows;
-  const activeCount = portfolioRows.filter((project) => project.is_active && project.status !== 'completed').length;
+  const activeCount = portfolioRows.filter((project) => project.is_active && project.status === 'active').length;
   const totalBudget = portfolioRows.reduce((total, project) => total + Number(project.budget || 0), 0);
   const averageProgress = portfolioRows.length ? Math.round(portfolioRows.reduce((total, project) => total + Number(project.progress_percent || 0), 0) / portfolioRows.length) : 0;
   const actionTotal = Object.values(workflow.data || {}).reduce((total, count) => total + Number(count || 0), 0);
   const statusCounts = { all: portfolioRows.length, active: portfolioRows.filter((project) => project.status === 'active').length, planning: portfolioRows.filter((project) => project.status === 'planning').length, completed: portfolioRows.filter((project) => project.status === 'completed').length };
   const today = new Date();
   const health = portfolioRows.reduce((summary, project) => {
-    const delayed = Boolean(project.end_date && new Date(project.end_date) < today && project.status !== 'completed');
-    const atRisk = project.status === 'on_hold' || Number(project.budget_available_balance || 0) < 0;
-    if (delayed) summary.delayed += 1;
-    else if (atRisk) summary.atRisk += 1;
+    const condition = projectCondition(project, today);
+    if (condition === 'delayed') summary.delayed += 1;
+    else if (condition === 'at-risk') summary.atRisk += 1;
     else summary.onTrack += 1;
     return summary;
   }, { onTrack: 0, atRisk: 0, delayed: 0 });
+  const managers = Array.from(new Map(portfolioRows.filter((project) => project.manager).map((project) => [project.manager, { id: project.manager, name: project.manager_name }])).values());
   const milestones = ((goals.data?.results || []) as ProjectGoal[]).filter((goal) => goal.due_date && goal.status !== 'COMPLETED').sort((a, b) => String(a.due_date).localeCompare(String(b.due_date))).slice(0, 3);
 
   return (
     <div className="projects-reference">
-      <section className="projects-titlebar"><div><p className="projects-eyebrow">Projects</p><h1>Projects</h1><p>Manage project delivery, budgets, materials and teams.</p></div><div className="projects-title-actions"><ExportButton label="Export" onClick={() => downloadProjects(projectRows)} /><Button onClick={() => setOpen(true)} disabled={!can.approvePr(role)}><Plus className="h-4 w-4" />Create project</Button></div></section>
+      <section className="projects-titlebar"><div><h1>Projects</h1><p>Manage project delivery, budgets, materials and teams.</p></div><div className="projects-title-actions"><Button variant="secondary" onClick={() => downloadProjects(projectRows)}><Upload className="h-4 w-4" />Export</Button><Button onClick={() => setOpen(true)} disabled={!can.approvePr(role)}><Plus className="h-4 w-4" />Create project</Button></div></section>
       <section className="projects-alert" aria-label="Project actions requiring attention"><AlertTriangle size={17} /><strong>{actionTotal} actions require your attention</strong><Link to="/procurement/requests?action_queue=my_requests">View priority queue <span>›</span></Link></section>
       <section className="projects-kpis">{[
         { label: 'Total projects', value: portfolioRows.length, note: 'Across all sites', icon: Building2, tone: 'blue' },
         { label: 'Active', value: activeCount, note: portfolioRows.length ? `${Math.round(activeCount / portfolioRows.length * 100)}% of total` : 'No active projects', icon: Target, tone: 'teal' },
         { label: 'At risk', value: health.atRisk + health.delayed, note: 'Requires attention', icon: AlertTriangle, tone: 'amber' },
-        { label: 'Total budget', value: formatUGX(totalBudget), note: 'Across all projects', icon: CircleDollarSign, tone: 'indigo' },
+        { label: 'Total budget', value: formatCompactUGX(totalBudget), note: 'Across all projects', icon: CircleDollarSign, tone: 'indigo' },
       ].map((item) => <div className="projects-kpi" key={item.label}><span className={`projects-kpi-icon ${item.tone}`}><item.icon size={23} /></span><div><p>{item.label}</p><strong>{item.value}</strong><small>{item.note}</small></div></div>)}</section>
       <section className="projects-content-grid">
         <div className="projects-portfolio projects-panel">
-          <div className="projects-panel-heading"><div><h2>Project portfolio</h2><p>Active delivery, budget use, and accountable project teams.</p></div><span className="projects-view-label">{projects.isLoading ? 'Loading…' : `${projectRows.length} of ${projects.data?.count || projectRows.length}`}</span></div>
-          <div className="projects-portfolio-toolbar"><div className="projects-status-tabs">{[['', 'All', statusCounts.all], ['active', 'Active', statusCounts.active], ['planning', 'Planning', statusCounts.planning], ['completed', 'Completed', statusCounts.completed]].map(([value, label, count]) => <button type="button" key={String(value)} className={list.filters.status === value ? 'active' : ''} onClick={() => list.setFilter('status', String(value))}>{label} <b>{count}</b></button>)}</div><label className="projects-search"><Search size={14} /><input aria-label="Search projects" placeholder="Search projects" value={list.search} onChange={(event) => list.setSearch(event.target.value)} /></label><select aria-label="Filter projects by status" className={inputClass} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}><option value="">All statuses</option><option value="planning">Planning</option><option value="active">Active</option><option value="on_hold">On hold</option><option value="completed">Completed</option></select><Link className="projects-sites-link" to="/projects/sites">Sites</Link></div>
-          <div className="projects-table-wrap"><table className="projects-table"><thead><tr><th>Project</th><th>Client</th><th>Status</th><th>Progress</th><th>Budget used</th><th>Manager</th><th>Sites / goals</th><th aria-label="Actions" /></tr></thead><tbody>{projectRows.map((project) => { const budget = Number(project.budget_revised || project.budget || 0); const used = Number(project.budget_actual_expenditure || 0) + Number(project.budget_commitments || 0); const percent = budget ? Math.min(100, Math.round(used / budget * 100)) : 0; return <tr key={project.id}><td><Link className="projects-name" to={`/projects/${project.id}/progress`}>{project.name}</Link><small>{project.code}</small></td><td>{project.client || '-'}</td><td><Badge tone={statusTone(project.status)}>{project.status_display}</Badge></td><td><Link className="projects-progress" to={`/projects/${project.id}/progress`}><span><i style={{ width: `${project.progress_percent}%` }} /><b>{project.progress_percent}%</b></span></Link></td><td><span className="projects-budget"><i style={{ width: `${percent}%` }} /><small>{formatUGX(used)} / {formatUGX(budget)}</small></span></td><td>{project.manager_name || '-'}</td><td><Link to={`/projects/${project.id}`}>{project.site_total || 0} / {project.goal_total || 0}</Link></td><td><Link className="projects-action" aria-label={`Open actions for ${project.name}`} to={`/projects/${project.id}`}><MoreVertical size={16} /></Link></td></tr>; })}</tbody></table>{!projectRows.length && <p className="projects-empty">{projects.isLoading ? 'Loading projects…' : 'No projects found.'}</p>}</div>
+          <div className="projects-panel-heading"><h2>Project portfolio</h2></div>
+          <div className="projects-portfolio-toolbar"><div className="projects-status-tabs">{[['', 'All', statusCounts.all], ['active', 'Active', statusCounts.active], ['planning', 'Planning', statusCounts.planning], ['completed', 'Completed', statusCounts.completed]].map(([value, label, count]) => <button type="button" key={String(value)} className={list.filters.status === value ? 'active' : ''} onClick={() => list.setFilter('status', String(value))}>{label} <b>{count}</b></button>)}</div><label className="projects-search"><Search size={14} /><input aria-label="Search projects" placeholder="Search projects" value={list.search} onChange={(event) => list.setSearch(event.target.value)} /></label><select aria-label="Filter projects by manager" className={inputClass} value={list.filters.manager} onChange={(event) => list.setFilter('manager', event.target.value)}><option value="">Manager</option>{managers.map((manager) => <option key={manager.id} value={manager.id || ''}>{manager.name}</option>)}</select><select aria-label="Filter projects by status" className={inputClass} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}><option value="">Status</option><option value="planning">Planning</option><option value="active">Active</option><option value="on_hold">On hold</option><option value="completed">Completed</option></select><span className="projects-view-toggle"><button type="button" className={viewMode === 'list' ? 'active' : ''} aria-label="List view" onClick={() => setViewMode('list')}><List size={15} /></button><button type="button" className={viewMode === 'grid' ? 'active' : ''} aria-label="Grid view" onClick={() => setViewMode('grid')}><Grid2X2 size={14} /></button></span></div>
+          <div className={`projects-table-wrap ${viewMode === 'grid' ? 'is-grid' : ''}`}><table className="projects-table"><thead><tr><th>Project</th><th>Client</th><th>Status</th><th>Progress</th><th>Budget used</th><th>Manager</th><th>Sites / goals</th><th aria-label="Actions" /></tr></thead><tbody>{projectRows.map((project) => { const budget = Number(project.budget_revised || project.budget || 0); const used = Number(project.budget_actual_expenditure || 0) + Number(project.budget_commitments || 0); const condition = projectCondition(project, today); const badgeTone = condition === 'delayed' ? 'danger' : condition === 'at-risk' ? 'warning' : project.status === 'active' ? 'success' : project.status === 'planning' ? 'info' : statusTone(project.status); const statusLabel = condition === 'delayed' ? 'Delayed' : condition === 'at-risk' ? 'At risk' : project.status_display; return <tr key={project.id}><td><span className="projects-project-cell"><span className="projects-row-icon"><Building2 size={15} /></span><span><Link className="projects-name" to={`/projects/${project.id}/progress`}>{project.name}</Link><small>{project.description || project.code}</small></span></span></td><td>{project.client || '-'}</td><td><Badge tone={badgeTone}>{statusLabel}</Badge></td><td><Link className={`projects-progress ${condition}`} to={`/projects/${project.id}/progress`}><b>{project.progress_percent}%</b><span><i style={{ width: `${project.progress_percent}%` }} /></span></Link></td><td><span className="projects-budget-text">{formatCompactUGX(used)} / {formatCompactUGX(budget)}</span></td><td>{project.manager_name || '-'}</td><td><Link to={`/projects/${project.id}`}>{project.site_total || 0} / {project.goal_total || 0}</Link></td><td><Link className="projects-action" aria-label={`Open actions for ${project.name}`} to={`/projects/${project.id}`}><MoreVertical size={16} /></Link></td></tr>; })}</tbody></table>{!projectRows.length && <p className="projects-empty">{projects.isLoading ? 'Loading projects…' : 'No projects found.'}</p>}</div>
           <div className="projects-table-footer"><span>Showing {projectRows.length ? ((list.page - 1) * 4 + 1) : 0} to {(list.page - 1) * 4 + projectRows.length} of {projects.data?.count || projectRows.length} projects</span><span className="projects-page-controls"><button type="button" aria-label="Previous page" disabled={!projects.data?.previous} onClick={() => list.setPage(Math.max(1, list.page - 1))}>‹</button><b>{list.page}</b><button type="button" aria-label="Next page" disabled={!projects.data?.next} onClick={() => list.setPage(list.page + 1)}>›</button></span></div>
         </div>
         <aside className="projects-side-column">
