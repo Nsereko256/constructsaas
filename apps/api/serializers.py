@@ -975,10 +975,14 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
         )
 
     def get_can_fulfill_from_stock(self, obj) -> bool:
+        # Once Procurement has moved a request into a stock-issue state, the
+        # approval gate has already been completed. Re-checking the historical
+        # approver roles here made the Storekeeper action disappear for older
+        # records even though the fulfilment endpoint correctly accepted them.
         return obj.status in {
             PurchaseRequest.STATUS_STOCK_ISSUE_REQUESTED,
             PurchaseRequest.STATUS_PARTIAL_STOCK_ISSUED,
-        } and not self.get_stock_issue_blockers(obj)
+        } and obj.project_id is not None and not self.get_has_purchase_order(obj) and obj.items.exists()
 
     def get_can_issue_from_stock(self, obj) -> bool:
         return self.get_can_request_stock_issue(obj)
@@ -1001,10 +1005,15 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
         blockers = []
         if obj.project_id is None:
             blockers.append('Warehouse replenishment requests buy stock into the warehouse and cannot use the stock issue workflow.')
-        if not obj.technical_approved_by_id or obj.technical_approved_by.role != User.ROLE_ADMIN:
-            blockers.append('Admin approval is required before Procurement can request warehouse stock issue.')
-        if not obj.manager_approved_by_id or obj.manager_approved_by.role != User.ROLE_PROJECT_MANAGER:
-            blockers.append('Project Manager approval is required before Admin can approve warehouse stock issue.')
+        stock_issue_state = obj.status in {
+            PurchaseRequest.STATUS_STOCK_ISSUE_REQUESTED,
+            PurchaseRequest.STATUS_PARTIAL_STOCK_ISSUED,
+        }
+        if not stock_issue_state:
+            if not obj.technical_approved_by_id or obj.technical_approved_by.role != User.ROLE_ADMIN:
+                blockers.append('Admin approval is required before Procurement can request warehouse stock issue.')
+            if not obj.manager_approved_by_id or obj.manager_approved_by.role != User.ROLE_PROJECT_MANAGER:
+                blockers.append('Project Manager approval is required before Admin can approve warehouse stock issue.')
         if self.get_has_purchase_order(obj):
             blockers.append('A purchase order is already linked to this request.')
         if obj.status not in {PurchaseRequest.STATUS_APPROVED, PurchaseRequest.STATUS_STOCK_ISSUE_REQUESTED, PurchaseRequest.STATUS_PARTIAL_STOCK_ISSUED}:
