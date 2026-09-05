@@ -1,83 +1,93 @@
-import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Building2, CheckCircle2, CircleDollarSign, Plus, Target, Trash2, Users } from 'lucide-react';
-import { FormEvent, useState } from 'react';
+import { AlertTriangle, Building2, CalendarDays, CircleDollarSign, MoreVertical, Plus, Search, Target, Trash2 } from 'lucide-react';
+import { FormEvent, useState, type CSSProperties } from 'react';
 import { api } from '@/api/services';
 import { financeApi } from '@/api/finance-services';
-import { Project, User } from '@/api/types';
+import { Project, ProjectGoal, User } from '@/api/types';
 import { qk } from '@/api/queryKeys';
 import { can } from '@/api/roles';
 import { useAuth } from '@/auth/auth-context';
 import { FormModal } from '@/components/common/form-modal';
 import { Badge, statusTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { DataTable } from '@/components/ui/data-table';
 import { Field, inputClass } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
-import { PageToolbar } from '@/components/common/page-toolbar';
-import { Pagination } from '@/components/common/pagination';
+import { ExportButton } from '@/components/common/export-button';
 import { EngineerPicker } from '@/components/common/engineer-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useListState } from '@/hooks/use-list-state';
 import { formatUGX } from '@/lib/utils';
-import { WorkspaceTabs } from '@/components/common/workspace-hub';
+import './projects-reference.css';
 
-const columns: ColumnDef<Project>[] = [
-  {
-    header: 'Project',
-    cell: ({ row }) => (
-      <div>
-        <Link className="font-bold text-primary" to={`/projects/${row.original.id}/progress`}>
-          {row.original.name}
-        </Link>
-        <p className="text-xs text-muted">{row.original.code}</p>
-        <div className="flex gap-3"><Link className="text-xs font-semibold text-primary" to={`/projects/${row.original.id}/progress`}>Progress & goals</Link><Link className="text-xs font-semibold text-muted underline" to={`/projects/${row.original.id}`}>Details</Link></div>
-      </div>
-    ),
-  },
-  { header: 'Client', cell: ({ row }) => <span>{row.original.client || '-'}</span> },
-  { header: 'Status', cell: ({ row }) => <Badge tone={statusTone(row.original.status)}>{row.original.status_display}</Badge> },
-  { header: 'Budget', cell: ({ row }) => <span>{formatUGX(row.original.budget)}</span> },
-  { header: 'Manager', cell: ({ row }) => <span>{row.original.manager_name || '-'}</span> },
-  { header: 'Progress', cell: ({ row }) => <Link className="font-semibold text-primary" to={`/projects/${row.original.id}/progress`}>{row.original.progress_percent}% · {row.original.progress_basis === 'goals' ? 'Goals' : 'Sites'}</Link> },
-  { header: 'Engineers', cell: ({ row }) => <span>{row.original.site_engineer_names.join(', ') || '-'}</span> },
-];
+function downloadProjects(rows: Project[]) {
+  const fields = ['Project', 'Code', 'Client', 'Status', 'Progress', 'Budget', 'Manager'];
+  const values = rows.map((project) => [project.name, project.code, project.client, project.status_display, `${project.progress_percent}%`, project.budget, project.manager_name]);
+  const csv = [fields, ...values].map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = 'constructsaas-projects.csv';
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
 
 export function ProjectsPage() {
   const { role } = useAuth();
   const list = useListState({ status: '', is_active: 'true' });
   const [open, setOpen] = useState(false);
-  const projects = useQuery({ queryKey: qk.projects(list.query), queryFn: () => api.projects(list.query) });
+  const projectQuery = { ...list.query, page_size: 4 };
+  const projects = useQuery({ queryKey: qk.projects(projectQuery), queryFn: () => api.projects(projectQuery) });
+  const portfolio = useQuery({ queryKey: qk.projects({ is_active: 'true', page_size: 100 }), queryFn: () => api.projects({ is_active: 'true', page_size: 100 }) });
+  const workflow = useQuery({ queryKey: qk.workflowBadges, queryFn: api.workflowBadges });
+  const goals = useQuery({ queryKey: ['project-goals', 'portfolio'], queryFn: () => api.projectGoals({ page_size: 100 }) });
   const projectRows = projects.data?.results || [];
-  const activeCount = projectRows.filter((project) => project.is_active && project.status !== 'completed').length;
-  const totalBudget = projectRows.reduce((total, project) => total + Number(project.budget || 0), 0);
-  const averageProgress = projectRows.length ? Math.round(projectRows.reduce((total, project) => total + Number(project.progress_percent || 0), 0) / projectRows.length) : 0;
+  const portfolioRows = portfolio.data?.results || projectRows;
+  const activeCount = portfolioRows.filter((project) => project.is_active && project.status !== 'completed').length;
+  const totalBudget = portfolioRows.reduce((total, project) => total + Number(project.budget || 0), 0);
+  const averageProgress = portfolioRows.length ? Math.round(portfolioRows.reduce((total, project) => total + Number(project.progress_percent || 0), 0) / portfolioRows.length) : 0;
+  const actionTotal = Object.values(workflow.data || {}).reduce((total, count) => total + Number(count || 0), 0);
+  const statusCounts = { all: portfolioRows.length, active: portfolioRows.filter((project) => project.status === 'active').length, planning: portfolioRows.filter((project) => project.status === 'planning').length, completed: portfolioRows.filter((project) => project.status === 'completed').length };
+  const today = new Date();
+  const health = portfolioRows.reduce((summary, project) => {
+    const delayed = Boolean(project.end_date && new Date(project.end_date) < today && project.status !== 'completed');
+    const atRisk = project.status === 'on_hold' || Number(project.budget_available_balance || 0) < 0;
+    if (delayed) summary.delayed += 1;
+    else if (atRisk) summary.atRisk += 1;
+    else summary.onTrack += 1;
+    return summary;
+  }, { onTrack: 0, atRisk: 0, delayed: 0 });
+  const milestones = ((goals.data?.results || []) as ProjectGoal[]).filter((goal) => goal.due_date && goal.status !== 'COMPLETED').sort((a, b) => String(a.due_date).localeCompare(String(b.due_date))).slice(0, 3);
 
   return (
-    <div className="grid gap-4">
-      <WorkspaceTabs links={[{ href: '/projects', label: 'Projects', description: 'Portfolio and budgets', icon: Building2 }, { href: '/projects/sites', label: 'Sites', description: 'Project locations', icon: Building2 }, { href: '/team/project-staffing', label: 'Project staffing', description: 'People and assignments', icon: Users }]} />
-      <section className="rounded-2xl border border-border bg-white px-4 py-4 shadow-panel sm:px-6 sm:py-5"><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">ConstructSaaS · Operations</p><div className="mt-1 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-2xl font-black tracking-tight sm:text-3xl">Projects overview</h2><p className="mt-1 max-w-2xl text-sm text-muted">Track delivery progress, budget position, sites, and accountable project teams.</p></div><Button onClick={() => setOpen(true)} disabled={!can.approvePr(role)}><Plus className="h-4 w-4" />New project</Button></div></section>
-      <section className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-        {[{ label: 'Active projects', value: activeCount, icon: Building2, tone: 'bg-info/10 text-info' }, { label: 'Total projects', value: projectRows.length, icon: CheckCircle2, tone: 'bg-success/10 text-success' }, { label: 'Portfolio budget', value: formatUGX(totalBudget), icon: CircleDollarSign, tone: 'bg-warning/10 text-warning' }, { label: 'Average progress', value: `${averageProgress}%`, icon: Target, tone: 'bg-primary/10 text-primary' }].map((item) => <Card key={item.label}><CardContent className="flex items-center gap-2.5 p-3 sm:p-4"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${item.tone}`}><item.icon className="h-4 w-4" /></span><div className="min-w-0"><p className="truncate text-[10px] font-bold uppercase tracking-wide text-muted">{item.label}</p><strong className="block truncate text-lg font-black sm:text-xl">{item.value}</strong></div></CardContent></Card>)}
+    <div className="projects-reference">
+      <section className="projects-titlebar"><div><p className="projects-eyebrow">Projects</p><h1>Projects</h1><p>Manage project delivery, budgets, materials and teams.</p></div><div className="projects-title-actions"><ExportButton label="Export" onClick={() => downloadProjects(projectRows)} /><Button onClick={() => setOpen(true)} disabled={!can.approvePr(role)}><Plus className="h-4 w-4" />Create project</Button></div></section>
+      <section className="projects-alert" aria-label="Project actions requiring attention"><AlertTriangle size={17} /><strong>{actionTotal} actions require your attention</strong><Link to="/procurement/requests?action_queue=my_requests">View priority queue <span>›</span></Link></section>
+      <section className="projects-kpis">{[
+        { label: 'Total projects', value: portfolioRows.length, note: 'Across all sites', icon: Building2, tone: 'blue' },
+        { label: 'Active', value: activeCount, note: portfolioRows.length ? `${Math.round(activeCount / portfolioRows.length * 100)}% of total` : 'No active projects', icon: Target, tone: 'teal' },
+        { label: 'At risk', value: health.atRisk + health.delayed, note: 'Requires attention', icon: AlertTriangle, tone: 'amber' },
+        { label: 'Total budget', value: formatUGX(totalBudget), note: 'Across all projects', icon: CircleDollarSign, tone: 'indigo' },
+      ].map((item) => <div className="projects-kpi" key={item.label}><span className={`projects-kpi-icon ${item.tone}`}><item.icon size={23} /></span><div><p>{item.label}</p><strong>{item.value}</strong><small>{item.note}</small></div></div>)}</section>
+      <section className="projects-content-grid">
+        <div className="projects-portfolio projects-panel">
+          <div className="projects-panel-heading"><div><h2>Project portfolio</h2><p>Active delivery, budget use, and accountable project teams.</p></div><span className="projects-view-label">{projects.isLoading ? 'Loading…' : `${projectRows.length} of ${projects.data?.count || projectRows.length}`}</span></div>
+          <div className="projects-portfolio-toolbar"><div className="projects-status-tabs">{[['', 'All', statusCounts.all], ['active', 'Active', statusCounts.active], ['planning', 'Planning', statusCounts.planning], ['completed', 'Completed', statusCounts.completed]].map(([value, label, count]) => <button type="button" key={String(value)} className={list.filters.status === value ? 'active' : ''} onClick={() => list.setFilter('status', String(value))}>{label} <b>{count}</b></button>)}</div><label className="projects-search"><Search size={14} /><input aria-label="Search projects" placeholder="Search projects" value={list.search} onChange={(event) => list.setSearch(event.target.value)} /></label><select aria-label="Filter projects by status" className={inputClass} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}><option value="">All statuses</option><option value="planning">Planning</option><option value="active">Active</option><option value="on_hold">On hold</option><option value="completed">Completed</option></select><Link className="projects-sites-link" to="/projects/sites">Sites</Link></div>
+          <div className="projects-table-wrap"><table className="projects-table"><thead><tr><th>Project</th><th>Client</th><th>Status</th><th>Progress</th><th>Budget used</th><th>Manager</th><th>Sites / goals</th><th aria-label="Actions" /></tr></thead><tbody>{projectRows.map((project) => { const budget = Number(project.budget_revised || project.budget || 0); const used = Number(project.budget_actual_expenditure || 0) + Number(project.budget_commitments || 0); const percent = budget ? Math.min(100, Math.round(used / budget * 100)) : 0; return <tr key={project.id}><td><Link className="projects-name" to={`/projects/${project.id}/progress`}>{project.name}</Link><small>{project.code}</small></td><td>{project.client || '-'}</td><td><Badge tone={statusTone(project.status)}>{project.status_display}</Badge></td><td><Link className="projects-progress" to={`/projects/${project.id}/progress`}><span><i style={{ width: `${project.progress_percent}%` }} /><b>{project.progress_percent}%</b></span></Link></td><td><span className="projects-budget"><i style={{ width: `${percent}%` }} /><small>{formatUGX(used)} / {formatUGX(budget)}</small></span></td><td>{project.manager_name || '-'}</td><td><Link to={`/projects/${project.id}`}>{project.site_total || 0} / {project.goal_total || 0}</Link></td><td><Link className="projects-action" aria-label={`Open actions for ${project.name}`} to={`/projects/${project.id}`}><MoreVertical size={16} /></Link></td></tr>; })}</tbody></table>{!projectRows.length && <p className="projects-empty">{projects.isLoading ? 'Loading projects…' : 'No projects found.'}</p>}</div>
+          <div className="projects-table-footer"><span>Showing {projectRows.length ? ((list.page - 1) * 4 + 1) : 0} to {(list.page - 1) * 4 + projectRows.length} of {projects.data?.count || projectRows.length} projects</span><span className="projects-page-controls"><button type="button" aria-label="Previous page" disabled={!projects.data?.previous} onClick={() => list.setPage(Math.max(1, list.page - 1))}>‹</button><b>{list.page}</b><button type="button" aria-label="Next page" disabled={!projects.data?.next} onClick={() => list.setPage(list.page + 1)}>›</button></span></div>
+        </div>
+        <aside className="projects-side-column">
+          <section className="projects-panel projects-health"><div className="projects-panel-heading"><h2>Portfolio health</h2><span>All projects</span></div><div className="projects-health-body"><div className="projects-donut" style={{ '--health-on-track': `${portfolioRows.length ? health.onTrack / portfolioRows.length * 100 : 0}%`, '--health-at-risk': `${portfolioRows.length ? health.atRisk / portfolioRows.length * 100 : 0}%` } as CSSProperties}><div><strong>{portfolioRows.length ? Math.round(health.onTrack / portfolioRows.length * 100) : 0}%</strong><small>On track</small></div></div><div className="projects-health-legend"><HealthRow label="On track" count={health.onTrack} total={portfolioRows.length} tone="teal" /><HealthRow label="At risk" count={health.atRisk} total={portfolioRows.length} tone="amber" /><HealthRow label="Delayed" count={health.delayed} total={portfolioRows.length} tone="rose" /><small className="projects-health-total">Total projects <b>{portfolioRows.length}</b></small></div></div></section>
+          <section className="projects-panel projects-milestones"><div className="projects-panel-heading"><h2>Upcoming milestones</h2><Link to="/projects">View all</Link></div>{milestones.map((goal) => <Link className="projects-milestone" to={`/projects/${goal.project}/progress`} key={goal.id}><span className="projects-milestone-icon"><CalendarDays size={16} /></span><span><strong>{goal.title}</strong><small>{goal.project_name}{goal.site_name ? ` · ${goal.site_name}` : ''}</small></span><time>{new Date(`${goal.due_date}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</time></Link>)}{!milestones.length && <p className="projects-empty">No upcoming milestones with due dates.</p>}<Link className="projects-footer-link" to="/projects">View all milestones <span>›</span></Link></section>
+        </aside>
       </section>
-      <PageToolbar title="Project register" subtitle="Searchable project portfolio with assignment and budget signals." search={list.search} onSearch={list.setSearch}>
-        <Button variant="secondary" asChild><Link to="/projects/sites">Manage sites</Link></Button>
-        <select className={inputClass} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}>
-          <option value="">All statuses</option>
-          <option value="planning">Planning</option>
-          <option value="active">Active</option>
-          <option value="on_hold">On hold</option>
-          <option value="completed">Completed</option>
-        </select>
-        {can.approvePr(role) ? <Button onClick={() => setOpen(true)}>Create project</Button> : null}
-      </PageToolbar>
-      <DataTable columns={columns} data={projectRows} emptyTitle={projects.isLoading ? 'Loading projects...' : 'No projects found'} mobileSummaryStacked />
-      <Pagination page={list.page} setPage={list.setPage} data={projects.data} />
       <ProjectModal open={open} onClose={() => setOpen(false)} />
     </div>
   );
+}
+
+function HealthRow({ label, count, total, tone }: { label: string; count: number; total: number; tone: string }) {
+  return <div className="projects-health-row"><span><i className={tone} />{label}</span><span className="projects-health-track"><i className={tone} style={{ width: `${total ? count / total * 100 : 0}%` }} /></span><b>{count}</b><small>{total ? Math.round(count / total * 100) : 0}%</small></div>;
 }
 
 function ProjectModal({ open, onClose }: { open: boolean; onClose: () => void }) {
