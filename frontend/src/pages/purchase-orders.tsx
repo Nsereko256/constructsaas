@@ -1,26 +1,22 @@
-import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, CheckCircle2, FilePenLine, Plus, Trash2, Truck, X } from 'lucide-react';
+import { Box, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, Clock3, Download, EllipsisVertical, FilePenLine, FileText, MapPin, PackageCheck, Plus, Search, Trash2, Truck, X } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/modules/procurement/api';
 import type { PurchaseOrder, PurchaseOrderAmendment, PurchaseRequest } from '@/modules/procurement/types';
 import { qk } from '@/api/queryKeys';
 import { can, canReceivePurchaseOrder, hasRole } from '@/api/roles';
 import { useAuth } from '@/auth/auth-context';
 import { FormModal } from '@/components/common/form-modal';
-import { ExportButton } from '@/components/common/export-button';
 import { SupplierLookup } from '@/components/common/supplier-lookup';
-import { PageToolbar } from '@/components/common/page-toolbar';
-import { Pagination } from '@/components/common/pagination';
 import { Badge, statusTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DataTable } from '@/components/ui/data-table';
 import { Field, inputClass } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
 import { useListState } from '@/hooks/use-list-state';
 import { formatDate, formatUGX } from '@/lib/utils';
+import './purchase-orders-reference.css';
 
 type PurchaseOrderItemDraft = {
   material_id: string;
@@ -40,13 +36,19 @@ export function PurchaseOrdersPage() {
   const requestedPurchaseRequestId = (location.state as { purchaseRequestId?: number } | null)?.purchaseRequestId;
   const toast = useToast();
   const queryClient = useQueryClient();
-  const list = useListState({ status: '', project: '', purchase_request: '', action_queue: new URLSearchParams(location.search).get('action_queue') || '' });
+  const list = useListState({ status: '', project: '', purchase_request: '', delivery_destination: '', action_queue: new URLSearchParams(location.search).get('action_queue') || '' });
   const [open, setOpen] = useState(Boolean(requestedPurchaseRequestId));
   const [cancelling, setCancelling] = useState<PurchaseOrder | null>(null);
   const [amending, setAmending] = useState<PurchaseOrder | null>(null);
   const [decidingAmendment, setDecidingAmendment] = useState<{ order: PurchaseOrder; amendment: PurchaseOrderAmendment; approve: boolean } | null>(null);
   const [reviewingPreapproval, setReviewingPreapproval] = useState<{ order: PurchaseOrder; amendment: PurchaseOrderAmendment; canConfirm: boolean } | null>(null);
-  const orders = useQuery({ queryKey: list.filters.action_queue ? qk.purchaseOrderActionQueue(list.query) : qk.purchaseOrders(list.query), queryFn: () => api.purchaseOrders(list.query) });
+  const [queue, setQueue] = useState<'all' | 'draft' | 'awaiting' | 'issued' | 'partial' | 'received' | 'closed'>('all');
+  const [sort, setSort] = useState<'delivery' | 'newest'>('delivery');
+  const orderQuery = { ...list.query, page_size: 5 };
+  const orders = useQuery({ queryKey: list.filters.action_queue ? qk.purchaseOrderActionQueue(orderQuery) : qk.purchaseOrders(orderQuery), queryFn: () => api.purchaseOrders(orderQuery) });
+  const allOrders = useQuery({ queryKey: qk.purchaseOrders({ page_size: 100 }), queryFn: () => api.purchaseOrders({ page_size: 100 }) });
+  const projects = useQuery({ queryKey: qk.projects({ page_size: 100 }), queryFn: () => api.projects({ page_size: 100 }) });
+  const receipts = useQuery({ queryKey: qk.goodsReceivedNotes({ page_size: 100 }), queryFn: () => api.goodsReceivedNotes({ page_size: 100 }) });
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
     void queryClient.invalidateQueries({ queryKey: ['purchase-requests'] });
@@ -96,77 +98,57 @@ export function PurchaseOrdersPage() {
     || (hasRole(role, ['procurement_officer', 'admin']) && ['DRAFT', 'PENDING', 'ORDERED'].includes(order.status))
     || Boolean(order.pending_preapproval_edit && hasRole(role, ['finance_officer', 'finance_manager', 'admin']))
   );
-  const orderRows = [...(orders.data?.results || [])].sort((a, b) => Number(orderNeedsAction(b)) - Number(orderNeedsAction(a)));
-
-  const columns: ColumnDef<PurchaseOrder>[] = [
-    {
-      header: 'Order',
-      cell: ({ row }) => (
-        <div>
-          <strong>{row.original.number}</strong>
-          <p className="text-sm text-muted">{row.original.supplier_name}</p>
-          <p className="text-xs text-muted">{row.original.purchase_request_number || 'Manual PO'}</p>
-        </div>
-      ),
-    },
-    { header: 'Project', cell: ({ row }) => row.original.project_name || 'Warehouse' },
-    { header: 'Destination', cell: ({ row }) => <Badge tone={row.original.delivery_destination === 'SITE' ? 'info' : 'success'}>{row.original.delivery_destination_display}</Badge> },
-    { header: 'Delivery', cell: ({ row }) => <div><strong className="text-sm">{row.original.revised_delivery_date ? formatDate(row.original.revised_delivery_date) : row.original.supplier_confirmed_delivery_date ? formatDate(row.original.supplier_confirmed_delivery_date) : row.original.expected_delivery_date ? formatDate(row.original.expected_delivery_date) : 'Not committed'}</strong><p className="text-xs text-muted">{row.original.delivery_follow_up_owner_name || 'Procurement follow-up'}</p>{row.original.is_overdue ? <Badge tone="danger">Overdue</Badge> : null}</div> },
-    { header: 'Status', cell: ({ row }) => <div className="grid justify-items-start gap-1"><Badge tone={statusTone(row.original.status)}>{row.original.status_display}</Badge>{row.original.pending_preapproval_edit ? <Badge tone="warning">Finance review required</Badge> : null}<p className="max-w-[220px] text-xs text-muted">{poNextAction(row.original, role)}</p></div> },
-    { header: 'Total', cell: ({ row }) => formatUGX(row.original.total_cost) },
-    {
-      id: 'actions',
-      header: '',
-      cell: ({ row }) => (
-        <div className="flex flex-wrap justify-end gap-2">
-          {can.createPo(role) && ['DRAFT', 'PENDING'].includes(row.original.status) ? (
-            <Button size="sm" loading={approve.isPending && approve.variables === row.original.id} loadingLabel="Approving" disabled={approve.isPending} onClick={() => approve.mutate(row.original.id)}><Check className="h-4 w-4" />Approve PO</Button>
-          ) : null}
-          {can.createPo(role) && row.original.delivery_destination === 'SITE' && ['ORDERED', 'PARTIAL'].includes(row.original.status) ? (
-            <Button variant="secondary" size="sm" onClick={() => confirmDispatch.mutate(row.original.id)}><Truck className="h-4 w-4" />Confirm dispatch</Button>
-          ) : null}
-          {canReceivePurchaseOrder(role, row.original) ? (
-            <Button size="sm" onClick={() => receive.mutate(row.original.id)}><CheckCircle2 className="h-4 w-4" />Confirm receipt</Button>
-          ) : null}
-          {can.createPo(role) && !['RECEIVED', 'CANCELLED'].includes(row.original.status) ? (
-            <Button size="sm" variant="ghost" onClick={() => setCancelling(row.original)}><X className="h-4 w-4" />Cancel</Button>
-          ) : null}
-          {hasRole(role, ['procurement_officer', 'admin']) && ['DRAFT', 'PENDING', 'ORDERED'].includes(row.original.status) ? (
-            <Button size="sm" variant="secondary" onClick={() => setAmending(row.original)}><FilePenLine className="h-4 w-4" />{['DRAFT', 'PENDING'].includes(row.original.status) ? 'Edit PO' : 'Amend'}</Button>
-          ) : null}
-          {hasRole(role, ['procurement_officer', 'admin']) && row.original.status === 'DRAFT' ? <Button size="sm" variant="ghost" onClick={() => { if (window.confirm(`Delete ${row.original.number}? This draft will be removed and audited.`)) deleteDraft.mutate(row.original.id); }}><Trash2 className="h-4 w-4" />Delete draft</Button> : null}
-          {hasRole(role, ['finance_officer', 'finance_manager', 'admin']) ? (amendments.data?.get(row.original.id) || []).filter((item) => item.status === 'SUBMITTED').map((item) => item.amendment_type === 'PRE_APPROVAL_EDIT' ? (
-            <Button key={item.id} size="sm" variant="warning" onClick={() => setReviewingPreapproval({ order: row.original, amendment: item, canConfirm: hasRole(role, ['finance_manager', 'admin']) })}>{hasRole(role, ['finance_manager', 'admin']) ? 'Review edited PO' : 'View edited PO'}</Button>
-          ) : hasRole(role, ['finance_manager', 'admin']) ? <Button key={item.id} size="sm" variant="warning" onClick={() => setDecidingAmendment({ order: row.original, amendment: item, approve: true })}>Review v{item.version}</Button> : null) : null}
-          {hasRole(role, ['finance_officer', 'finance_manager', 'admin']) && row.original.status === 'PENDING' && row.original.purchase_request_number ? <Button size="sm" variant="warning" onClick={() => navigate(`/procurement/requests?search=${encodeURIComponent(row.original.purchase_request_number || '')}`)}><Check className="h-4 w-4" />Finance review</Button> : null}
-        </div>
-      ),
-    },
-  ];
+  const allRows = allOrders.data?.results || [];
+  const receiptRows = receipts.data?.results || [];
+  const receiptRowsByOrder = new Map<number, typeof receiptRows>();
+  receiptRows.forEach((receipt) => receiptRowsByOrder.set(receipt.purchase_order, [...(receiptRowsByOrder.get(receipt.purchase_order) || []), receipt]));
+  const receiptProgress = (order: PurchaseOrder) => {
+    const ordered = order.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const linkedReceipts = receiptRowsByOrder.get(order.id) || [];
+    const accepted = linkedReceipts.flatMap((receipt) => receipt.items).reduce((sum, item) => sum + Number(item.accepted_quantity || 0), 0);
+    const percent = ordered ? Math.min(100, Math.round((accepted / ordered) * 100)) : order.status === 'RECEIVED' ? 100 : 0;
+    const latest = [...linkedReceipts].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
+    return { percent, number: latest?.number || (order.status === 'RECEIVED' ? 'Receipt complete' : 'Awaiting receipt') };
+  };
+  const deliveryDate = (order: PurchaseOrder) => order.revised_delivery_date || order.supplier_confirmed_delivery_date || order.expected_delivery_date;
+  const totalValue = allRows.reduce((sum, order) => sum + Number(order.total_cost || 0), 0);
+  const awaitingDelivery = allRows.filter((order) => ['ORDERED', 'DISPATCH_CONFIRMED', 'PARTIAL'].includes(order.status));
+  const receivedOrders = allRows.filter((order) => order.status === 'RECEIVED');
+  const directToSiteOrders = allRows.filter((order) => order.delivery_destination === 'SITE');
+  const directToSiteValue = directToSiteOrders.reduce((sum, order) => sum + Number(order.total_cost || 0), 0);
+  const warehouseReceipts = receiptRows.filter((receipt) => allRows.find((order) => order.id === receipt.purchase_order)?.delivery_destination === 'WAREHOUSE');
+  const siteReceipts = receiptRows.filter((receipt) => allRows.find((order) => order.id === receipt.purchase_order)?.delivery_destination === 'SITE');
+  const partialOrders = allRows.filter((order) => order.status === 'PARTIAL');
+  const onTimeReceived = receivedOrders.filter((order) => !deliveryDate(order) || !order.received_at || Date.parse(order.received_at) <= Date.parse(deliveryDate(order)!)).length;
+  const onTimeRate = receivedOrders.length ? Math.round((onTimeReceived / receivedOrders.length) * 100) : 0;
+  const receiptRate = allRows.length ? Math.round((receivedOrders.length / allRows.length) * 100) : 0;
+  const averageLeadTime = receivedOrders.length ? Math.round(receivedOrders.reduce((sum, order) => sum + Math.max(0, (Date.parse(order.received_at || order.created_at) - Date.parse(order.created_at)) / 86400000), 0) / receivedOrders.length * 10) / 10 : 0;
+  const projectOptions = projects.data?.results || [];
+  const pageSize = 5;
+  const totalRows = orders.data?.count || 0;
+  const pageStart = totalRows ? (list.page - 1) * pageSize + 1 : 0;
+  const pageEnd = totalRows ? Math.min(list.page * pageSize, totalRows) : 0;
+  const updateQueue = (value: typeof queue) => {
+    setQueue(value);
+    list.setFilter('action_queue', '');
+    list.setFilter('status', value === 'draft' ? 'DRAFT' : value === 'awaiting' ? 'PENDING' : value === 'issued' ? 'ORDERED' : value === 'partial' ? 'PARTIAL' : value === 'received' ? 'RECEIVED' : value === 'closed' ? 'CANCELLED' : '');
+  };
+  const rowAction = (order: PurchaseOrder) => {
+    if (can.createPo(role) && ['DRAFT', 'PENDING'].includes(order.status)) return <Button size="sm" className="po-next-action" loading={approve.isPending && approve.variables === order.id} loadingLabel="Approving" disabled={approve.isPending} onClick={() => approve.mutate(order.id)}>Approve PO</Button>;
+    if (can.createPo(role) && order.delivery_destination === 'SITE' && ['ORDERED', 'PARTIAL'].includes(order.status)) return <Button size="sm" variant="secondary" className="po-next-action" onClick={() => confirmDispatch.mutate(order.id)}><Truck size={13} />Confirm dispatch</Button>;
+    if (canReceivePurchaseOrder(role, order)) return <Button size="sm" className="po-next-action" onClick={() => receive.mutate(order.id)}><CheckCircle2 size={13} />Confirm receipt</Button>;
+    if (order.status === 'RECEIVED') return <Link className="po-view-action" to={`/procurement/grns?search=${encodeURIComponent(order.number)}`}>{order.delivery_destination === 'SITE' ? 'View receipt' : 'View GRN'}</Link>;
+    if (order.pending_preapproval_edit && hasRole(role, ['finance_officer', 'finance_manager', 'admin'])) return <Button size="sm" variant="warning" className="po-next-action" onClick={() => { const amendment = (amendments.data?.get(order.id) || []).find((item) => item.status === 'SUBMITTED'); if (amendment) setReviewingPreapproval({ order, amendment, canConfirm: hasRole(role, ['finance_manager', 'admin']) }); }}>Review edit</Button>;
+    return <span className="po-next-message" title={poNextAction(order, role)}>{poNextAction(order, role)}</span>;
+  };
+  const orderRows = [...(orders.data?.results || [])].sort((a, b) => sort === 'newest' ? Date.parse(b.created_at) - Date.parse(a.created_at) : Number(orderNeedsAction(b)) - Number(orderNeedsAction(a)));
 
   return (
-    <div className="grid gap-3 sm:gap-4">
-      <PageToolbar title="Purchase orders" subtitle="Orders, warehouse receiving and direct-to-site dispatch/receipt workflow." search={list.search} onSearch={list.setSearch}>
-        <select className={inputClass} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}>
-          <option value="">All statuses</option>
-          <option value="DRAFT">Draft</option>
-          <option value="PENDING">Pending</option>
-          <option value="ORDERED">Ordered</option>
-          <option value="DISPATCH_CONFIRMED">Dispatch confirmed</option>
-          <option value="RECEIVED">Received</option>
-          <option value="CANCELLED">Cancelled</option>
-        </select>
-        <ExportButton label="PDF" onClick={() => void api.downloadPurchaseOrders('pdf', { ...list.filters, search: list.search })} />
-        <ExportButton label="Excel" onClick={() => void api.downloadPurchaseOrders('xlsx', { ...list.filters, search: list.search })} />
-        {can.createPo(role) ? <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" />New PO</Button> : null}
-      </PageToolbar>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <div className="rounded-xl border border-border/80 bg-white px-3 py-2.5 shadow-sm"><p className="text-[10px] font-bold uppercase tracking-wide text-muted">On this page</p><strong className="mt-0.5 block text-lg font-black">{orderRows.length}</strong></div>
-        <div className="rounded-xl border border-warning/25 bg-warning/5 px-3 py-2.5 shadow-sm"><p className="text-[10px] font-bold uppercase tracking-wide text-warning">Needs action</p><strong className="mt-0.5 block text-lg font-black">{orderRows.filter(orderNeedsAction).length}</strong></div>
-        <div className="col-span-2 rounded-xl border border-primary/15 bg-primary/[0.025] px-3 py-2.5 shadow-sm sm:col-span-1"><p className="text-[10px] font-bold uppercase tracking-wide text-primary">Queue order</p><p className="mt-0.5 truncate text-sm font-semibold">Action first · delivery context below</p></div>
-      </div>
-      <DataTable columns={columns} data={orderRows} mobileSummaryCells={2} mobileSummaryStacked mobileCardClassName="request-card" emptyTitle={orders.isLoading ? 'Loading purchase orders...' : 'No purchase orders found'} />
-      <Pagination page={list.page} setPage={list.setPage} data={orders.data} />
+    <div className="purchase-orders-reference">
+      <section className="po-top"><div className="po-titlebar"><div><h1>Purchase orders</h1><p>Track supplier orders, deliveries and material receipt.</p></div><div className="po-title-actions"><details className="po-export-menu"><summary><Download size={15} />Export <ChevronDown size={13} /></summary><div><button type="button" onClick={() => void api.downloadPurchaseOrders('pdf', { ...list.filters, search: list.search })}>PDF register</button><button type="button" onClick={() => void api.downloadPurchaseOrders('xlsx', { ...list.filters, search: list.search })}>Excel register</button></div></details>{can.createPo(role) ? <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" />New PO</Button> : null}</div></div><nav className="po-tabs" aria-label="Procurement sections"><Link to="/procurement">Overview</Link><Link to="/procurement/requests">Purchase requests</Link><Link to="/procurement/rfqs">Supplier quotes</Link><Link className="active" to="/procurement/purchase-orders">Purchase orders</Link><Link to="/procurement/grns">Receipts</Link><Link to="/procurement/deliveries">Deliveries</Link><Link to="/procurement/supplier-claims">Supplier claims</Link></nav></section>
+      <section className={`po-guidance ${awaitingDelivery.length ? 'attention' : 'complete'}`}><CheckCircle2 size={17} /><span><strong>{awaitingDelivery.length ? `${awaitingDelivery.length} purchase order${awaitingDelivery.length === 1 ? '' : 's'} await delivery or receipt.` : 'All purchase orders have been received.'}</strong><small>{awaitingDelivery.length ? 'Keep supplier dispatch and receipt evidence up to date.' : 'Verify receipt documents before closing.'}</small></span><Link to="/procurement/grns">Open receipts <ChevronRight size={14} /></Link></section>
+      <section className="po-kpis"><PurchaseOrderKpi icon={FileText} tone="blue" label="Total orders" value={allRows.length} note="Across selected sites" /><PurchaseOrderKpi icon={Truck} tone="amber" label="Awaiting delivery" value={awaitingDelivery.length} note={awaitingDelivery.length ? 'Follow-up required' : 'All orders received'} /><PurchaseOrderKpi icon={Box} tone="green" label="Received" value={receivedOrders.length} note={`${receiptRate}% receipt completion`} /><PurchaseOrderKpi icon={CircleDollarSign} tone="indigo" label="Order value" value={formatUGX(totalValue)} note="Committed purchase value" /><PurchaseOrderKpi icon={MapPin} tone="violet" label="Direct to site" value={directToSiteOrders.length} note={formatUGX(directToSiteValue)} /></section>
+      <section className="po-workspace-grid"><div className="po-register-panel"><div className="po-panel-heading"><h2>Purchase order register</h2></div><div className="po-queue-tabs">{([['all', 'All', allRows.length], ['draft', 'Draft', allRows.filter((order) => order.status === 'DRAFT').length], ['awaiting', 'Awaiting approval', allRows.filter((order) => order.status === 'PENDING').length], ['issued', 'Issued', allRows.filter((order) => order.status === 'ORDERED').length], ['partial', 'Part received', partialOrders.length], ['received', 'Received', receivedOrders.length], ['closed', 'Closed', allRows.filter((order) => order.status === 'CANCELLED').length]] as const).map(([value, label, count]) => <button type="button" key={value} className={queue === value ? 'active' : ''} onClick={() => updateQueue(value)}>{label}<b>{count}</b></button>)}</div><div className="po-filters"><label><Search size={14} /><input aria-label="Search purchase orders" placeholder="Search PO, supplier or project" value={list.search} onChange={(event) => list.setSearch(event.target.value)} /></label><select aria-label="Filter purchase orders by project" className={inputClass} value={list.filters.project} onChange={(event) => list.setFilter('project', event.target.value)}><option value="">Project</option>{projectOptions.map((project) => <option value={project.id} key={project.id}>{project.name}</option>)}</select><select aria-label="Filter purchase orders by destination" className={inputClass} value={list.filters.delivery_destination} onChange={(event) => list.setFilter('delivery_destination', event.target.value)}><option value="">Destination</option><option value="WAREHOUSE">Main warehouse</option><option value="SITE">Direct to site</option></select><select aria-label="Filter purchase orders by status" className={inputClass} value={list.filters.status} onChange={(event) => { setQueue('all'); list.setFilter('action_queue', ''); list.setFilter('status', event.target.value); }}><option value="">Status</option><option value="DRAFT">Draft</option><option value="PENDING">Pending</option><option value="ORDERED">Ordered</option><option value="DISPATCH_CONFIRMED">Dispatch confirmed</option><option value="PARTIAL">Part received</option><option value="RECEIVED">Received</option><option value="CANCELLED">Cancelled</option></select><select aria-label="Sort purchase orders" className={inputClass} value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="delivery">Sort: Delivery date</option><option value="newest">Sort: Newest first</option></select></div><div className="po-table-wrap"><table className="po-table"><thead><tr><th>Purchase order</th><th>Supplier</th><th>Project / site</th><th>Destination</th><th>Ordered</th><th>Delivery date</th><th>Receipt progress</th><th>Total</th><th>Status</th><th>Next action</th><th aria-label="Actions" /></tr></thead><tbody>{orderRows.map((order) => { const receipt = receiptProgress(order); const commitmentDate = deliveryDate(order); return <tr key={order.id}><td><Link to={`/procurement/purchase-orders?search=${encodeURIComponent(order.number)}`}>{order.number}</Link><small>{order.purchase_request_number || 'Manual PO'}</small></td><td>{order.supplier_name || 'Unassigned'}</td><td>{order.project_name || 'Warehouse'}<small>{order.project_name ? 'Project order' : 'No project'}</small></td><td><Badge tone={order.delivery_destination === 'SITE' ? 'info' : 'success'}>{order.delivery_destination_display}</Badge></td><td>{formatDate(order.created_at)}</td><td className={order.is_overdue ? 'overdue' : ''}>{commitmentDate ? formatDate(commitmentDate) : 'Not committed'}{order.is_overdue ? <small>Overdue</small> : null}</td><td><div className="po-receipt-progress"><span><b style={{ width: `${receipt.percent}%` }} /></span><strong>{receipt.percent}%</strong><small>{receipt.number}</small></div></td><td>{formatUGX(order.total_cost)}</td><td><Badge tone={statusTone(order.status)}>{order.status_display}</Badge>{order.pending_preapproval_edit ? <small className="po-finance-flag">Finance review</small> : null}</td><td>{rowAction(order)}</td><td><details className="po-row-menu"><summary aria-label={`More actions for ${order.number}`}><EllipsisVertical size={16} /></summary><div>{can.createPo(role) && !['RECEIVED', 'CANCELLED'].includes(order.status) ? <button type="button" onClick={() => setCancelling(order)}><X size={13} />Cancel</button> : null}{hasRole(role, ['procurement_officer', 'admin']) && ['DRAFT', 'PENDING', 'ORDERED'].includes(order.status) ? <button type="button" onClick={() => setAmending(order)}><FilePenLine size={13} />{['DRAFT', 'PENDING'].includes(order.status) ? 'Edit PO' : 'Amend PO'}</button> : null}{hasRole(role, ['procurement_officer', 'admin']) && order.status === 'DRAFT' ? <button type="button" onClick={() => { if (window.confirm(`Delete ${order.number}? This draft will be removed and audited.`)) deleteDraft.mutate(order.id); }}><Trash2 size={13} />Delete draft</button> : null}{hasRole(role, ['finance_officer', 'finance_manager', 'admin']) ? (amendments.data?.get(order.id) || []).filter((item) => item.status === 'SUBMITTED').map((item) => item.amendment_type === 'PRE_APPROVAL_EDIT' ? <button type="button" key={item.id} onClick={() => setReviewingPreapproval({ order, amendment: item, canConfirm: hasRole(role, ['finance_manager', 'admin']) })}><FilePenLine size={13} />{hasRole(role, ['finance_manager', 'admin']) ? 'Review edited PO' : 'View edited PO'}</button> : hasRole(role, ['finance_manager', 'admin']) ? <button type="button" key={item.id} onClick={() => setDecidingAmendment({ order, amendment: item, approve: true })}><Check size={13} />Review v{item.version}</button> : null) : null}{hasRole(role, ['finance_officer', 'finance_manager', 'admin']) && order.status === 'PENDING' && order.purchase_request_number ? <button type="button" onClick={() => navigate(`/procurement/requests?search=${encodeURIComponent(order.purchase_request_number || '')}`)}><Check size={13} />Finance review</button> : null}</div></details></td></tr>; })}</tbody></table>{!orderRows.length ? <p className="po-empty">{orders.isLoading ? 'Loading purchase orders…' : 'No purchase orders match this view.'}</p> : null}</div><footer className="po-table-footer"><span>Showing {pageStart} to {pageEnd} of {totalRows} purchase orders</span><span><button type="button" disabled={!orders.data?.previous} onClick={() => list.setPage(Math.max(1, list.page - 1))}>‹</button><b>{list.page}</b><button type="button" disabled={!orders.data?.next} onClick={() => list.setPage(list.page + 1)}>›</button></span></footer></div><aside className="po-side-column"><section className="po-summary-panel"><div className="po-panel-heading"><h2>Receiving summary</h2></div><Link to="/procurement/deliveries?action_queue=warehouse_receipts"><Box size={17} /><span>Warehouse receipts<small>{warehouseReceipts.length} recorded</small></span><strong>{formatUGX(warehouseReceipts.reduce((sum, receipt) => sum + Number(allRows.find((order) => order.id === receipt.purchase_order)?.total_cost || 0), 0))}</strong></Link><Link to="/procurement/deliveries?action_queue=site_receipts"><Truck size={17} /><span>Direct-to-site receipts<small>{siteReceipts.length} recorded</small></span><strong>{formatUGX(siteReceipts.reduce((sum, receipt) => sum + Number(allRows.find((order) => order.id === receipt.purchase_order)?.total_cost || 0), 0))}</strong></Link><div><Clock3 size={17} /><span>Partial receipts<small>Require follow-up</small></span><strong>{partialOrders.length}</strong></div><div><X size={17} /><span>Cancelled orders<small>Commitment released</small></span><strong>{allRows.filter((order) => order.status === 'CANCELLED').length}</strong></div></section><section className="po-steps-panel"><div className="po-panel-heading"><h2>Next steps</h2><Link to="/procurement/deliveries">View all <ChevronRight size={13} /></Link></div><Link to="/procurement/deliveries?action_queue=warehouse_receipts"><PackageCheck size={17} /><span>GRNs to verify<small>Warehouse receiving queue</small></span><strong>{allRows.filter((order) => order.delivery_destination === 'WAREHOUSE' && ['ORDERED', 'PARTIAL'].includes(order.status)).length}</strong></Link><Link to="/procurement/deliveries?action_queue=site_receipts"><Truck size={17} /><span>Site receipts to confirm<small>Direct-to-site queue</small></span><strong>{allRows.filter((order) => order.delivery_destination === 'SITE' && ['DISPATCH_CONFIRMED', 'PARTIAL'].includes(order.status)).length}</strong></Link><Link to="/finance/payables"><CircleDollarSign size={17} /><span>Ready for invoice matching<small>Finance payables workspace</small></span><strong>{receivedOrders.length}</strong></Link></section><section className="po-performance-panel"><div className="po-panel-heading"><h2>Supplier delivery</h2><Link to="/suppliers">View all <ChevronRight size={13} /></Link></div><strong>{allRows[0]?.supplier_name || 'No supplier data'}</strong><PurchaseOrderPerformance label="On-time delivery" value={onTimeRate} suffix="%" /><PurchaseOrderPerformance label="Receipt completion" value={receiptRate} suffix="%" /><PurchaseOrderPerformance label="Average lead time" value={averageLeadTime} suffix=" days" /></section></aside></section>
       {hasRole(role, ['procurement_officer', 'admin']) ? <PurchaseOrderModal open={open} onClose={() => setOpen(false)} initialPurchaseRequestId={requestedPurchaseRequestId} /> : null}
       <CancelPurchaseOrderModal order={cancelling} pending={cancel.isPending} onClose={() => setCancelling(null)} onCancel={(comments) => cancelling && cancel.mutate({ id: cancelling.id, comments })} />
       <PurchaseOrderAmendmentModal order={amending} onClose={() => setAmending(null)} onDone={refresh} />
@@ -174,6 +156,15 @@ export function PurchaseOrdersPage() {
       <PreApprovalEditReviewModal state={reviewingPreapproval} onClose={() => setReviewingPreapproval(null)} onDone={refresh} />
     </div>
   );
+}
+
+function PurchaseOrderKpi({ icon: Icon, tone, label, value, note }: { icon: typeof FileText; tone: string; label: string; value: string | number; note: string }) {
+  return <article className="po-kpi"><span className={`po-kpi-icon ${tone}`}><Icon size={23} /></span><div><p>{label}</p><strong>{value}</strong><small>{note}</small></div></article>;
+}
+
+function PurchaseOrderPerformance({ label, value, suffix }: { label: string; value: number; suffix: string }) {
+  const width = suffix === ' days' ? Math.min(100, value ? 100 / Math.max(value, 1) * 3 : 0) : value;
+  return <div className="po-performance-row"><span>{label}</span><i><b style={{ width: `${width}%` }} /></i><strong>{value}{suffix}</strong></div>;
 }
 
 function poNextAction(order: PurchaseOrder, role: ReturnType<typeof useAuth>['role']) {
