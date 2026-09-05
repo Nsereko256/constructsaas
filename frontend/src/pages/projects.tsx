@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Building2, CheckCircle2, CircleDollarSign, Plus, Target, Trash2, Users } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 import { api } from '@/api/services';
+import { financeApi } from '@/api/finance-services';
 import { Project, User } from '@/api/types';
 import { qk } from '@/api/queryKeys';
 import { can } from '@/api/roles';
@@ -18,6 +19,7 @@ import { useToast } from '@/components/ui/toast';
 import { PageToolbar } from '@/components/common/page-toolbar';
 import { Pagination } from '@/components/common/pagination';
 import { EngineerPicker } from '@/components/common/engineer-picker';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useListState } from '@/hooks/use-list-state';
 import { formatUGX } from '@/lib/utils';
 import { WorkspaceTabs } from '@/components/common/workspace-hub';
@@ -81,17 +83,24 @@ export function ProjectsPage() {
 function ProjectModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { role } = useAuth();
   const managers = useQuery({ queryKey: qk.users({ role: 'project_manager', is_active: true }), queryFn: () => api.users({ role: 'project_manager', is_active: true }) });
+  const budgetCategories = useQuery({ queryKey: ['finance', 'budget-categories', 'project-setup'], queryFn: () => financeApi.budgetCategories({ page_size: 100, is_active: true }), enabled: can.prepareFinance(role) });
   const queryClient = useQueryClient();
   const toast = useToast();
   const [form, setForm] = useState({ name: '', code: '', client: '', location: '', description: '', budget: '0', status: 'planning', manager: '', site_engineers: [] as string[], start_date: '', end_date: '' });
   const [selectedEngineers, setSelectedEngineers] = useState<Pick<User, 'id' | 'username'>[]>([]);
   const [sites, setSites] = useState([{ code: '', name: '', location: '' }]);
+  const [goals, setGoals] = useState([{ title: '', description: '', weight: '1', due_date: '' }]);
+  const [createFinanceBudget, setCreateFinanceBudget] = useState(false);
+  const [budgetName, setBudgetName] = useState('Initial project budget');
+  const [budgetLines, setBudgetLines] = useState([{ category: '', description: '', original_amount: '' }]);
   const set = (key: Exclude<keyof typeof form, 'site_engineers'>, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const setEngineers = (engineers: Pick<User, 'id' | 'username'>[]) => { setSelectedEngineers(engineers); setForm((current) => ({ ...current, site_engineers: engineers.map((engineer) => String(engineer.id)) })); };
   const mutation = useMutation({
     mutationFn: async () => {
       const project = await api.saveProject({ ...form, manager: form.manager || null, site_engineers: form.site_engineers.map(Number), start_date: form.start_date || null, end_date: form.end_date || null } as Partial<Project>);
       await Promise.all(sites.filter((site) => site.code.trim() || site.name.trim()).map((site) => api.saveProjectSite({ ...site, project: project.id, status: 'ACTIVE', is_active: true })));
+      await Promise.all(goals.filter((goal) => goal.title.trim()).map((goal) => api.saveProjectGoal({ ...goal, project: project.id, weight: goal.weight || '1', due_date: goal.due_date || null })));
+      if (createFinanceBudget) await financeApi.createBudget({ project: project.id, name: budgetName, lines: budgetLines.map((line) => ({ ...line, category: Number(line.category) })) });
       return project;
     },
     onSuccess: () => {
@@ -125,10 +134,12 @@ function ProjectModal({ open, onClose }: { open: boolean; onClose: () => void })
           <EngineerPicker selected={selectedEngineers} onChange={setEngineers} />
         </div> : null}
         <div className="grid gap-3 rounded-xl border border-border bg-background p-3 md:col-span-2"><div className="flex items-center justify-between gap-2"><div><strong className="text-sm">Project sites</strong><p className="text-xs text-muted">Add every physical location that belongs to this project.</p></div><Button type="button" size="sm" variant="secondary" onClick={() => setSites((current) => [...current, { code: '', name: '', location: '' }])}><Plus className="h-4 w-4" />Add site</Button></div>{sites.map((site, index) => <div key={index} className="grid gap-2 rounded-lg border border-border bg-white p-3 md:grid-cols-[0.7fr_1fr_1fr_auto]"><input className={inputClass} required={index === 0} placeholder="Site code" value={site.code} onChange={(event) => setSites((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, code: event.target.value.toUpperCase() } : item))} /><input className={inputClass} required={index === 0} placeholder="Site name" value={site.name} onChange={(event) => setSites((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} /><input className={inputClass} placeholder="Location / address" value={site.location} onChange={(event) => setSites((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, location: event.target.value } : item))} />{sites.length > 1 ? <Button type="button" size="sm" variant="ghost" aria-label={`Remove site ${index + 1}`} onClick={() => setSites((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="h-4 w-4" /></Button> : <span />}</div>)}</div>
+        <div className="grid gap-3 rounded-xl border border-border bg-background p-3 md:col-span-2"><div className="flex items-center justify-between gap-2"><div><strong className="text-sm">Progress goals</strong><p className="text-xs text-muted">Add weighted milestones so the dashboard can show actual progress immediately.</p></div><Button type="button" size="sm" variant="secondary" onClick={() => setGoals((current) => [...current, { title: '', description: '', weight: '1', due_date: '' }])}><Plus className="h-4 w-4" />Add goal</Button></div>{goals.map((goal, index) => <div key={index} className="grid gap-2 rounded-lg border border-border bg-white p-3 md:grid-cols-[1fr_110px_150px_auto]"><input className={inputClass} placeholder="Goal or milestone" value={goal.title} onChange={(event) => setGoals((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, title: event.target.value } : item))} /><input className={inputClass} type="number" min="0.01" step="0.01" placeholder="Weight" value={goal.weight} onChange={(event) => setGoals((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, weight: event.target.value } : item))} /><input className={inputClass} type="date" value={goal.due_date} onChange={(event) => setGoals((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, due_date: event.target.value } : item))} />{goals.length > 1 ? <Button type="button" size="sm" variant="ghost" aria-label={`Remove goal ${index + 1}`} onClick={() => setGoals((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="h-4 w-4" /></Button> : <span />}</div>)}</div>
+        {can.prepareFinance(role) ? <div className="grid gap-3 rounded-xl border border-primary/20 bg-primary/[0.035] p-3 md:col-span-2"><label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-0.5" checked={createFinanceBudget} onChange={(event) => setCreateFinanceBudget(event.target.checked)} /><span><strong>Create Finance budget draft</strong><span className="block text-xs text-muted">Set up budget lines now so Finance can review and approve the project budget.</span></span></label>{createFinanceBudget ? <><Field label="Budget name" required><input className={inputClass} value={budgetName} onChange={(event) => setBudgetName(event.target.value)} /></Field><div className="grid gap-2">{budgetLines.map((line, index) => <div key={index} className="grid gap-2 md:grid-cols-[1fr_1fr_150px_auto]"><SearchableSelect required value={line.category} onChange={(category) => setBudgetLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, category } : item))} options={(budgetCategories.data?.results || []).map((category) => ({ value: category.id, label: `${category.code} / ${category.name}` }))} placeholder="Budget category" /><input className={inputClass} placeholder="Description" value={line.description} onChange={(event) => setBudgetLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, description: event.target.value } : item))} /><input className={inputClass} type="number" min="0.01" step="0.01" required placeholder="Amount" value={line.original_amount} onChange={(event) => setBudgetLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, original_amount: event.target.value } : item))} />{budgetLines.length > 1 ? <Button type="button" size="sm" variant="ghost" aria-label={`Remove budget line ${index + 1}`} onClick={() => setBudgetLines((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="h-4 w-4" /></Button> : <span />}</div>)}<Button type="button" size="sm" variant="secondary" onClick={() => setBudgetLines((current) => [...current, { category: '', description: '', original_amount: '' }])}><Plus className="h-4 w-4" />Add budget line</Button></div></> : null}</div> : null}
         <Field label="Start date"><input className={inputClass} type="date" value={form.start_date} onChange={(event) => set('start_date', event.target.value)} /></Field>
         <Field label="End date"><input className={inputClass} type="date" value={form.end_date} onChange={(event) => set('end_date', event.target.value)} /></Field>
         <Field label="Description" className="md:col-span-2"><textarea className={inputClass} value={form.description} onChange={(event) => set('description', event.target.value)} /></Field>
-        <Button className="md:col-span-2" disabled={!form.name || !form.code || mutation.isPending}>Save project</Button>
+        <Button className="md:col-span-2" loading={mutation.isPending} loadingLabel="Setting up project" disabled={!form.name || !form.code || mutation.isPending || (createFinanceBudget && (!budgetName || !budgetLines.length || budgetLines.some((line) => !line.category || !line.original_amount)))}>Create project setup</Button>
       </form>
     </FormModal>
   );
