@@ -22,6 +22,14 @@ export function AppShell() {
   const currentNav = [...nav].sort((a, b) => b.href.length - a.href.length).find((item) =>
     item.href === '/dashboard' ? location.pathname === item.href : location.pathname.startsWith(item.href),
   );
+  const procurementPage = [
+    ['/procurement/requests', 'Purchase requests'], ['/procurement/rfqs', 'Supplier quotes'],
+    ['/procurement/purchase-orders', 'Purchase orders'], ['/procurement/grns', 'Receipts'],
+    ['/procurement/deliveries', 'Deliveries'], ['/procurement/supplier-claims', 'Supplier claims'],
+  ].find(([path]) => location.pathname.startsWith(path))?.[1];
+  const compactWorkspaceLabel = location.pathname.startsWith('/procurement')
+    ? procurementPage ? `Procurement / ${procurementPage}` : 'Procurement'
+    : currentNav?.label;
   const unread = useQuery({ queryKey: qk.unreadCount, queryFn: api.unreadCount, refetchInterval: 30000 });
   const workflowBadges = useQuery({ queryKey: qk.workflowBadges, queryFn: api.workflowBadges, refetchInterval: 30000 });
   useEffect(() => {
@@ -102,7 +110,7 @@ export function AppShell() {
           <Button variant="ghost" size="sm" className="md:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation">
             <Menu className="h-5 w-5" />
           </Button>
-          {currentNav ? location.pathname.startsWith('/projects') || location.pathname === '/procurement' ? <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted">{currentNav.label}</p> : <div className="min-w-0"><p className="hidden text-[10px] font-bold uppercase tracking-[0.14em] text-muted sm:block">ConstructSaaS</p><p className="truncate text-sm font-bold sm:text-base">{currentNav.label}</p></div> : null}
+          {currentNav ? location.pathname.startsWith('/projects') || location.pathname.startsWith('/procurement') ? <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted">{compactWorkspaceLabel}</p> : <div className="min-w-0"><p className="hidden text-[10px] font-bold uppercase tracking-[0.14em] text-muted sm:block">ConstructSaaS</p><p className="truncate text-sm font-bold sm:text-base">{currentNav.label}</p></div> : null}
           <div className="ml-auto" />
           <label className="flex min-w-0 items-center gap-2 text-xs">
             <span className="sr-only">Active site</span>
@@ -126,7 +134,7 @@ export function AppShell() {
         </header>
         <main className="app-sheen min-h-[calc(100vh-4rem)] min-w-0 p-2.5 sm:p-4 md:px-5 md:py-2"><div className="mx-auto max-w-[1600px]">
           {site ? <div className="mb-3 rounded-md border border-info/20 bg-info/5 px-3 py-2 text-xs text-info">Site scope: <strong>{site.project_name} · {site.name}</strong>. Use “All sites” to return to the company view.</div> : null}
-          {location.pathname !== '/dashboard' && !location.pathname.startsWith('/projects') && location.pathname !== '/procurement' ? <ActionCentre role={role} workflow={workflowBadges.data} /> : null}
+          {location.pathname !== '/dashboard' && !location.pathname.startsWith('/projects') && !location.pathname.startsWith('/procurement') ? <ActionCentre role={role} workflow={workflowBadges.data} /> : null}
           <Outlet />
         </div></main>
       </div>

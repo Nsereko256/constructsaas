@@ -1,8 +1,7 @@
-import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, CircleDollarSign, CornerUpLeft, PackageOpen, Pencil, Plus, Send, Trash2, X } from 'lucide-react';
+import { AlertCircle, Box, Check, ChevronDown, ChevronRight, CircleDollarSign, Clock3, CornerUpLeft, Download, EllipsisVertical, FileText, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { financeApi } from '@/modules/finance/api';
 import { api } from '@/modules/procurement/api';
 import { getTokens } from '@/api/client';
@@ -12,18 +11,15 @@ import { qk } from '@/api/queryKeys';
 import { can, hasRole } from '@/api/roles';
 import { useAuth } from '@/auth/auth-context';
 import { FormModal } from '@/components/common/form-modal';
-import { ExportButton } from '@/components/common/export-button';
 import { MaterialLookup } from '@/components/common/material-lookup';
-import { PageToolbar } from '@/components/common/page-toolbar';
-import { Pagination } from '@/components/common/pagination';
 import { Badge, statusTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DataTable } from '@/components/ui/data-table';
 import { Field, inputClass } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
 import { useListState } from '@/hooks/use-list-state';
 import { formatDate, formatNumber, formatUGX } from '@/lib/utils';
+import './purchase-requests-reference.css';
 
 const draftKey = 'construct.pr.draft';
 
@@ -34,6 +30,8 @@ export function ProcurementRequestsPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const list = useListState({ status: '', priority: '', project: '', action_queue: searchParams.get('action_queue') || '' });
+  const [queue, setQueue] = useState<'all' | 'mine' | 'awaiting' | 'stock' | 'completed'>(() => searchParams.get('action_queue') ? 'mine' : 'all');
+  const [sort, setSort] = useState<'action' | 'newest'>('action');
   const [open, setOpen] = useState(() => searchParams.get('create') === '1' && can.submitPr(role));
   const [rejecting, setRejecting] = useState<PurchaseRequest | null>(null);
   const [returning, setReturning] = useState<PurchaseRequest | null>(null);
@@ -43,7 +41,10 @@ export function ProcurementRequestsPage() {
   const [editingDraft, setEditingDraft] = useState<PurchaseRequest | null>(null);
   const [stockIssueReview, setStockIssueReview] = useState<PurchaseRequest | null>(null);
   const [issuingStock, setIssuingStock] = useState<PurchaseRequest | null>(null);
-  const requests = useQuery({ queryKey: list.filters.action_queue ? qk.purchaseRequestActionQueue(list.query) : qk.purchaseRequests(list.query), queryFn: () => api.purchaseRequests(list.query) });
+  const requestQuery = { ...list.query, page_size: 5 };
+  const requests = useQuery({ queryKey: list.filters.action_queue ? qk.purchaseRequestActionQueue(requestQuery) : qk.purchaseRequests(requestQuery), queryFn: () => api.purchaseRequests(requestQuery) });
+  const allRequests = useQuery({ queryKey: qk.purchaseRequests({ page_size: 100 }), queryFn: () => api.purchaseRequests({ page_size: 100 }) });
+  const projects = useQuery({ queryKey: qk.projects({ page_size: 100 }), queryFn: () => api.projects({ page_size: 100 }) });
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ['purchase-requests'] });
     void queryClient.invalidateQueries({ queryKey: qk.dashboard });
@@ -128,123 +129,104 @@ export function ProcurementRequestsPage() {
     ].some(Boolean);
 
   const requestRows = [...(requests.data?.results || [])].sort((a, b) => {
+    if (sort === 'newest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     const actionScore = (request: PurchaseRequest) => requestNeedsAction(request) ? 0 : 1;
-    return actionScore(a) - actionScore(b);
+    const score = actionScore(a) - actionScore(b);
+    return score || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  const columns: ColumnDef<PurchaseRequest>[] = [
-    {
-      header: 'Request',
-      cell: ({ row }) => (
-        <div>
-          <strong className="block truncate">{row.original.number}</strong>
-          <p className="text-sm text-muted">{row.original.title}</p>
-          <p className="text-xs text-muted">{row.original.project_name || 'No project'} · {row.original.requested_by_username} · {formatDate(row.original.created_at)}</p>
-        </div>
-      ),
-    },
-    { header: 'Status', cell: ({ row }) => <div><Badge tone={statusTone(row.original.status)}>{row.original.status_display}</Badge><p className="mt-1 max-w-[260px] text-xs text-muted">{row.original.next_action_message}</p></div> },
-    { header: 'Priority', cell: ({ row }) => <Badge tone={statusTone(row.original.priority)}>{row.original.priority_display}</Badge> },
-    {
-      header: 'Finance',
-      cell: ({ row }) => (
-        <div>
-          <Badge tone={statusTone(row.original.finance_status)}>{row.original.finance_status_display}</Badge>
-          {row.original.finance_return_reason ? <p className="mt-1 max-w-48 truncate text-xs font-semibold text-warning" title={row.original.finance_return_reason}>Return: {row.original.finance_return_reason}</p> : row.original.finance_review_reason ? <p className="mt-1 max-w-48 truncate text-xs text-muted" title={row.original.finance_review_reason}>{row.original.finance_review_reason}</p> : null}
-        </div>
-      ),
-    },
-    {
-      header: 'Warehouse available',
-      cell: ({ row }) => (
-        <div className="grid gap-1 text-xs">
-          {row.original.items.slice(0, 2).map((item) => {
-            const available = Number(item.warehouse_available);
-            const needed = Number(item.outstanding_quantity);
-            return <span key={item.id} className={available >= needed ? 'text-primary' : available > 0 ? 'text-warning' : 'text-critical'}>{item.material_code}: {formatNumber(item.warehouse_available)}/{formatNumber(item.outstanding_quantity)} {item.unit}</span>;
-          })}
-          {row.original.items.length > 2 ? <span className="text-muted">+{row.original.items.length - 2} more</span> : null}
-        </div>
-      ),
-    },
-    { header: 'Estimate', cell: ({ row }) => <span className="whitespace-nowrap font-semibold">{formatUGX(row.original.total_estimated_cost)}</span> },
-    {
-      id: 'actions',
-      header: '',
-      cell: ({ row }) => (
-        <div className="flex flex-wrap justify-end gap-2">
-          {hasRole(role, ['admin', 'site_engineer', 'procurement_officer']) && row.original.status === 'PENDING' && (role === 'admin' || row.original.requested_by === user?.id) ? <>
-            <Button size="sm" variant="secondary" onClick={() => setEditingDraft(row.original)}><Pencil className="h-4 w-4" />Edit draft</Button>
-            <Button size="sm" variant="ghost" onClick={() => { if (window.confirm(`Delete ${row.original.number}? This draft will be removed and audited.`)) deleteDraft.mutate(row.original.id); }}><Trash2 className="h-4 w-4" />Delete draft</Button>
-          </> : null}
-          {can.approvePr(role) && row.original.status === 'PENDING' ? (
-            <>
-              <Button size="sm" title="Review the project, justification, materials and quantities before approving" onClick={() => approve.mutate(row.original.id)}><Check className="h-4 w-4" />Approve</Button>
-              <Button size="sm" variant="secondary" onClick={() => setReturning(row.original)}><CornerUpLeft className="h-4 w-4" />Return</Button>
-              <Button size="sm" variant="secondary" onClick={() => setRejecting(row.original)}><X className="h-4 w-4" />Reject</Button>
-            </>
-          ) : null}
-          {row.original.can_approve_stock_issue ? (
-            <Button size="sm" onClick={() => approveStockIssue.mutate(row.original.id)} disabled={approveStockIssue.isPending}>
-              <Check className="h-4 w-4" />Approve stock issue
-            </Button>
-          ) : null}
-          {hasRole(role, ['procurement_officer', 'admin']) && row.original.can_request_stock_issue ? (
-            <Button size="sm" variant="secondary" onClick={() => setStockIssueReview(row.original)}><Send className="h-4 w-4" />Request stock issue</Button>
-          ) : null}
-          {role === 'procurement_officer' && row.original.status === 'APPROVED' && !row.original.can_request_stock_issue && !row.original.has_purchase_order ? <span className="self-center text-xs font-semibold text-warning">Awaiting Admin approval for stock issue</span> : null}
-          {hasRole(role, ['storekeeper', 'admin']) && row.original.can_fulfill_from_stock ? (
-            <Button size="sm" onClick={() => setIssuingStock(row.original)} title="Enter the quantities to issue from the warehouse"><PackageOpen className="h-4 w-4" />Issue available stock</Button>
-          ) : null}
-          {can.submitPrToFinance(role) && row.original.can_submit_finance && row.original.has_purchase_order ? (
-            <Button size="sm" variant="secondary" onClick={() => setFinanceSubmission(row.original)}><CircleDollarSign className="h-4 w-4" />Send quoted PO to finance</Button>
-          ) : null}
-          {can.createPo(role) && row.original.can_create_purchase_order ? (
-            <Button size="sm" onClick={() => navigate('/procurement/purchase-orders', { state: { purchaseRequestId: row.original.id } })}><PackageOpen className="h-4 w-4" />{row.original.status === 'PARTIAL_STOCK_ISSUED' ? 'Source balance' : 'Create PO'}</Button>
-          ) : null}
-          {row.original.can_correct_return ? <Button size="sm" variant="secondary" onClick={() => setCorrecting(row.original)}>Correct request</Button> : null}
-          {can.reviewPrFinance(role) && ['SUBMITTED', 'HOLD'].includes(row.original.finance_status) ? (
-            <Button size="sm" onClick={() => setFinanceDecision(row.original)}><CircleDollarSign className="h-4 w-4" />Finance review</Button>
-          ) : null}
-        </div>
-      ),
-    },
-  ];
+  const allRows = allRequests.data?.results || [];
+  const totalValue = allRows.reduce((sum, request) => sum + Number(request.total_estimated_cost || 0), 0);
+  const actionRows = allRows.filter(requestNeedsAction);
+  const awaitingApproval = allRows.filter((request) => request.status === 'PENDING');
+  const stockIssueRows = allRows.filter((request) => [
+    'STOCK_ISSUE_REQUESTED', 'PARTIAL_STOCK_ISSUED', 'STOCK_ISSUED',
+  ].includes(request.status));
+  const readyForStockIssue = allRows.filter((request) => request.can_approve_stock_issue || request.can_request_stock_issue || request.can_fulfill_from_stock);
+  const stockIssueValue = stockIssueRows.reduce((sum, request) => sum + Number(request.total_estimated_cost || 0), 0);
+  const purchaseValue = Math.max(0, totalValue - stockIssueValue);
+  const projectOptions = projects.data?.results || [];
+  const pageSize = 5;
+  const totalRows = requests.data?.count || 0;
+  const pageStart = totalRows ? (list.page - 1) * pageSize + 1 : 0;
+  const pageEnd = totalRows ? Math.min(list.page * pageSize, totalRows) : 0;
+  const stockAvailability = (request: PurchaseRequest) => {
+    const lines = request.items || [];
+    if (!lines.length) return { label: 'No lines', tone: 'neutral' as const };
+    const fullyAvailable = lines.every((item) => Number(item.warehouse_available) >= Number(item.outstanding_quantity));
+    const anyAvailable = lines.some((item) => Number(item.warehouse_available) > 0);
+    if (fullyAvailable) return { label: 'Available', tone: 'success' as const };
+    if (anyAvailable) return { label: 'Partial stock', tone: 'warning' as const };
+    return { label: 'Not available', tone: 'danger' as const };
+  };
+  const updateQueue = (value: typeof queue) => {
+    setQueue(value);
+    if (value === 'mine') {
+      list.setFilter('status', '');
+      list.setFilter('action_queue', 'my_requests');
+      return;
+    }
+    list.setFilter('action_queue', '');
+    list.setFilter('status', value === 'awaiting' ? 'PENDING' : value === 'stock' ? 'STOCK_ISSUE_REQUESTED' : value === 'completed' ? 'STOCK_ISSUED' : '');
+  };
+  const primaryAction = (request: PurchaseRequest) => {
+    if (can.approvePr(role) && request.status === 'PENDING') return <Button size="sm" className="pr-next-action" onClick={() => approve.mutate(request.id)}>Approve</Button>;
+    if (request.can_approve_stock_issue) return <Button size="sm" className="pr-next-action" onClick={() => approveStockIssue.mutate(request.id)} disabled={approveStockIssue.isPending}>Approve stock</Button>;
+    if (hasRole(role, ['procurement_officer', 'admin']) && request.can_request_stock_issue) return <Button size="sm" className="pr-next-action" onClick={() => setStockIssueReview(request)}>Request issue</Button>;
+    if (hasRole(role, ['storekeeper', 'admin']) && request.can_fulfill_from_stock) return <Button size="sm" className="pr-next-action" onClick={() => setIssuingStock(request)}>Issue stock</Button>;
+    if (can.submitPrToFinance(role) && request.can_submit_finance && request.has_purchase_order) return <Button size="sm" className="pr-next-action" onClick={() => setFinanceSubmission(request)}>Send to finance</Button>;
+    if (can.createPo(role) && request.can_create_purchase_order) return <Button size="sm" className="pr-next-action" onClick={() => navigate('/procurement/purchase-orders', { state: { purchaseRequestId: request.id } })}>{request.status === 'PARTIAL_STOCK_ISSUED' ? 'Source balance' : 'Create PO'}</Button>;
+    if (request.can_correct_return) return <Button size="sm" className="pr-next-action" onClick={() => setCorrecting(request)}>Correct</Button>;
+    if (can.reviewPrFinance(role) && ['SUBMITTED', 'HOLD'].includes(request.finance_status)) return <Button size="sm" className="pr-next-action" onClick={() => setFinanceDecision(request)}>Finance review</Button>;
+    return <span className="pr-next-message" title={request.next_action_message}>{request.next_action_message}</span>;
+  };
 
   return (
-    <div className="grid gap-3 sm:gap-4">
-      <PageToolbar title="Purchase requests" subtitle="Create and route project material requests." search={list.search} onSearch={list.setSearch}>
-        {hasRole(role, ['storekeeper', 'admin']) ? <Button variant="secondary" onClick={() => navigate('/procurement/requests?action_queue=my_requests')}><PackageOpen className="h-4 w-4" />Stock issue queue</Button> : null}
-        <select className={inputClass} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}>
-          <option value="">All statuses</option>
-          <option value="PENDING">Pending</option>
-          <option value="APPROVED">Approved</option>
-          <option value="STOCK_ISSUE_REQUESTED">Issue requested</option>
-          <option value="PARTIAL_STOCK_ISSUED">Partially issued</option>
-          <option value="STOCK_ISSUED">Stock issued</option>
-          <option value="PO_CREATED">PO created</option>
-          <option value="REJECTED">Rejected</option>
-        </select>
-        <select className={inputClass} value={list.filters.priority} onChange={(event) => list.setFilter('priority', event.target.value)}>
-          <option value="">All priorities</option>
-          <option value="LOW">Low</option>
-          <option value="NORMAL">Normal</option>
-          <option value="HIGH">High</option>
-          <option value="URGENT">Urgent</option>
-        </select>
-        <ExportButton label="PDF" onClick={() => void api.downloadPurchaseRequests('pdf', { ...list.filters, search: list.search })} />
-        <ExportButton label="Excel" onClick={() => void api.downloadPurchaseRequests('xlsx', { ...list.filters, search: list.search })} />
-        {can.submitPr(role) || can.submitWarehouseReplenishment(role) ? <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" />{can.submitWarehouseReplenishment(role) && !can.submitPr(role) ? 'Warehouse replenishment' : 'New PR'}</Button> : null}
-      </PageToolbar>
-      <div className="border border-info/25 bg-info/5 p-3 text-sm text-foreground"><strong>Manager review required before approval.</strong><p className="mt-1 text-muted">The Project Manager must review the project, justification, priority, requested quantities, materials, and warehouse availability before approving. Incomplete or inaccurate requests should be returned for correction.</p></div>
-      {hasRole(role, ['storekeeper', 'admin', 'procurement_officer']) ? <div className="border border-primary/25 bg-primary/[0.045] p-3 text-sm text-foreground"><strong>Stock issue workflow</strong><p className="mt-1 text-muted">For project requests, the sequence is: Manager approval → Admin stock-issue approval → Procurement selects <strong>Request stock issue</strong> → Storekeeper selects <strong>Issue available stock</strong>. Warehouse replenishment requests must use a purchase order and will not show this action.</p></div> : null}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <div className="rounded-xl border border-border/80 bg-white px-3 py-2.5 shadow-sm"><p className="text-[10px] font-bold uppercase tracking-wide text-muted">On this page</p><strong className="mt-0.5 block text-lg font-black">{requestRows.length}</strong></div>
-        <div className="rounded-xl border border-warning/25 bg-warning/5 px-3 py-2.5 shadow-sm"><p className="text-[10px] font-bold uppercase tracking-wide text-warning">Needs action</p><strong className="mt-0.5 block text-lg font-black text-foreground">{requestRows.filter(requestNeedsAction).length}</strong></div>
-        <div className="col-span-2 rounded-xl border border-primary/15 bg-primary/[0.025] px-3 py-2.5 shadow-sm sm:col-span-1"><p className="text-[10px] font-bold uppercase tracking-wide text-primary">Queue order</p><p className="mt-0.5 truncate text-sm font-semibold">Action first · newest context below</p></div>
-      </div>
-      <DataTable columns={columns} data={requestRows} mobileSummaryCells={2} mobileSummaryStacked mobileCardClassName="request-card" emptyTitle={requests.isLoading ? 'Loading requests...' : 'No purchase requests found'} />
-      <Pagination page={list.page} setPage={list.setPage} data={requests.data} />
+    <div className="purchase-requests-reference">
+      <section className="pr-top">
+        <div className="pr-titlebar">
+          <div><h1>Purchase requests</h1><p>Create, review and fulfil project material requests.</p></div>
+          <div className="pr-title-actions">
+            {hasRole(role, ['storekeeper', 'admin']) ? <Button variant="secondary" asChild><Link to="/procurement/requests?action_queue=my_requests"><Box className="h-4 w-4" />Stock issue queue</Link></Button> : null}
+            <details className="pr-export-menu"><summary><Download className="h-4 w-4" />Export <ChevronDown className="h-3.5 w-3.5" /></summary><div><button type="button" onClick={() => void api.downloadPurchaseRequests('pdf', { ...list.filters, search: list.search })}>PDF register</button><button type="button" onClick={() => void api.downloadPurchaseRequests('xlsx', { ...list.filters, search: list.search })}>Excel register</button></div></details>
+            {can.submitPr(role) || can.submitWarehouseReplenishment(role) ? <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" />{can.submitWarehouseReplenishment(role) && !can.submitPr(role) ? 'Warehouse replenishment' : 'New PR'}</Button> : null}
+          </div>
+        </div>
+        <nav className="pr-tabs" aria-label="Procurement sections">
+          <Link to="/procurement">Overview</Link><Link className="active" to="/procurement/requests">Purchase requests</Link><Link to="/procurement/rfqs">Supplier quotes</Link><Link to="/procurement/purchase-orders">Purchase orders</Link><Link to="/procurement/grns">Receipts</Link><Link to="/procurement/deliveries">Deliveries</Link><Link to="/procurement/supplier-claims">Supplier claims</Link>
+        </nav>
+      </section>
+      <section className="pr-guidance"><AlertCircle size={18} /><span><strong>Manager review required before approval</strong><small>Confirm project, justification, quantities, budget and warehouse availability.</small></span><Link to="/procurement/requests?action_queue=my_requests">View workflow <ChevronRight size={14} /></Link></section>
+      <section className="pr-kpis">
+        <RequestKpi icon={FileText} tone="blue" label="Total requests" value={allRows.length} note="Across selected sites" />
+        <RequestKpi icon={AlertCircle} tone="amber" label="Needs action" value={actionRows.length} note="Assigned to your role" />
+        <RequestKpi icon={Clock3} tone="sky" label="Awaiting approval" value={awaitingApproval.length} note={awaitingApproval.filter((request) => request.priority === 'URGENT').length ? `${awaitingApproval.filter((request) => request.priority === 'URGENT').length} urgent` : 'No urgent requests'} />
+        <RequestKpi icon={Box} tone="green" label="Ready for stock issue" value={readyForStockIssue.length} note="Warehouse workflow" />
+      </section>
+      <section className="pr-workspace-grid">
+        <div className="pr-queue-panel">
+          <div className="pr-panel-heading"><h2>Purchase request queue</h2></div>
+          <div className="pr-queue-tabs">
+            {([['all', 'All', allRows.length], ['mine', 'My actions', actionRows.length], ['awaiting', 'Awaiting approval', awaitingApproval.length], ['stock', 'Stock issue', stockIssueRows.length], ['completed', 'Completed', allRows.filter((request) => ['STOCK_ISSUED', 'PO_CREATED', 'REJECTED'].includes(request.status)).length]] as const).map(([value, label, count]) => <button type="button" key={value} className={queue === value ? 'active' : ''} onClick={() => updateQueue(value)}>{label}<b>{count}</b></button>)}
+          </div>
+          <div className="pr-filters">
+            <label><Search size={14} /><input aria-label="Search purchase requests" placeholder="Search request, project or requester" value={list.search} onChange={(event) => list.setSearch(event.target.value)} /></label>
+            <select aria-label="Filter purchase requests by project" className={inputClass} value={list.filters.project} onChange={(event) => list.setFilter('project', event.target.value)}><option value="">Project</option>{projectOptions.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>
+            <select aria-label="Filter purchase requests by status" className={inputClass} value={list.filters.status} onChange={(event) => { setQueue('all'); list.setFilter('action_queue', ''); list.setFilter('status', event.target.value); }}><option value="">Status</option><option value="PENDING">Pending</option><option value="APPROVED">Approved</option><option value="STOCK_ISSUE_REQUESTED">Issue requested</option><option value="PARTIAL_STOCK_ISSUED">Partially issued</option><option value="STOCK_ISSUED">Stock issued</option><option value="PO_CREATED">PO created</option><option value="REJECTED">Rejected</option></select>
+            <select aria-label="Filter purchase requests by priority" className={inputClass} value={list.filters.priority} onChange={(event) => list.setFilter('priority', event.target.value)}><option value="">Priority</option><option value="LOW">Low</option><option value="NORMAL">Normal</option><option value="HIGH">High</option><option value="URGENT">Urgent</option></select>
+            <select aria-label="Sort purchase requests" className={inputClass} value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="action">Sort: Action first</option><option value="newest">Sort: Newest first</option></select>
+          </div>
+          <div className="pr-table-wrap"><table className="pr-table"><thead><tr><th>Request</th><th>Project / site</th><th>Requested by</th><th>Created</th><th>Estimate</th><th>Stock available</th><th>Priority</th><th>Status</th><th>Next action</th><th aria-label="Actions" /></tr></thead><tbody>
+            {requestRows.map((request) => { const stock = stockAvailability(request); return <tr key={request.id}><td><Link to={`/procurement/requests?search=${encodeURIComponent(request.number)}`}>{request.number}</Link><small>{request.title}</small></td><td>{request.project_name || 'Warehouse replenishment'}</td><td>{request.requested_by_username || 'System'}</td><td>{formatDate(request.created_at)}</td><td>{formatUGX(request.total_estimated_cost)}</td><td><span className={`pr-stock-dot ${stock.tone}`} />{stock.label}</td><td><Badge tone={statusTone(request.priority)}>{request.priority_display}</Badge></td><td><Badge tone={statusTone(request.status)}>{request.status_display}</Badge></td><td>{primaryAction(request)}</td><td><details className="pr-row-menu"><summary aria-label={`More actions for ${request.number}`}><EllipsisVertical size={16} /></summary><div>{hasRole(role, ['admin', 'site_engineer', 'procurement_officer']) && request.status === 'PENDING' && (role === 'admin' || request.requested_by === user?.id) ? <><button type="button" onClick={() => setEditingDraft(request)}><Pencil size={13} />Edit draft</button><button type="button" onClick={() => { if (window.confirm(`Delete ${request.number}? This draft will be removed and audited.`)) deleteDraft.mutate(request.id); }}><Trash2 size={13} />Delete draft</button></> : null}{can.approvePr(role) && request.status === 'PENDING' ? <><button type="button" onClick={() => setReturning(request)}><CornerUpLeft size={13} />Return</button><button type="button" onClick={() => setRejecting(request)}><X size={13} />Reject</button></> : null}{request.can_correct_return ? <button type="button" onClick={() => setCorrecting(request)}><Pencil size={13} />Correct request</button> : null}{can.reviewPrFinance(role) && ['SUBMITTED', 'HOLD'].includes(request.finance_status) ? <button type="button" onClick={() => setFinanceDecision(request)}><CircleDollarSign size={13} />Finance review</button> : null}</div></details></td></tr>; })}
+          </tbody></table>{!requestRows.length ? <p className="pr-empty">{requests.isLoading ? 'Loading purchase requests…' : 'No purchase requests match this view.'}</p> : null}</div>
+          <footer className="pr-table-footer"><span>Showing {pageStart} to {pageEnd} of {totalRows} purchase requests</span><span><button type="button" disabled={!requests.data?.previous} onClick={() => list.setPage(Math.max(1, list.page - 1))}>‹</button><b>{list.page}</b><button type="button" disabled={!requests.data?.next} onClick={() => list.setPage(list.page + 1)}>›</button></span></footer>
+        </div>
+        <aside className="pr-side-column">
+          <section className="pr-value-panel"><div className="pr-panel-heading"><h2>Request value</h2></div><div className="pr-value-body"><span>Total</span><strong>{formatUGX(totalValue)}</strong><i><b style={{ width: totalValue ? `${stockIssueValue / totalValue * 100}%` : '0%' }} /></i><div><span><em className="stock" />Stock issue <b>{formatUGX(stockIssueValue)}</b></span><span><em className="purchase" />To purchase <b>{formatUGX(purchaseValue)}</b></span></div></div></section>
+          <section className="pr-flow-panel"><div className="pr-panel-heading"><h2>Approval flow</h2></div><ol><li className={awaitingApproval.length ? 'active' : ''}><b>1</b><span><strong>Manager review</strong><small>{awaitingApproval.length} awaiting decision</small></span></li><li><b>2</b><span><strong>Admin stock approval</strong><small>Technical and compliance gate</small></span></li><li><b>3</b><span><strong>Stock decision</strong><small>Issue from stock or source a PO</small></span></li><li><b>4</b><span><strong>Fulfilment</strong><small>Store issue or procurement handoff</small></span></li></ol></section>
+          <section className="pr-rules-panel"><div className="pr-panel-heading"><h2>Queue rules</h2></div><p><Check size={14} />Action first, then newest context.</p><p><Check size={14} />Warehouse replenishment uses a PO, not stock issue.</p></section>
+        </aside>
+      </section>
       <RequestModal open={open} onClose={() => setOpen(false)} />
       <StockIssueReviewModal request={stockIssueReview} pending={issue.isPending} onClose={() => setStockIssueReview(null)} onSubmit={() => stockIssueReview && issue.mutate(stockIssueReview.id)} />
       <PartialStockIssueModal request={issuingStock} pending={fulfill.isPending} onClose={() => setIssuingStock(null)} onSubmit={(items) => issuingStock && fulfill.mutate({ id: issuingStock.id, body: { items } })} />
@@ -267,6 +249,10 @@ export function ProcurementRequestsPage() {
       <CorrectionModal draft request={editingDraft} pending={editDraft.isPending} onClose={() => setEditingDraft(null)} onSubmit={(body) => editingDraft && editDraft.mutate({ id: editingDraft.id, body })} />
     </div>
   );
+}
+
+function RequestKpi({ icon: Icon, tone, label, value, note }: { icon: typeof FileText; tone: string; label: string; value: number; note: string }) {
+  return <article className="pr-kpi"><span className={`pr-kpi-icon ${tone}`}><Icon size={24} /></span><div><p>{label}</p><strong>{value}</strong><small>{note}</small></div></article>;
 }
 
 function StockIssueReviewModal({ request, pending, onClose, onSubmit }: { request: PurchaseRequest | null; pending: boolean; onClose: () => void; onSubmit: () => void }) {
