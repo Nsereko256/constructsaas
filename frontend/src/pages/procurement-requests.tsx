@@ -190,11 +190,11 @@ export function ProcurementRequestsPage() {
             </Button>
           ) : null}
           {hasRole(role, ['procurement_officer', 'admin']) && row.original.can_request_stock_issue ? (
-            <Button size="sm" variant="secondary" onClick={() => setStockIssueReview(row.original)}><Send className="h-4 w-4" />Request issue</Button>
+            <Button size="sm" variant="secondary" onClick={() => setStockIssueReview(row.original)}><Send className="h-4 w-4" />Request stock issue</Button>
           ) : null}
           {role === 'procurement_officer' && row.original.status === 'APPROVED' && !row.original.can_request_stock_issue && !row.original.has_purchase_order ? <span className="self-center text-xs font-semibold text-warning">Awaiting Admin approval for stock issue</span> : null}
           {hasRole(role, ['storekeeper', 'admin']) && row.original.can_fulfill_from_stock ? (
-            <Button size="sm" onClick={() => setIssuingStock(row.original)}><PackageOpen className="h-4 w-4" />Issue available stock</Button>
+            <Button size="sm" onClick={() => setIssuingStock(row.original)} title="Enter the quantities to issue from the warehouse"><PackageOpen className="h-4 w-4" />Issue available stock</Button>
           ) : null}
           {can.submitPrToFinance(role) && row.original.can_submit_finance && row.original.has_purchase_order ? (
             <Button size="sm" variant="secondary" onClick={() => setFinanceSubmission(row.original)}><CircleDollarSign className="h-4 w-4" />Send quoted PO to finance</Button>
@@ -214,6 +214,7 @@ export function ProcurementRequestsPage() {
   return (
     <div className="grid gap-3 sm:gap-4">
       <PageToolbar title="Purchase requests" subtitle="Create and route project material requests." search={list.search} onSearch={list.setSearch}>
+        {hasRole(role, ['storekeeper', 'admin']) ? <Button variant="secondary" onClick={() => navigate('/procurement/requests?action_queue=my_requests')}><PackageOpen className="h-4 w-4" />Stock issue queue</Button> : null}
         <select className={inputClass} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}>
           <option value="">All statuses</option>
           <option value="PENDING">Pending</option>
@@ -236,7 +237,7 @@ export function ProcurementRequestsPage() {
         {can.submitPr(role) || can.submitWarehouseReplenishment(role) ? <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" />{can.submitWarehouseReplenishment(role) && !can.submitPr(role) ? 'Warehouse replenishment' : 'New PR'}</Button> : null}
       </PageToolbar>
       <div className="border border-info/25 bg-info/5 p-3 text-sm text-foreground"><strong>Manager review required before approval.</strong><p className="mt-1 text-muted">The Project Manager must review the project, justification, priority, requested quantities, materials, and warehouse availability before approving. Incomplete or inaccurate requests should be returned for correction.</p></div>
-      {hasRole(role, ['storekeeper', 'admin', 'procurement_officer']) ? <div className="border border-primary/25 bg-primary/[0.045] p-3 text-sm text-foreground"><strong>Stock issue workflow</strong><p className="mt-1 text-muted">For project requests, the sequence is: Manager approval → Admin stock-issue approval → Procurement selects <strong>Request issue</strong> → Storekeeper selects <strong>Issue available stock</strong>. Warehouse replenishment requests must use a purchase order and will not show this action.</p></div> : null}
+      {hasRole(role, ['storekeeper', 'admin', 'procurement_officer']) ? <div className="border border-primary/25 bg-primary/[0.045] p-3 text-sm text-foreground"><strong>Stock issue workflow</strong><p className="mt-1 text-muted">For project requests, the sequence is: Manager approval → Admin stock-issue approval → Procurement selects <strong>Request stock issue</strong> → Storekeeper selects <strong>Issue available stock</strong>. Warehouse replenishment requests must use a purchase order and will not show this action.</p></div> : null}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <div className="rounded-xl border border-border/80 bg-white px-3 py-2.5 shadow-sm"><p className="text-[10px] font-bold uppercase tracking-wide text-muted">On this page</p><strong className="mt-0.5 block text-lg font-black">{requestRows.length}</strong></div>
         <div className="rounded-xl border border-warning/25 bg-warning/5 px-3 py-2.5 shadow-sm"><p className="text-[10px] font-bold uppercase tracking-wide text-warning">Needs action</p><strong className="mt-0.5 block text-lg font-black text-foreground">{requestRows.filter(requestNeedsAction).length}</strong></div>
