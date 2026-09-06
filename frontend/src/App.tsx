@@ -13,7 +13,6 @@ const SiteCustodyPage = lazy(() => import('@/pages/site-custody').then((module) 
 const BinLocationsPage = lazy(() => import('@/pages/bin-locations').then((module) => ({ default: module.BinLocationsPage })));
 const LoginPage = lazy(() => import('@/pages/login').then((module) => ({ default: module.LoginPage })));
 const RegisterCompanyPage = lazy(() => import('@/pages/register-company').then((module) => ({ default: module.RegisterCompanyPage })));
-const MessagesPage = lazy(() => import('@/pages/messages').then((module) => ({ default: module.MessagesPage })));
 const NotFoundPage = lazy(() => import('@/pages/not-found').then((module) => ({ default: module.NotFoundPage })));
 const NotificationsPage = lazy(() => import('@/pages/notifications').then((module) => ({ default: module.NotificationsPage })));
 const ProcurementRequestsPage = lazy(() => import('@/pages/procurement-requests').then((module) => ({ default: module.ProcurementRequestsPage })));
@@ -39,9 +38,6 @@ const FinanceLedgerPage = lazy(() => import('@/pages/finance/ledger').then((modu
 const FinanceMonthEndPage = lazy(() => import('@/pages/finance/month-end').then((module) => ({ default: module.FinanceMonthEndPage })));
 const FinanceReportsPage = lazy(() => import('@/pages/finance/reports').then((module) => ({ default: module.FinanceReportsPage })));
 const FinanceSettingsPage = lazy(() => import('@/pages/finance/settings').then((module) => ({ default: module.FinanceSettingsPage })));
-const WorkOrdersPage = lazy(() => import('@/pages/work-orders').then((module) => ({ default: module.WorkOrdersPage })));
-const WorkOrderProgressPage = lazy(() => import('@/pages/work-order-progress').then((module) => ({ default: module.WorkOrderProgressPage })));
-const WorkOrderInvoicesPage = lazy(() => import('@/pages/work-order-invoices').then((module) => ({ default: module.WorkOrderInvoicesPage })));
 
 function RouteLoader() {
   return (
@@ -68,10 +64,7 @@ export function App() {
             <Route path="/projects/sites" element={<ProjectSitesPage />} />
             <Route path="/projects/:projectId/progress" element={<ProjectProgressPage />} />
             <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
-            <Route path="/work-orders" element={<WorkOrdersPage />} />
-            <Route path="/work-orders/progress" element={<WorkOrderProgressPage />} />
-            <Route path="/work-orders/invoices" element={<WorkOrderInvoicesPage />} />
-            <Route path="/work-orders/:workOrderId" element={<WorkOrdersPage />} />
+            <Route path="/work-orders/*" element={<Navigate to="/dashboard" replace />} />
             <Route path="/procurement" element={<ProcurementPage />} />
             <Route path="/procurement/requests" element={<ProcurementRequestsPage />} />
             <Route path="/procurement/rfqs" element={<Navigate to="/procurement" replace />} />
@@ -84,7 +77,7 @@ export function App() {
             <Route path="/inventory/site-custody" element={<SiteCustodyPage />} />
             <Route path="/inventory/bin-locations" element={<BinLocationsPage />} />
             <Route path="/suppliers" element={<SuppliersPage />} />
-            <Route path="/messages" element={<MessagesPage />} />
+            <Route path="/messages" element={<Navigate to="/notifications" replace />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/team" element={<TeamPage />} />

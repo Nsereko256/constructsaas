@@ -16,7 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/toast';
 import { formatUGX } from '@/lib/utils';
 
-const tabs = ['Overview', 'Progress', 'Materials', 'Procurement', 'Budget', 'Documents', 'Messages', 'Activity'];
+const tabs = ['Overview', 'Progress', 'Materials', 'Procurement', 'Budget', 'Documents', 'Activity'];
 
 export function ProjectDetailPage() {
   const { projectId = '' } = useParams(); const { role } = useAuth(); const [editing, setEditing] = useState(false);

@@ -45,7 +45,7 @@ export function SuppliersPage() {
     { header: 'Phone', cell: ({ row }) => row.original.phone || '-' },
     { header: 'Email', cell: ({ row }) => row.original.email || '-' },
     { header: 'Rating', cell: ({ row }) => `${row.original.rating}/5` },
-    { header: 'Type', cell: ({ row }) => row.original.is_contractor ? `Contractor${row.original.contractor_specialty ? ` · ${row.original.contractor_specialty}` : ''}` : 'Supplier' },
+    { header: 'Type', cell: () => 'Supplier' },
     {
       id: 'actions',
       header: '',
@@ -66,7 +66,7 @@ export function SuppliersPage() {
           <option value="">All ratings</option>
           {[5, 4, 3, 2, 1].map((rating) => <option key={rating} value={rating}>{rating} stars</option>)}
         </select>
-        {allowed ? <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" />Supplier / contractor</Button> : null}
+        {allowed ? <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" />New supplier</Button> : null}
       </PageToolbar>
       <DataTable columns={columns} data={suppliers.data?.results || []} emptyTitle={suppliers.isLoading ? 'Loading suppliers...' : 'No suppliers found'} />
       <Pagination page={list.page} setPage={list.setPage} data={suppliers.data} />
@@ -76,8 +76,8 @@ export function SuppliersPage() {
 }
 
 function SupplierModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [form, setForm] = useState({ name: '', contact_person: '', phone: '', email: '', address: '', rating: '3', is_contractor: false, contractor_specialty: '', notes: '' });
-  const set = (key: Exclude<keyof typeof form, 'is_contractor'>, value: string) => setForm((current) => ({ ...current, [key]: value }));
+  const [form, setForm] = useState({ name: '', contact_person: '', phone: '', email: '', address: '', rating: '3', notes: '' });
+  const set = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const queryClient = useQueryClient();
   const toast = useToast();
   const mutation = useMutation({
@@ -94,7 +94,7 @@ function SupplierModal({ open, onClose }: { open: boolean; onClose: () => void }
   });
 
   return (
-    <FormModal open={open} title="Register supplier or contractor" onClose={onClose}>
+    <FormModal open={open} title="Register supplier" onClose={onClose}>
       <form className="grid gap-3 md:grid-cols-2" onSubmit={(event: FormEvent) => { event.preventDefault(); mutation.mutate(); }}>
         <Field label="Supplier name" required><input className={inputClass} value={form.name} onChange={(event) => set('name', event.target.value)} /></Field>
         <Field label="Contact person"><input className={inputClass} value={form.contact_person} onChange={(event) => set('contact_person', event.target.value)} /></Field>
@@ -102,8 +102,6 @@ function SupplierModal({ open, onClose }: { open: boolean; onClose: () => void }
         <Field label="Email"><input className={inputClass} type="email" value={form.email} onChange={(event) => set('email', event.target.value)} /></Field>
         <Field label="Rating"><input className={inputClass} type="number" min="1" max="5" value={form.rating} onChange={(event) => set('rating', event.target.value)} /></Field>
         <Field label="Address"><input className={inputClass} value={form.address} onChange={(event) => set('address', event.target.value)} /></Field>
-        <Field label="Organisation type" className="md:col-span-2"><label className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm"><input type="checkbox" checked={form.is_contractor} onChange={(event) => setForm((current) => ({ ...current, is_contractor: event.target.checked }))} />This supplier is also an approved work-order contractor.</label></Field>
-        {form.is_contractor ? <Field label="Contractor trade / speciality" required className="md:col-span-2"><input className={inputClass} required value={form.contractor_specialty} onChange={(event) => set('contractor_specialty', event.target.value)} placeholder="e.g. Electrical, plumbing, civil works" /></Field> : null}
         <Field label="Notes" className="md:col-span-2"><textarea className={inputClass} value={form.notes} onChange={(event) => set('notes', event.target.value)} /></Field>
         <Button className="md:col-span-2" disabled={!form.name || mutation.isPending}>Save supplier</Button>
       </form>

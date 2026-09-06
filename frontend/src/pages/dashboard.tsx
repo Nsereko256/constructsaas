@@ -45,7 +45,7 @@ export function DashboardPage() {
     project_manager: { label: 'Review approvals', href: '/procurement/requests?action_queue=my_requests' },
     procurement_officer: { label: 'Open buying queue', href: '/procurement/requests?action_queue=my_requests' },
     storekeeper: { label: 'Receive deliveries', href: '/procurement/deliveries?action_queue=warehouse_receipts' },
-    site_engineer: { label: 'Update site work', href: '/work-orders/progress' },
+    site_engineer: { label: 'Create purchase request', href: '/procurement/requests?create=1' },
     finance_officer: { label: 'Prepare finance review', href: '/finance/payables' },
     finance_manager: { label: 'Review finance approvals', href: '/finance/payables' },
     finance_viewer: { label: 'View finance position', href: '/finance' },
