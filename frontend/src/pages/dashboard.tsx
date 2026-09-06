@@ -52,6 +52,7 @@ export function DashboardPage() {
   };
   const isFieldRole = role === 'site_engineer' || role === 'storekeeper';
   const financeAvailable = user?.soft_finance_enabled !== false;
+  const financeRecovery = !financeAvailable && role === 'admin';
   const isFinanceRole = financeAvailable && role?.startsWith('finance_');
   const kpis = isFieldRole ? [
     { label: 'Assigned projects', value: data.active_projects, note: 'Across assigned sites', icon: FolderKanban },
@@ -105,7 +106,7 @@ export function DashboardPage() {
     <div className="reference-dashboard">
       <section className="dashboard-greeting">
         <div><h1>Good day, {user?.first_name || user?.username || 'there'}</h1><p>Overview of your construction operations.</p></div>
-        <div className="dashboard-greeting-actions"><span><CalendarDays size={15} />{new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date())}</span><Link className="dashboard-primary" to={financeAvailable ? primaryAction[role || 'admin'].href : '/procurement/requests'}>{financeAvailable ? primaryAction[role || 'admin'].label : 'Open procurement'}</Link></div>
+        <div className="dashboard-greeting-actions"><span><CalendarDays size={15} />{new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date())}</span><Link className="dashboard-primary" to={financeRecovery ? '/finance/settings' : financeAvailable ? primaryAction[role || 'admin'].href : '/procurement/requests'}>{financeRecovery ? 'Enable Finance' : financeAvailable ? primaryAction[role || 'admin'].label : 'Open procurement'}</Link></div>
       </section>
       <section className="dashboard-kpis">
         {kpis.map((kpi, index) => <div className="dashboard-panel dashboard-kpi" key={kpi.label}>

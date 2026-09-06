@@ -41,7 +41,18 @@ export const navItems: NavItem[] = [
 
 export function visibleNav(role: Role | null, softFinanceEnabled = true) {
   if (!role) return [];
-  return navItems
+  const items = navItems
     .filter((item) => item.roles.includes(role) && (softFinanceEnabled || item.href !== '/finance'))
     .map((item) => ({ ...item, section: item.section || 'Operations' }));
+  if (!softFinanceEnabled && role === 'admin') {
+    const recoveryItem: NavItem = {
+      label: 'Finance settings',
+      href: '/finance/settings',
+      icon: Landmark,
+      roles: ['admin'],
+      section: 'Finance',
+    };
+    return [...items, recoveryItem];
+  }
+  return items;
 }
