@@ -9,6 +9,7 @@ import { NotificationStream } from '@/components/common/notification-stream';
 import { ToastProvider } from '@/components/ui/toast';
 import { App } from './App';
 import './styles/globals.css';
+import './styles/reference-type-scale.css';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

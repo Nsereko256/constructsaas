@@ -1,0 +1,161 @@
+/* Readable type scale for the rebuilt reference-style workspaces.
+   These screens use intentionally dense tables, but their smallest labels
+   should still be comfortable to read on a laptop and on a phone. */
+.reference-dashboard .dashboard-greeting p { font-size: 0.8125rem !important; }
+.reference-dashboard .dashboard-greeting-actions > span { font-size: 0.75rem !important; }
+.reference-dashboard .dashboard-primary { font-size: 0.8125rem !important; }
+.reference-dashboard .dashboard-kpi p { font-size: 0.75rem !important; }
+.reference-dashboard .dashboard-kpi small { font-size: 0.6875rem !important; }
+.reference-dashboard .dashboard-panel-heading h2 { font-size: 0.8125rem !important; }
+.reference-dashboard .dashboard-panel-heading a,
+.reference-dashboard .dashboard-footer-link { font-size: 0.6875rem !important; }
+.reference-dashboard .dashboard-legend { font-size: 0.625rem !important; }
+.reference-dashboard .dashboard-project-name strong { font-size: 0.6875rem !important; }
+.reference-dashboard .dashboard-project-name small,
+.reference-dashboard .dashboard-bar-track small { font-size: 0.625rem !important; }
+.reference-dashboard .dashboard-chart-axis > div { font-size: 0.5625rem !important; }
+.reference-dashboard .dashboard-attention-row strong,
+.reference-dashboard .dashboard-activity strong { font-size: 0.6875rem !important; }
+.reference-dashboard .dashboard-attention-row small,
+.reference-dashboard .dashboard-activity small,
+.reference-dashboard .dashboard-activity-row time { font-size: 0.625rem !important; }
+.reference-dashboard .dashboard-status { font-size: 0.625rem !important; }
+.reference-dashboard .dashboard-step-content { font-size: 0.625rem !important; }
+.reference-dashboard .dashboard-step-content small { font-size: 0.5625rem !important; }
+.reference-dashboard .dashboard-donut small { font-size: 0.6875rem !important; }
+.reference-dashboard .dashboard-health-row,
+.reference-dashboard .dashboard-health-row small { font-size: 0.625rem !important; }
+.reference-dashboard .dashboard-empty { font-size: 0.8125rem !important; }
+
+.projects-reference .projects-eyebrow { font-size: 0.6875rem !important; }
+.projects-reference .projects-titlebar p:last-child { font-size: 0.8125rem !important; }
+.projects-reference .projects-alert { font-size: 0.75rem !important; }
+.projects-reference .projects-alert a { font-size: 0.6875rem !important; }
+.projects-reference .projects-kpi p { font-size: 0.6875rem !important; }
+.projects-reference .projects-kpi small { font-size: 0.625rem !important; }
+.projects-reference .projects-panel-heading h2 { font-size: 0.8125rem !important; }
+.projects-reference .projects-panel-heading p,
+.projects-reference .projects-panel-heading > span { font-size: 0.625rem !important; }
+.projects-reference .projects-panel-heading a { font-size: 0.6875rem !important; }
+.projects-reference .projects-status-tabs button,
+.projects-reference .projects-status-tabs b { font-size: 0.625rem !important; }
+.projects-reference .projects-search input,
+.projects-reference .projects-portfolio-toolbar select { font-size: 0.6875rem !important; }
+.projects-reference .projects-table th { font-size: 0.5625rem !important; }
+.projects-reference .projects-table td { font-size: 0.625rem !important; }
+.projects-reference .projects-name { font-size: 0.6875rem !important; }
+.projects-reference .projects-table td:first-child small,
+.projects-reference .projects-budget-text,
+.projects-reference .projects-progress b { font-size: 0.5625rem !important; }
+.projects-reference .projects-table .badge { font-size: 0.5625rem !important; }
+.projects-reference .projects-table-footer { font-size: 0.625rem !important; }
+.projects-reference .projects-donut small,
+.projects-reference .projects-health-row,
+.projects-reference .projects-health-row b,
+.projects-reference .projects-health-row small,
+.projects-reference .projects-health-total,
+.projects-reference .projects-milestone time { font-size: 0.5625rem !important; }
+.projects-reference .projects-milestone strong { font-size: 0.625rem !important; }
+.projects-reference .projects-milestone small,
+.projects-reference .projects-footer-link { font-size: 0.5625rem !important; }
+
+.procurement-reference .procurement-titlebar p { font-size: 0.75rem !important; }
+.procurement-reference .procurement-tabs a { font-size: 0.625rem !important; }
+.procurement-reference .procurement-alert { font-size: 0.6875rem !important; }
+.procurement-reference .procurement-alert > a { font-size: 0.625rem !important; }
+.procurement-reference .procurement-kpi p { font-size: 0.6875rem !important; }
+.procurement-reference .procurement-kpi small { font-size: 0.625rem !important; }
+.procurement-reference .procurement-panel-heading h2 { font-size: 0.8125rem !important; }
+.procurement-reference .procurement-panel-heading a { font-size: 0.625rem !important; }
+.procurement-reference .procurement-stage small,
+.procurement-reference .procurement-stage em { font-size: 0.5625rem !important; }
+.procurement-reference .procurement-order-tabs button,
+.procurement-reference .procurement-order-tabs b { font-size: 0.625rem !important; }
+.procurement-reference .procurement-filters input,
+.procurement-reference .procurement-filters select { font-size: 0.625rem !important; }
+.procurement-reference .procurement-table th { font-size: 0.5625rem !important; }
+.procurement-reference .procurement-table td { font-size: 0.625rem !important; }
+.procurement-reference .procurement-table td:first-child a { font-size: 0.6875rem !important; }
+.procurement-reference .procurement-table .badge { font-size: 0.5625rem !important; }
+.procurement-reference .procurement-empty,
+.procurement-reference .procurement-table-footer { font-size: 0.625rem !important; }
+.procurement-reference .procurement-approval-row strong { font-size: 0.625rem !important; }
+.procurement-reference .procurement-approval-row small,
+.procurement-reference .procurement-approval-row > b,
+.procurement-reference .procurement-performance-row,
+.procurement-reference .procurement-performance-row > strong { font-size: 0.5625rem !important; }
+.procurement-reference .procurement-approval-row .badge { font-size: 0.5625rem !important; }
+
+/* The four detailed procurement registers share the same dense typography. */
+.purchase-requests-reference .pr-titlebar p,
+.purchase-orders-reference .po-titlebar p,
+.goods-received-reference .grn-titlebar p,
+.deliveries-reference .del-titlebar p { font-size: 0.75rem !important; }
+.purchase-requests-reference .pr-tabs a,
+.purchase-orders-reference .po-tabs a,
+.goods-received-reference .grn-tabs a,
+.deliveries-reference .del-tabs a { font-size: 0.625rem !important; }
+.purchase-requests-reference .pr-guidance strong,
+.purchase-orders-reference .po-guidance strong,
+.goods-received-reference .grn-guidance strong,
+.deliveries-reference .del-guidance strong { font-size: 0.6875rem !important; }
+.purchase-requests-reference .pr-guidance small,
+.purchase-requests-reference .pr-guidance a,
+.purchase-orders-reference .po-guidance small,
+.purchase-orders-reference .po-guidance a,
+.goods-received-reference .grn-guidance small,
+.goods-received-reference .grn-guidance a,
+.deliveries-reference .del-guidance small,
+.deliveries-reference .del-guidance a { font-size: 0.625rem !important; }
+.purchase-requests-reference .pr-kpi p,
+.purchase-orders-reference .po-kpi p,
+.goods-received-reference .grn-kpi p,
+.deliveries-reference .del-kpi p { font-size: 0.6875rem !important; }
+.purchase-requests-reference .pr-kpi small,
+.purchase-orders-reference .po-kpi small,
+.goods-received-reference .grn-kpi small,
+.deliveries-reference .del-kpi small { font-size: 0.625rem !important; }
+.purchase-requests-reference .pr-panel-heading h2,
+.purchase-orders-reference .po-panel-heading h2,
+.goods-received-reference .grn-panel-heading h2,
+.deliveries-reference .del-panel-heading h2 { font-size: 0.8125rem !important; }
+.purchase-requests-reference .pr-queue-tabs button,
+.purchase-requests-reference .pr-queue-tabs b,
+.purchase-orders-reference .po-queue-tabs button,
+.purchase-orders-reference .po-queue-tabs b,
+.goods-received-reference .grn-queue-tabs button,
+.goods-received-reference .grn-queue-tabs b,
+.deliveries-reference .del-queue-tabs button,
+.deliveries-reference .del-queue-tabs b { font-size: 0.625rem !important; }
+.purchase-requests-reference .pr-filters input,
+.purchase-requests-reference .pr-filters select,
+.purchase-orders-reference .po-filters input,
+.purchase-orders-reference .po-filters select,
+.goods-received-reference .grn-filters input,
+.goods-received-reference .grn-filters select,
+.deliveries-reference .del-filters input,
+.deliveries-reference .del-filters select { font-size: 0.625rem !important; }
+.purchase-requests-reference .pr-table th,
+.purchase-orders-reference .po-table th,
+.goods-received-reference .grn-table th,
+.deliveries-reference .del-table th { font-size: 0.5625rem !important; }
+.purchase-requests-reference .pr-table td,
+.purchase-orders-reference .po-table td,
+.goods-received-reference .grn-table td,
+.deliveries-reference .del-table td { font-size: 0.625rem !important; }
+.purchase-requests-reference .pr-table td:first-child a,
+.purchase-orders-reference .po-table td:first-child a,
+.goods-received-reference .grn-table td a,
+.deliveries-reference .del-table td a { font-size: 0.6875rem !important; }
+.purchase-requests-reference .pr-table td small,
+.purchase-requests-reference .pr-table .badge,
+.purchase-orders-reference .po-table td small,
+.purchase-orders-reference .po-table .badge,
+.goods-received-reference .grn-table td small,
+.goods-received-reference .grn-table .badge,
+.deliveries-reference .del-table td small,
+.deliveries-reference .del-table .badge { font-size: 0.5625rem !important; }
+.purchase-requests-reference .pr-table-footer,
+.purchase-orders-reference .po-table-footer,
+.goods-received-reference .grn-table-footer,
+.deliveries-reference .del-table-footer { font-size: 0.625rem !important; }
