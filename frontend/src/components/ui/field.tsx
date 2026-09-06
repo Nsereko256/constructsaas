@@ -11,8 +11,8 @@ type FieldProps = {
 
 export function Field({ label, required, error, children, className }: FieldProps) {
   return (
-    <label className={cn('field-group grid min-w-0 gap-1.5 text-[13px] sm:text-sm', className)}>
-      <span className="field-label flex items-center gap-1 font-bold tracking-[-0.01em] text-foreground">
+    <label className={cn('field-group grid min-w-0 gap-1.5 text-sm', className)}>
+      <span className="field-label flex items-center gap-1.5 font-bold tracking-[-0.01em] text-foreground">
         {label}
         {required ? <span className="field-required" aria-label="required">Required</span> : null}
       </span>
@@ -23,4 +23,4 @@ export function Field({ label, required, error, children, className }: FieldProp
 }
 
 export const inputClass =
-  'field-control min-h-11 w-full rounded-md border border-border bg-white px-3 py-2 text-sm leading-5 text-foreground placeholder:text-muted/65 transition-[border-color,box-shadow,background-color] duration-150 hover:border-muted/70 focus:border-info focus:outline-none focus:ring-4 focus:ring-info/10 disabled:cursor-not-allowed disabled:bg-surface disabled:text-muted';
+  'field-control min-h-10 w-full rounded-md border border-border bg-white px-3 py-2 text-sm leading-5 text-foreground shadow-[0_1px_2px_rgba(38,49,59,0.03)] placeholder:text-muted/65 transition-[border-color,box-shadow,background-color] duration-150 hover:border-primary/40 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 disabled:cursor-not-allowed disabled:bg-surface disabled:text-muted';

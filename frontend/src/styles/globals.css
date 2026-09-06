@@ -57,27 +57,29 @@ textarea {
   box-shadow: none !important;
 }
 
-/* Shared form language. Older screens that have not migrated to inputClass
-   still receive the same polished controls; checkboxes, radios, and files
-   intentionally keep their native affordances. */
+/* Shared form language. Every workflow uses the same compact, high-contrast
+   controls as the reference screens, including older forms not yet migrated
+   to the Field component. */
 input:not([type='checkbox']):not([type='radio']):not([type='file']),
 select,
 textarea {
   width: 100%;
-  border-color: rgb(215 221 215 / 90%);
+  border: 1px solid #d9e0e3;
+  border-radius: 8px;
   background-color: #fff;
-  color: #17201c;
+  color: #26313b;
+  box-shadow: 0 1px 2px rgb(38 49 59 / 3%);
   transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
 }
 
 input:not([type='checkbox']):not([type='radio']):not([type='file']),
 select {
-  min-height: 2.5rem;
+  min-height: 2.625rem;
   padding: 0.5rem 0.75rem;
 }
 
 textarea {
-  min-height: 5.5rem;
+  min-height: 6rem;
   resize: vertical;
   padding: 0.625rem 0.75rem;
   line-height: 1.45;
@@ -86,31 +88,218 @@ textarea {
 input:not([type='checkbox']):not([type='radio']):not([type='file']):hover,
 select:hover,
 textarea:hover {
-  border-color: rgb(102 112 106 / 70%);
+  border-color: rgb(15 112 117 / 45%);
 }
 
 input:not([type='checkbox']):not([type='radio']):not([type='file']):focus,
 select:focus,
 textarea:focus {
-  border-color: #2878d0;
+  border-color: #0f7075;
   outline: none;
-  box-shadow: 0 0 0 4px rgb(40 120 208 / 10%);
+  box-shadow: 0 0 0 4px rgb(15 112 117 / 10%);
 }
 
-.field-label { min-height: 1.125rem; }
+.field-group { align-content: start; }
+.field-label {
+  min-height: 1.125rem;
+  color: #34414a;
+  font-size: 0.75rem;
+  letter-spacing: 0.015em;
+}
 .field-required {
   border-radius: 999px;
   background: rgb(220 60 60 / 9%);
   color: #b52e2e;
-  font-size: 0.625rem;
+  font-size: 0.5625rem;
   font-weight: 800;
   letter-spacing: 0.03em;
   line-height: 1;
   padding: 0.2rem 0.38rem;
   text-transform: uppercase;
 }
-.field-error { margin-top: -0.125rem; }
-.form-modal-body form.grid { padding-bottom: 0.125rem; }
+.field-error {
+  margin-top: -0.125rem;
+  padding-left: 0.125rem;
+}
+
+input[aria-invalid='true'],
+select[aria-invalid='true'],
+textarea[aria-invalid='true'] {
+  border-color: #dc3c3c;
+  box-shadow: 0 0 0 3px rgb(220 60 60 / 9%);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  border-color: #e2e6e7;
+  background: #f1f3f2;
+  color: #69737c;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  accent-color: #0f7075;
+}
+
+input[type='file'] {
+  width: 100%;
+  min-height: 2.625rem;
+  overflow: hidden;
+  border: 1px dashed #b8c6ca;
+  border-radius: 8px;
+  background: #f8faf9;
+  color: #69737c;
+  font-size: 0.8125rem;
+}
+
+input[type='file']::file-selector-button {
+  min-height: 2.625rem;
+  margin-right: 0.75rem;
+  border: 0;
+  border-right: 1px solid #d9e0e3;
+  background: #e9f4f3;
+  padding: 0 0.875rem;
+  color: #0f7075;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Reference-style modal forms: a clear title rail, calm workspace and an
+   unmistakable final action without changing any workflow behaviour. */
+.dialog-overlay {
+  backdrop-filter: blur(3px);
+  animation: dialog-fade-in 140ms ease-out;
+}
+
+.dialog-surface {
+  animation: dialog-fade-in 180ms ease-out;
+}
+
+.reference-form-dialog {
+  border-color: #d7dfe2;
+  box-shadow: 0 22px 65px rgb(19 41 54 / 23%), 0 2px 8px rgb(19 41 54 / 10%);
+}
+
+.reference-form-dialog::before {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #0f7075, #24a79d 62%, #84cec3);
+  content: '';
+}
+
+.reference-form-dialog .dialog-header {
+  min-height: 4.5rem;
+  background: linear-gradient(105deg, #fff 0%, #fbfdfc 72%, #edf7f5 100%);
+  padding-top: 1rem;
+  padding-bottom: 0.875rem;
+}
+
+.dialog-title-mark {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #cce7e3;
+  border-radius: 9px;
+  background: #e9f6f4;
+  color: #0f7075;
+}
+
+.dialog-eyebrow {
+  margin: 0 0 0.125rem;
+  color: #0f7075;
+  font-family: "Archivo", "Barlow", sans-serif;
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.dialog-title { color: #1d2932; }
+
+.dialog-close {
+  width: 2rem;
+  min-height: 2rem;
+  padding: 0;
+  border-color: #dce3e5;
+  background: #fff;
+}
+
+.form-modal-body {
+  background: #f7f9f8;
+}
+
+.reference-form-dialog .form-modal-body > form {
+  gap: 0.875rem;
+}
+
+.form-modal-body form .field-control {
+  background-color: #fff;
+}
+
+.form-modal-body form > div[class*='border'],
+.form-modal-body form > label[class*='border'] {
+  border-color: #dce3e5;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(38 49 59 / 3%);
+}
+
+.form-modal-body form > p[class*='border'] {
+  border-radius: 8px;
+}
+
+.form-modal-body form > button:last-child {
+  min-width: 10.5rem;
+  min-height: 2.625rem;
+  justify-self: end;
+  margin-top: 0.25rem;
+  padding-inline: 1.125rem;
+}
+
+.reference-auth-card {
+  position: relative;
+  overflow: hidden;
+  border-color: #d7dfe2;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #fff 0%, #fff 72%, #f0f8f6 100%);
+  box-shadow: 0 20px 50px rgb(19 41 54 / 11%), 0 2px 8px rgb(19 41 54 / 6%);
+}
+
+.reference-auth-card::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #0f7075, #24a79d 62%, #84cec3);
+  content: '';
+}
+
+.reference-auth-form .field-label {
+  font-size: 0.8125rem;
+}
+
+.reference-auth-form > button[type='submit'] {
+  min-height: 2.75rem;
+  margin-top: 0.25rem;
+}
+
+@keyframes dialog-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 /* Make keyboard focus visible without adding visual noise to every control. */
 button:focus-visible,
@@ -118,7 +307,7 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 a:focus-visible {
-  outline: 2px solid #2878d0;
+  outline: 2px solid #0f7075;
   outline-offset: 2px;
 }
 
@@ -149,6 +338,11 @@ textarea {
 
   .form-modal-body textarea {
     min-height: 6rem;
+  }
+
+  .form-modal-body form > button:last-child {
+    width: 100%;
+    justify-self: stretch;
   }
 
   input[type='checkbox'],

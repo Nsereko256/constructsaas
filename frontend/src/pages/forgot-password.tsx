@@ -48,7 +48,7 @@ export function ForgotPasswordPage() {
 
   return (
     <main className="grid min-h-screen place-items-center bg-background p-5">
-      <Card className="max-w-md">
+      <Card className="reference-auth-card max-w-md">
         <CardHeader>
           <CardTitle>{isConfirmation ? 'Choose a new password' : 'Password recovery'}</CardTitle>
         </CardHeader>
@@ -58,7 +58,7 @@ export function ForgotPasswordPage() {
               ? 'Set a new password for your ConstructSaaS account.'
               : 'Enter your account email and we will send a one-time password-reset link.'}
           </p>
-          <form className="grid gap-4" onSubmit={submit}>
+          <form className="reference-auth-form grid gap-4" onSubmit={submit}>
             {isConfirmation ? <>
               <Field label="New password" required><div className="relative"><input className={`${inputClass} pr-12`} type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" className="absolute inset-y-0 right-0 grid w-11 place-items-center text-muted hover:text-foreground" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></Field>
               <Field label="Confirm new password" required><div className="relative"><input className={`${inputClass} pr-12`} type={showConfirmPassword ? 'text' : 'password'} autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /><button type="button" className="absolute inset-y-0 right-0 grid w-11 place-items-center text-muted hover:text-foreground" aria-label={showConfirmPassword ? 'Hide password' : 'Show password'} onClick={() => setShowConfirmPassword((visible) => !visible)}>{showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></Field>

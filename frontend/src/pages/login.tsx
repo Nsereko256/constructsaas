@@ -66,11 +66,11 @@ export function LoginPage() {
         </div>
       </section>
       <section className="grid place-items-center p-5">
-        <Card className="w-full max-w-md p-6">
+        <Card className="reference-auth-card w-full max-w-md p-6">
           <h2 className="text-2xl font-black tracking-tight">Sign in</h2>
           <p className="mt-1 text-sm text-muted">Use your company account to continue.</p>
           {auth.sessionMessage ? <p className="mt-4 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-foreground">{auth.sessionMessage}</p> : null}
-          <form className="mt-6 grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
+          <form className="reference-auth-form mt-6 grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
             <Field label="Username" required error={form.formState.errors.username?.message}>
               <input className={inputClass} autoComplete="username" {...form.register('username')} />
             </Field>

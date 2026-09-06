@@ -14,7 +14,7 @@ export function FormModal({
 }) {
   return (
     <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
-      <DialogContent title={title} className="max-w-3xl">
+      <DialogContent title={title} variant="form" className="max-w-3xl">
         {children}
       </DialogContent>
     </Dialog>

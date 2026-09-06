@@ -47,10 +47,10 @@ export function RegisterCompanyPage() {
         </div>
       </section>
       <section className="grid place-items-center p-5">
-        <Card className="w-full max-w-md p-6">
+        <Card className="reference-auth-card w-full max-w-md p-6">
           <h2 className="text-2xl font-black tracking-tight">Register company</h2>
           <p className="mt-1 text-sm text-muted">The first account becomes the company administrator.</p>
-          <form className="mt-6 grid gap-4" onSubmit={submit}>
+          <form className="reference-auth-form mt-6 grid gap-4" onSubmit={submit}>
             <Field label="Company name" required><input className={inputClass} value={form.company_name} onChange={(e) => update('company_name', e.target.value)} required /></Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="First name" required><input className={inputClass} value={form.first_name} onChange={(e) => update('first_name', e.target.value)} required /></Field>
