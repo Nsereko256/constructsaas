@@ -152,6 +152,10 @@ export type Supplier = {
   email: string;
   address: string;
   rating: number;
+  lead_time_days: number;
+  is_preferred: boolean;
+  compliance_reference: string;
+  compliance_expiry_date: string | null;
   is_contractor: boolean;
   contractor_specialty: string;
   notes: string;
@@ -162,6 +166,8 @@ export type StockMovement = {
   id: number;
   material: number;
   material_name: string;
+  warehouse: number | null;
+  warehouse_name: string | null;
   project: number | null;
   project_name: string | null;
   movement_type: 'IN' | 'OUT' | 'ADJUST_IN' | 'ADJUST_OUT';
