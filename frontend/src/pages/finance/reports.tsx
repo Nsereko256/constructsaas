@@ -26,8 +26,6 @@ const reports = [
   ['payment-register', 'Payment register'],
   ['expense-register', 'Expense register'],
   ['staff-advances', 'Staff advances'],
-  ['general-ledger', 'General ledger'],
-  ['trial-balance', 'Trial balance'],
   ['finance-audit-events', 'Finance audit events'],
   ['project-forecast', 'Project forecast'],
   ['procurement-aging', 'Procurement aging'],

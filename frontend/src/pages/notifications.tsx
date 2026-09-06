@@ -157,7 +157,7 @@ function notificationDestination(item: { notification_type: string; link: string
   if (item.notification_type.startsWith('payment_')) return '/finance/payments';
   if (item.notification_type === 'staff_advance_overdue') return '/finance/expenses';
   if (item.notification_type === 'valuation_adjustment') return '/inventory/movements';
-  if (item.notification_type === 'journal_posting_failure') return '/finance/ledger';
+  if (item.notification_type === 'journal_posting_failure') return '/finance/reports';
   if (item.notification_type === 'po_exceeding_budget') return '/procurement/requests';
   return null;
 }

@@ -36,7 +36,6 @@ const queues: Record<Role, QueueItem[]> = {
     { badge: 'supplier_invoices', label: 'Invoice authorizations', href: '/finance/payables', icon: FileText },
     { badge: 'payments', label: 'Payment approvals / posting', href: '/finance/payments', icon: Wallet },
     { badge: 'expenses', label: 'Expense decisions', href: '/finance/expenses', icon: Banknote },
-    { badge: 'ledger', label: 'Draft journals', href: '/finance/ledger', icon: ClipboardCheck },
   ],
   finance_viewer: [],
   admin: [
@@ -48,7 +47,6 @@ const queues: Record<Role, QueueItem[]> = {
     { badge: 'supplier_invoices', label: 'Invoice actions', href: '/finance/payables', icon: FileText },
     { badge: 'payments', label: 'Payment actions', href: '/finance/payments', icon: Wallet },
     { badge: 'expenses', label: 'Expense actions', href: '/finance/expenses', icon: Banknote },
-    { badge: 'ledger', label: 'Draft journals', href: '/finance/ledger', icon: ClipboardCheck },
   ],
 };
 

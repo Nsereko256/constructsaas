@@ -13,10 +13,8 @@ import { formatDate } from '@/lib/utils';
 
 export const financeTabs = [
   ['Overview', '/finance'], ['Budgets', '/finance/budgets'], ['Payables', '/finance/payables'],
-  ['Cash & Payments', '/finance/payments'], ['Expenses & Advances', '/finance/expenses'], ['Ledger', '/finance/ledger'],
-  ['Payment batches', '/finance/payment-batches'],
+  ['Cash & Payments', '/finance/payments'], ['Expenses & Advances', '/finance/expenses'],
   ['Month end', '/finance/month-end'],
-  ['Reconciliation', '/finance/reconciliation'],
   ['Reports', '/finance/reports'], ['Setup & Audit', '/finance/settings'],
 ] as const;
 
