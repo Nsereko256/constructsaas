@@ -287,3 +287,17 @@ form textarea {
 .del-tabs a[href="/procurement/supplier-claims"] {
   display: none;
 }
+
+/* Keep required workflow choices discoverable without relying on overflow menus. */
+.pr-row-actions,
+.po-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.pr-table td:nth-child(9),
+.po-table td:nth-child(10) {
+  overflow: visible;
+  white-space: normal;
+}
