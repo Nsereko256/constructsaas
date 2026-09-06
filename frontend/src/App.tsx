@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '@/auth/protected-route';
 import { AppShell } from '@/components/layout/app-shell';
+import { FinanceGate } from '@/pages/finance/components';
 
 const DashboardPage = lazy(() => import('@/pages/dashboard').then((module) => ({ default: module.DashboardPage })));
 const DeliveriesPage = lazy(() => import('@/pages/deliveries').then((module) => ({ default: module.DeliveriesPage })));
@@ -83,17 +84,17 @@ export function App() {
             <Route path="/team" element={<TeamPage />} />
             <Route path="/team/project-staffing" element={<ProjectStaffingPage />} />
             <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/finance" element={<FinanceOverviewPage />} />
-            <Route path="/finance/budgets" element={<FinanceBudgetsPage />} />
-            <Route path="/finance/payables" element={<FinancePayablesPage />} />
-            <Route path="/finance/payments" element={<FinancePaymentsPage />} />
-            <Route path="/finance/payment-batches" element={<FinancePaymentBatchesPage />} />
-            <Route path="/finance/reconciliation" element={<FinanceReconciliationPage />} />
-            <Route path="/finance/expenses" element={<FinanceExpensesPage />} />
-            <Route path="/finance/ledger" element={<FinanceLedgerPage />} />
-            <Route path="/finance/month-end" element={<FinanceMonthEndPage />} />
-            <Route path="/finance/reports" element={<FinanceReportsPage />} />
-            <Route path="/finance/settings" element={<FinanceSettingsPage />} />
+            <Route path="/finance" element={<FinanceGate><FinanceOverviewPage /></FinanceGate>} />
+            <Route path="/finance/budgets" element={<FinanceGate><FinanceBudgetsPage /></FinanceGate>} />
+            <Route path="/finance/payables" element={<FinanceGate><FinancePayablesPage /></FinanceGate>} />
+            <Route path="/finance/payments" element={<FinanceGate><FinancePaymentsPage /></FinanceGate>} />
+            <Route path="/finance/payment-batches" element={<FinanceGate><FinancePaymentBatchesPage /></FinanceGate>} />
+            <Route path="/finance/reconciliation" element={<FinanceGate><FinanceReconciliationPage /></FinanceGate>} />
+            <Route path="/finance/expenses" element={<FinanceGate><FinanceExpensesPage /></FinanceGate>} />
+            <Route path="/finance/ledger" element={<FinanceGate><FinanceLedgerPage /></FinanceGate>} />
+            <Route path="/finance/month-end" element={<FinanceGate><FinanceMonthEndPage /></FinanceGate>} />
+            <Route path="/finance/reports" element={<FinanceGate><FinanceReportsPage /></FinanceGate>} />
+            <Route path="/finance/settings" element={<FinanceGate><FinanceSettingsPage /></FinanceGate>} />
           </Route>
         </Route>
         <Route path="*" element={<NotFoundPage />} />
