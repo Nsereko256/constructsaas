@@ -1,8 +1,7 @@
-import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { CheckCircle2, Truck } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { BarChart3, Box, CalendarDays, ChevronDown, ChevronRight, CircleAlert, Download, EllipsisVertical, Eye, FileText, PackageCheck, Search, Truck } from 'lucide-react';
 import { api } from '@/api/services';
 import { getTokens } from '@/api/client';
 import { offlineScope, queueOfflineAction } from '@/pwa/offline';
@@ -10,28 +9,29 @@ import type { PurchaseOrder, SupplierClaim } from '@/api/types';
 import { qk } from '@/api/queryKeys';
 import { can, canReceivePurchaseOrder } from '@/api/roles';
 import { useAuth } from '@/auth/auth-context';
-import { PageToolbar } from '@/components/common/page-toolbar';
-import { Pagination } from '@/components/common/pagination';
 import { FormModal } from '@/components/common/form-modal';
 import { Badge, statusTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { DataTable } from '@/components/ui/data-table';
 import { inputClass } from '@/components/ui/field';
 import { Field } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
-import { useListState } from '@/hooks/use-list-state';
 import { formatDate, formatUGX } from '@/lib/utils';
+import './deliveries-reference.css';
 
 export function DeliveriesPage() {
   const { role } = useAuth();
   const [searchParams] = useSearchParams();
   const replacementClaimId = Number(searchParams.get('replacement_claim') || 0);
-  const list = useListState({
-    status: searchParams.get('status') || '',
-    delivery_destination: searchParams.get('delivery_destination') || '',
-    action_queue: searchParams.get('action_queue') || '',
-  });
-  const orders = useQuery({ queryKey: qk.purchaseOrders(list.query), queryFn: () => api.purchaseOrders(list.query) });
+  const [queue, setQueue] = useState<'all' | 'scheduled' | 'dispatched' | 'arrived' | 'received' | 'delayed'>('all');
+  const [search, setSearch] = useState('');
+  const [destination, setDestination] = useState(searchParams.get('delivery_destination') || '');
+  const [project, setProject] = useState('');
+  const [status, setStatus] = useState(searchParams.get('status') || '');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [sort, setSort] = useState<'expected' | 'newest'>('expected');
+  const [page, setPage] = useState(1);
+  const orders = useQuery({ queryKey: qk.purchaseOrders({ page_size: 100 }), queryFn: () => api.purchaseOrders({ page_size: 100 }) });
   const receipts = useQuery({ queryKey: ['goods-received-notes', 'delivery-remaining'], queryFn: () => api.goodsReceivedNotes({ page_size: 100 }) });
   const replacementClaim = useQuery({ queryKey: ['supplier-claim', replacementClaimId], queryFn: () => api.supplierClaim(replacementClaimId), enabled: replacementClaimId > 0 });
   const replacementOrder = useQuery({ queryKey: ['purchase-order', replacementClaim.data?.purchase_order], queryFn: () => api.purchaseOrder(replacementClaim.data!.purchase_order), enabled: !!replacementClaim.data?.purchase_order });
@@ -39,7 +39,7 @@ export function DeliveriesPage() {
   const toast = useToast();
   const [receiving, setReceiving] = useState<PurchaseOrder | null>(null);
   useEffect(() => { if (replacementClaim.data && replacementOrder.data) setReceiving(replacementOrder.data); }, [replacementClaim.data, replacementOrder.data]);
-  const refresh = () => void queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+  const refresh = () => { void queryClient.invalidateQueries({ queryKey: ['purchase-orders'] }); void queryClient.invalidateQueries({ queryKey: ['goods-received-notes'] }); };
   const dispatch = useMutation({
     mutationFn: api.confirmDispatch,
     onSuccess: () => { toast.push({ title: 'Dispatch confirmed', tone: 'success' }); refresh(); },
@@ -71,54 +71,66 @@ export function DeliveriesPage() {
     },
     onError: (error: Error) => toast.push({ title: 'Receipt blocked', message: error.message, tone: 'danger' }),
   });
-  const columns: ColumnDef<PurchaseOrder>[] = [
-    { header: 'PO', cell: ({ row }) => <strong>{row.original.number}</strong> },
-    { header: 'Supplier', cell: ({ row }) => row.original.supplier_name },
-    { header: 'Destination', cell: ({ row }) => row.original.delivery_destination_display },
-    { header: 'Project', cell: ({ row }) => row.original.project_name || '-' },
-    { header: 'Status', cell: ({ row }) => <Badge tone={statusTone(row.original.status)}>{row.original.status_display}</Badge> },
-    { header: 'Received', cell: ({ row }) => row.original.received_at ? <div><span>{formatDate(row.original.received_at)}</span><p className="text-xs text-muted">{row.original.received_by_username || 'GRN receiver'}</p></div> : '-' },
-    { header: 'Total', cell: ({ row }) => formatUGX(row.original.total_cost) },
-    {
-      id: 'actions',
-      header: '',
-      cell: ({ row }) => (
-        <div className="flex justify-end gap-2">
-          {can.createPo(role) && row.original.delivery_destination === 'SITE' && !['DISPATCH_CONFIRMED', 'RECEIVED', 'CANCELLED'].includes(row.original.status) ? (
-            <Button size="sm" variant="secondary" onClick={() => dispatch.mutate(row.original.id)}><Truck className="h-4 w-4" />Dispatch</Button>
-          ) : null}
-          {canReceivePurchaseOrder(role, row.original) ? (
-            <Button size="sm" onClick={() => setReceiving(row.original)}><CheckCircle2 className="h-4 w-4" />Receive</Button>
-          ) : null}
-        </div>
-      ),
-    },
-  ];
+  const allOrders = orders.data?.results || [];
+  const allReceipts = receipts.data?.results || [];
+  const receiptByOrder = new Map<number, typeof allReceipts>();
+  allReceipts.forEach((receipt) => receiptByOrder.set(receipt.purchase_order, [...(receiptByOrder.get(receipt.purchase_order) || []), receipt]));
+  const deliveryOrders = allOrders.filter((order) => !['DRAFT', 'PENDING', 'CANCELLED'].includes(order.status));
+  const deliveryState = (order: PurchaseOrder) => order.status === 'RECEIVED' ? 'received' : order.status === 'PARTIAL' ? 'arrived' : order.status === 'DISPATCH_CONFIRMED' ? 'dispatched' : order.is_overdue ? 'delayed' : 'scheduled';
+  const expectedDate = (order: PurchaseOrder) => order.revised_delivery_date || order.supplier_confirmed_delivery_date || order.expected_delivery_date;
+  const today = new Date().toISOString().slice(0, 10);
+  const receivedOrders = deliveryOrders.filter((order) => order.status === 'RECEIVED');
+  const inTransitOrders = deliveryOrders.filter((order) => ['ORDERED', 'DISPATCH_CONFIRMED'].includes(order.status) && !order.is_overdue);
+  const arrivedToday = deliveryOrders.filter((order) => (order.received_at || '').slice(0, 10) === today);
+  const delayedOrders = deliveryOrders.filter((order) => order.is_overdue);
+  const warehouseOrders = deliveryOrders.filter((order) => order.delivery_destination === 'WAREHOUSE');
+  const siteOrders = deliveryOrders.filter((order) => order.delivery_destination === 'SITE');
+  const onTimeReceived = receivedOrders.filter((order) => !expectedDate(order) || !order.received_at || Date.parse(order.received_at) <= Date.parse(expectedDate(order)!)).length;
+  const onTimeRate = receivedOrders.length ? Math.round(onTimeReceived / receivedOrders.length * 100) : 0;
+  const averageTransit = receivedOrders.length ? Math.round(receivedOrders.reduce((sum, order) => sum + Math.max(0, (Date.parse(order.received_at || order.created_at) - Date.parse(order.created_at)) / 86400000), 0) / receivedOrders.length * 10) / 10 : 0;
+  const projects = [...new Map(deliveryOrders.filter((order) => order.project && order.project_name).map((order) => [order.project!, order.project_name!])).entries()];
+  const filteredOrders = deliveryOrders.filter((order) => {
+    const state = deliveryState(order);
+    const haystack = [order.number, order.supplier_name, order.project_name, order.delivery_destination_display].join(' ').toLowerCase();
+    const date = expectedDate(order) || '';
+    return (queue === 'all' || state === queue) && (!destination || order.delivery_destination === destination) && (!project || String(order.project) === project) && (!status || order.status === status) && (!fromDate || date >= fromDate) && (!toDate || date <= toDate) && haystack.includes(search.trim().toLowerCase());
+  }).sort((a, b) => sort === 'newest' ? Date.parse(b.created_at) - Date.parse(a.created_at) : Date.parse(expectedDate(a) || '9999-12-31') - Date.parse(expectedDate(b) || '9999-12-31'));
+  const pageSize = 5;
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+  const displayedOrders = filteredOrders.slice((page - 1) * pageSize, page * pageSize);
+  const pageStart = filteredOrders.length ? (page - 1) * pageSize + 1 : 0;
+  const pageEnd = filteredOrders.length ? Math.min(page * pageSize, filteredOrders.length) : 0;
+  const update = (setter: () => void) => { setter(); setPage(1); };
+  const exportRegister = async (kind: 'pdf' | 'xlsx') => {
+    try { await api.downloadPurchaseOrders(kind, { search, status, delivery_destination: destination }); toast.push({ title: `Delivery ${kind === 'pdf' ? 'PDF' : 'Excel'} register prepared`, tone: 'success' }); }
+    catch (error) { toast.push({ title: 'Delivery register export failed', message: (error as Error).message, tone: 'danger' }); }
+  };
 
-  return (
-    <div className="grid gap-4">
-      <PageToolbar title="Deliveries" subtitle={role === 'storekeeper' ? 'Warehouse receiving and oversight queue. Site engineers record direct-site GRNs; you remain notified and can review them.' : role === 'site_engineer' ? 'Record physical GRNs for your assigned direct-to-site deliveries after Procurement confirms dispatch.' : 'Delivery tracking and supplier dispatch oversight. Warehouse GRNs are Storekeeper-only; site GRNs are recorded by assigned site engineers.'} search={list.search} onSearch={list.setSearch}>
-        <select className={inputClass} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}>
-          <option value="">All statuses</option>
-          <option value="PENDING">Pending</option>
-          <option value="ORDERED">Ordered</option>
-          <option value="DISPATCH_CONFIRMED">Dispatch confirmed</option>
-          <option value="RECEIVED">Received</option>
-        </select>
-      </PageToolbar>
-      <DataTable columns={columns} data={orders.data?.results || []} emptyTitle={orders.isLoading ? 'Loading deliveries...' : 'No deliveries found'} />
-      <Pagination page={list.page} setPage={list.setPage} data={orders.data} />
-      <ReceiptModal
-        order={receiving}
-        receipts={receipts.data?.results || []}
-        pending={receive.isPending}
-        role={role}
-        replacementClaim={replacementClaim.data}
-        onClose={() => setReceiving(null)}
-        onSubmit={(body) => receiving && receive.mutate({ id: receiving.id, body: body as Record<string, unknown> })}
-      />
-    </div>
-  );
+  return <div className="deliveries-reference"><section className="del-top"><div className="del-titlebar"><div><h1>Deliveries</h1><p>Track supplier dispatches, expected arrivals and receipt confirmation.</p></div><div className="del-title-actions"><details className="del-export-menu"><summary><Download size={15} />Export <ChevronDown size={13} /></summary><div><button type="button" onClick={() => void exportRegister('pdf')}>PDF register</button><button type="button" onClick={() => void exportRegister('xlsx')}>Excel register</button></div></details><Button asChild><Link to={can.createPo(role) ? '/procurement/deliveries?status=ORDERED&delivery_destination=SITE' : '/procurement/deliveries'}>{can.createPo(role) ? <><Truck className="h-4 w-4" />Record dispatch</> : <><PackageCheck className="h-4 w-4" />Delivery queue</>}</Link></Button></div></div><nav className="del-tabs" aria-label="Procurement sections"><Link to="/procurement">Overview</Link><Link to="/procurement/requests">Purchase requests</Link><Link to="/procurement/rfqs">Supplier quotes</Link><Link to="/procurement/purchase-orders">Purchase orders</Link><Link to="/procurement/grns">Receipts</Link><Link className="active" to="/procurement/deliveries">Deliveries</Link><Link to="/procurement/supplier-claims">Supplier claims</Link></nav></section>
+    <section className="del-guidance"><CircleAlert size={17} /><span><strong>Warehouse receipts are confirmed by Storekeepers; direct-to-site receipts are confirmed by assigned Site Engineers.</strong><small>Dispatch confirmation and physical receiving stay separated for an auditable delivery trail.</small></span><Link to="/procurement/purchase-orders">Delivery workflow <ChevronRight size={14} /></Link></section>
+    <section className="del-kpis"><DeliveryKpi icon={Truck} tone="blue" label="Total deliveries" value={deliveryOrders.length} note="Issued purchase orders" /><DeliveryKpi icon={Truck} tone="amber" label="In transit" value={inTransitOrders.length} note={inTransitOrders.length ? 'Supplier follow-up active' : 'No active dispatches'} /><DeliveryKpi icon={CalendarDays} tone="indigo" label="Arrived today" value={arrivedToday.length} note={arrivedToday.length ? 'Receipt recorded today' : 'No arrivals today'} /><DeliveryKpi icon={Box} tone="green" label="Received" value={receivedOrders.length} note="Linked to GRNs" /><DeliveryKpi icon={BarChart3} tone="green" label="On-time delivery" value={receivedOrders.length ? `${onTimeRate}%` : '—'} note={receivedOrders.length ? 'Received against expected date' : 'No received orders'} /></section>
+    <section className="del-workspace-grid"><div className="del-register-panel"><div className="del-panel-heading"><h2>Delivery register</h2></div><div className="del-queue-tabs">{([['all', 'All', deliveryOrders.length], ['scheduled', 'Scheduled', deliveryOrders.filter((order) => deliveryState(order) === 'scheduled').length], ['dispatched', 'Dispatched', deliveryOrders.filter((order) => deliveryState(order) === 'dispatched').length], ['arrived', 'Arrived', deliveryOrders.filter((order) => deliveryState(order) === 'arrived').length], ['received', 'Received', receivedOrders.length], ['delayed', 'Delayed', delayedOrders.length]] as const).map(([value, label, count]) => <button type="button" key={value} className={queue === value ? 'active' : ''} onClick={() => update(() => setQueue(value))}>{label}<b>{count}</b></button>)}</div><div className="del-filters"><label><Search size={14} /><input aria-label="Search deliveries" placeholder="Search PO, supplier or destination" value={search} onChange={(event) => update(() => setSearch(event.target.value))} /></label><select aria-label="Filter deliveries by destination" className={inputClass} value={destination} onChange={(event) => update(() => setDestination(event.target.value))}><option value="">Destination</option><option value="WAREHOUSE">Main warehouse</option><option value="SITE">Direct to site</option></select><select aria-label="Filter deliveries by project" className={inputClass} value={project} onChange={(event) => update(() => setProject(event.target.value))}><option value="">Project</option>{projects.map(([id, name]) => <option value={id} key={id}>{name}</option>)}</select><select aria-label="Filter deliveries by status" className={inputClass} value={status} onChange={(event) => update(() => setStatus(event.target.value))}><option value="">Status</option><option value="ORDERED">Scheduled</option><option value="DISPATCH_CONFIRMED">Dispatched</option><option value="PARTIAL">Part received</option><option value="RECEIVED">Received</option></select><label className="del-date-range"><CalendarDays size={14} /><input aria-label="Filter deliveries from date" type="date" value={fromDate} onChange={(event) => update(() => setFromDate(event.target.value))} /><span>–</span><input aria-label="Filter deliveries to date" type="date" value={toDate} onChange={(event) => update(() => setToDate(event.target.value))} /></label><select aria-label="Sort deliveries" className={inputClass} value={sort} onChange={(event) => update(() => setSort(event.target.value as typeof sort))}><option value="expected">Sort: Expected arrival</option><option value="newest">Sort: Newest first</option></select></div><div className="del-table-wrap"><table className="del-table"><thead><tr><th>Delivery / PO</th><th>Supplier</th><th>Project / site</th><th>Destination</th><th>Dispatched</th><th>Expected</th><th>Arrived</th><th>Status</th><th>Receipt</th><th>Total</th><th>Next action</th><th aria-label="Actions" /></tr></thead><tbody>{displayedOrders.map((order) => <DeliveryRow key={order.id} order={order} receipts={receiptByOrder.get(order.id) || []} role={role} onDispatch={() => dispatch.mutate(order.id)} onReceive={() => setReceiving(order)} />)}</tbody></table>{!displayedOrders.length ? <p className="del-empty">{orders.isLoading ? 'Loading deliveries…' : 'No deliveries match this view.'}</p> : null}</div><footer className="del-table-footer"><span>Showing {pageStart} to {pageEnd} of {filteredOrders.length} deliveries</span><span><button type="button" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>‹</button><b>{page}</b><button type="button" disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>›</button></span></footer></div><aside className="del-side-column"><section className="del-status-panel"><div className="del-panel-heading"><h2>Delivery status</h2></div><div className="del-status-body"><div className="del-donut" style={{ background: deliveryOrders.length ? `conic-gradient(#138d68 0 ${Math.round(receivedOrders.length / deliveryOrders.length * 100)}%, #2d83c8 ${Math.round(receivedOrders.length / deliveryOrders.length * 100)}% ${Math.round((receivedOrders.length + inTransitOrders.length) / deliveryOrders.length * 100)}%, #ef9c27 ${Math.round((receivedOrders.length + inTransitOrders.length) / deliveryOrders.length * 100)}% ${Math.round((receivedOrders.length + inTransitOrders.length + delayedOrders.length) / deliveryOrders.length * 100)}%, #e9edef ${Math.round((receivedOrders.length + inTransitOrders.length + delayedOrders.length) / deliveryOrders.length * 100)}% 100%)` : '#e9edef' }}><strong>{deliveryOrders.length}</strong><small>deliveries</small></div><div className="del-status-list"><StatusRow label="Received" tone="received" value={receivedOrders.length} /><StatusRow label="In transit" tone="transit" value={inTransitOrders.length} /><StatusRow label="Delayed" tone="delayed" value={delayedOrders.length} /><StatusRow label="Awaiting receipt" tone="awaiting" value={deliveryOrders.filter((order) => order.status === 'PARTIAL').length} /></div></div></section><section className="del-summary-panel"><div className="del-panel-heading"><h2>Destination summary</h2></div><Link to="/procurement/deliveries?action_queue=warehouse_receipts"><Box size={17} /><span>Main warehouse<small>{warehouseOrders.length} deliveries</small></span><strong>{formatUGX(warehouseOrders.reduce((sum, order) => sum + Number(order.total_cost || 0), 0))}</strong></Link><Link to="/procurement/deliveries?action_queue=site_receipts"><Truck size={17} /><span>Direct to site<small>{siteOrders.length} deliveries</small></span><strong>{formatUGX(siteOrders.reduce((sum, order) => sum + Number(order.total_cost || 0), 0))}</strong></Link></section><section className="del-confirmation-panel"><div className="del-panel-heading"><h2>Arrival confirmations</h2><Badge tone={inTransitOrders.length || delayedOrders.length ? 'warning' : 'success'}>{inTransitOrders.length || delayedOrders.length ? 'Attention' : 'All clear'}</Badge></div><Link to="/procurement/deliveries?action_queue=warehouse_receipts"><PackageCheck size={17} /><span>Warehouse awaiting GRN<small>Storekeeper receipt queue</small></span><strong>{allOrders.filter((order) => order.delivery_destination === 'WAREHOUSE' && ['ORDERED', 'PARTIAL'].includes(order.status)).length}</strong></Link><Link to="/procurement/deliveries?action_queue=site_receipts"><Truck size={17} /><span>Site engineer confirmations<small>Direct-to-site receipt queue</small></span><strong>{allOrders.filter((order) => order.delivery_destination === 'SITE' && ['DISPATCH_CONFIRMED', 'PARTIAL'].includes(order.status)).length}</strong></Link><Link to="/procurement/purchase-orders"><FileText size={17} /><span>Delayed deliveries<small>Supplier follow-up required</small></span><strong>{delayedOrders.length}</strong></Link></section><section className="del-performance-panel"><div className="del-panel-heading"><h2>Supplier performance</h2><Link to="/suppliers">View all <ChevronRight size={13} /></Link></div><strong>{deliveryOrders[0]?.supplier_name || 'No supplier data'}</strong><PerformanceRow label="On-time delivery" value={onTimeRate} display={receivedOrders.length ? `${onTimeRate}%` : 'No data'} /><PerformanceRow label="Average transit time" value={averageTransit ? Math.min(100, 100 / averageTransit * 3) : 0} display={receivedOrders.length ? `${averageTransit} days` : 'No data'} /><PerformanceRow label="Total deliveries" value={deliveryOrders.length ? 100 : 0} display={String(deliveryOrders.length)} /></section></aside></section>
+    <ReceiptModal order={receiving} receipts={allReceipts} pending={receive.isPending} role={role} replacementClaim={replacementClaim.data} onClose={() => setReceiving(null)} onSubmit={(body) => receiving && receive.mutate({ id: receiving.id, body: body as Record<string, unknown> })} />
+  </div>;
+}
+
+function DeliveryRow({ order, receipts, role, onDispatch, onReceive }: { order: PurchaseOrder; receipts: Awaited<ReturnType<typeof api.goodsReceivedNotes>>['results']; role: ReturnType<typeof useAuth>['role']; onDispatch: () => void; onReceive: () => void }) {
+  const expected = order.revised_delivery_date || order.supplier_confirmed_delivery_date || order.expected_delivery_date;
+  const latestReceipt = [...receipts].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
+  const nextAction = can.createPo(role) && order.delivery_destination === 'SITE' && ['ORDERED', 'PARTIAL'].includes(order.status) ? <Button size="sm" className="del-next-action" variant="secondary" onClick={onDispatch}><Truck size={13} />Dispatch</Button> : canReceivePurchaseOrder(role, order) ? <Button size="sm" className="del-next-action" onClick={onReceive}><PackageCheck size={13} />Receive</Button> : order.status === 'RECEIVED' ? <Link className="del-view-action" to={`/procurement/grns?search=${encodeURIComponent(order.number)}`}>View receipt</Link> : <span className="del-next-message">{order.is_overdue ? 'Follow up supplier' : 'Awaiting delivery'}</span>;
+  return <tr><td><Link to={`/procurement/purchase-orders?search=${encodeURIComponent(order.number)}`}>{order.number}</Link><small>{order.purchase_request_number || 'Manual PO'}</small></td><td>{order.supplier_name || 'Supplier not recorded'}</td><td>{order.project_name || 'Warehouse'}<small>{order.project_name ? 'Project order' : 'No project'}</small></td><td><Badge tone={order.delivery_destination === 'SITE' ? 'info' : 'success'}>{order.delivery_destination_display}</Badge></td><td>{order.dispatch_confirmed_at ? formatDate(order.dispatch_confirmed_at) : order.status === 'ORDERED' ? 'Not dispatched' : '—'}</td><td className={order.is_overdue ? 'overdue' : ''}>{expected ? formatDate(expected) : 'Not committed'}{order.is_overdue ? <small>Overdue</small> : null}</td><td>{order.received_at ? formatDate(order.received_at) : '—'}{order.received_by_username ? <small>{order.received_by_username}</small> : null}</td><td><Badge tone={statusTone(order.status)}>{order.status_display}</Badge></td><td>{latestReceipt ? <Link to={`/procurement/grns?search=${encodeURIComponent(latestReceipt.number)}`}>{latestReceipt.number}</Link> : <span className="del-muted">Awaiting GRN</span>}</td><td>{formatUGX(order.total_cost)}</td><td>{nextAction}</td><td><details className="del-row-menu"><summary aria-label={`More actions for ${order.number}`}><EllipsisVertical size={16} /></summary><div>{can.createPo(role) && order.delivery_destination === 'SITE' && ['ORDERED', 'PARTIAL'].includes(order.status) ? <button type="button" onClick={onDispatch}><Truck size={13} />Confirm dispatch</button> : null}{canReceivePurchaseOrder(role, order) ? <button type="button" onClick={onReceive}><PackageCheck size={13} />Record receipt</button> : null}<Link to={`/procurement/purchase-orders?search=${encodeURIComponent(order.number)}`}><Eye size={13} />View purchase order</Link></div></details></td></tr>;
+}
+
+function DeliveryKpi({ icon: Icon, tone, label, value, note }: { icon: typeof Truck; tone: string; label: string; value: string | number; note: string }) {
+  return <article className="del-kpi"><span className={`del-kpi-icon ${tone}`}><Icon size={23} /></span><div><p>{label}</p><strong>{value}</strong><small>{note}</small></div></article>;
+}
+
+function StatusRow({ label, tone, value }: { label: string; tone: string; value: number }) {
+  return <div className="del-status-row"><span><i className={tone} />{label}</span><strong>{value}</strong></div>;
+}
+
+function PerformanceRow({ label, value, display }: { label: string; value: number; display: string }) {
+  return <div className="del-performance-row"><span>{label}</span><i><b style={{ width: `${value}%` }} /></i><strong>{display}</strong></div>;
 }
 
 type ReceiptLine = { purchase_order_item: number; accepted_quantity: string; rejected_quantity: string; damaged_quantity: string; notes: string };
