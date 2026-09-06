@@ -15,9 +15,8 @@ import { formatUGX } from '@/lib/utils';
 import './procurement-reference.css';
 
 const tabs = [
-  ['Overview', '/procurement'], ['Purchase requests', '/procurement/requests'], ['Supplier quotes', '/procurement/rfqs'],
-  ['Purchase orders', '/procurement/purchase-orders'], ['Receipts', '/procurement/grns'], ['Deliveries', '/procurement/deliveries'],
-  ['Supplier claims', '/procurement/supplier-claims'],
+  ['Overview', '/procurement'], ['Purchase requests', '/procurement/requests'], ['Purchase orders', '/procurement/purchase-orders'],
+  ['Receipts', '/procurement/grns'], ['Deliveries', '/procurement/deliveries'],
 ] as const;
 const openStatuses = new Set(['DRAFT', 'PENDING', 'ORDERED', 'DISPATCH_CONFIRMED', 'PARTIAL']);
 const issuedStatuses = new Set(['ORDERED', 'DISPATCH_CONFIRMED']);
@@ -93,8 +92,7 @@ export function ProcurementPage() {
   const monthSpend = orderRows.filter((order) => !['DRAFT', 'CANCELLED'].includes(order.status) && order.created_at && new Date(order.created_at).getMonth() === today.getMonth() && new Date(order.created_at).getFullYear() === today.getFullYear()).reduce((sum, order) => sum + Number(order.total_cost || 0), 0);
   const committed = openOrders.reduce((sum, order) => sum + Number(order.total_cost || 0), 0);
   const workflowRecord = workflow.data as unknown as Record<string, number> | undefined;
-  const actionTotal = ['requests', 'purchase_orders', 'deliveries', 'supplier_claims'].reduce((sum, key) => sum + Number(workflowRecord?.[key] || 0), 0);
-  const draftQuotes = orderRows.filter((order) => order.status === 'DRAFT').length;
+  const actionTotal = ['requests', 'purchase_orders', 'deliveries'].reduce((sum, key) => sum + Number(workflowRecord?.[key] || 0), 0);
   const issuedOrders = orderRows.filter((order) => issuedStatuses.has(order.status));
 
   const projectOptions = Array.from(new Map(orderRows.filter((order) => order.project).map((order) => [String(order.project), order.project_name || 'Project'])).entries());
@@ -123,7 +121,6 @@ export function ProcurementPage() {
   const setFilter = (setter: (value: string) => void, value: string) => { setter(value); setPage(1); };
   const pipeline = [
     { label: 'Requests', value: requestRows.length, note: pendingRequests.length ? `${pendingRequests.length} need attention` : 'All reviewed', tone: pendingRequests.length ? 'amber' : 'green', href: '/procurement/requests' },
-    { label: 'Quotes', value: draftQuotes, note: draftQuotes ? `${draftQuotes} being prepared` : 'No draft quotes', tone: draftQuotes ? 'neutral' : 'green', href: '/procurement/rfqs' },
     { label: 'Approvals', value: pendingApprovals, note: urgentApprovals ? `${urgentApprovals} urgent` : 'No urgent items', tone: pendingApprovals ? 'amber' : 'green', href: '/procurement/requests?action_queue=my_requests' },
     { label: 'POs', value: issuedOrders.length, note: `${issuedOrders.length} issued`, tone: 'neutral', href: '/procurement/purchase-orders' },
     { label: 'Deliveries', value: inTransit.length, note: dueToday ? `${dueToday} due today` : 'No deliveries due', tone: dueToday ? 'amber' : 'green', href: '/procurement/deliveries' },

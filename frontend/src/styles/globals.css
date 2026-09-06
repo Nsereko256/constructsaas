@@ -279,3 +279,11 @@ form textarea {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Retired procurement workspaces remain hidden while legacy bookmarks redirect safely. */
+.po-tabs a[href="/procurement/rfqs"],
+.po-tabs a[href="/procurement/supplier-claims"],
+.del-tabs a[href="/procurement/rfqs"],
+.del-tabs a[href="/procurement/supplier-claims"] {
+  display: none;
+}

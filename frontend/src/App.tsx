@@ -18,9 +18,7 @@ const NotFoundPage = lazy(() => import('@/pages/not-found').then((module) => ({ 
 const NotificationsPage = lazy(() => import('@/pages/notifications').then((module) => ({ default: module.NotificationsPage })));
 const ProcurementRequestsPage = lazy(() => import('@/pages/procurement-requests').then((module) => ({ default: module.ProcurementRequestsPage })));
 const ProcurementPage = lazy(() => import('@/pages/procurement').then((module) => ({ default: module.ProcurementPage })));
-const ProcurementRfqsPage = lazy(() => import('@/pages/procurement-rfqs').then((module) => ({ default: module.ProcurementRfqsPage })));
 const PurchaseOrdersPage = lazy(() => import('@/pages/purchase-orders').then((module) => ({ default: module.PurchaseOrdersPage })));
-const SupplierClaimsPage = lazy(() => import('@/pages/supplier-claims').then((module) => ({ default: module.SupplierClaimsPage })));
 const ProjectDetailPage = lazy(() => import('@/pages/project-detail').then((module) => ({ default: module.ProjectDetailPage })));
 const ProjectsPage = lazy(() => import('@/pages/projects').then((module) => ({ default: module.ProjectsPage })));
 const ProjectSitesPage = lazy(() => import('@/pages/project-sites').then((module) => ({ default: module.ProjectSitesPage })));
@@ -76,10 +74,10 @@ export function App() {
             <Route path="/work-orders/:workOrderId" element={<WorkOrdersPage />} />
             <Route path="/procurement" element={<ProcurementPage />} />
             <Route path="/procurement/requests" element={<ProcurementRequestsPage />} />
-            <Route path="/procurement/rfqs" element={<ProcurementRfqsPage />} />
+            <Route path="/procurement/rfqs" element={<Navigate to="/procurement" replace />} />
             <Route path="/procurement/purchase-orders" element={<PurchaseOrdersPage />} />
             <Route path="/procurement/grns" element={<GoodsReceivedNotesPage />} />
-            <Route path="/procurement/supplier-claims" element={<SupplierClaimsPage />} />
+            <Route path="/procurement/supplier-claims" element={<Navigate to="/procurement/grns" replace />} />
             <Route path="/procurement/deliveries" element={<DeliveriesPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/inventory/movements" element={<InventoryMovementsPage />} />

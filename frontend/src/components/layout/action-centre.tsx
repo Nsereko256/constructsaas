@@ -9,13 +9,11 @@ const queues: Record<Role, QueueItem[]> = {
   site_engineer: [
     { badge: 'deliveries', label: 'Site deliveries to receive', href: '/procurement/deliveries?action_queue=site_receipts', icon: ReceiptText },
     { badge: 'requests', label: 'Request follow-ups', href: '/procurement/requests?action_queue=my_requests', icon: ClipboardList },
-    { badge: 'supplier_claims', label: 'Site supplier replacements', href: '/procurement/supplier-claims?action_queue=site_replacements', icon: AlertTriangle },
   ],
   storekeeper: [
     { badge: 'deliveries', label: 'Warehouse receipts', href: '/procurement/deliveries?action_queue=warehouse_receipts', icon: ReceiptText },
     { badge: 'requests', label: 'Stock issues to fulfil', href: '/procurement/requests?action_queue=my_requests', icon: ClipboardCheck },
     { badge: 'inventory', label: 'Low-stock materials', href: '/inventory', icon: AlertTriangle },
-    { badge: 'supplier_claims', label: 'Supplier replacements to receive', href: '/procurement/supplier-claims?action_queue=my_claims', icon: AlertTriangle },
   ],
   project_manager: [
     { badge: 'requests', label: 'Requests awaiting manager approval', href: '/procurement/requests?action_queue=my_requests', icon: ClipboardCheck },
@@ -25,7 +23,6 @@ const queues: Record<Role, QueueItem[]> = {
     { badge: 'requests', label: 'Manager-approved requests to quote', href: '/procurement/requests?action_queue=my_requests', icon: ClipboardList },
     { badge: 'purchase_orders', label: 'Purchase orders to progress', href: '/procurement/purchase-orders?action_queue=po_progress', icon: PackageCheck },
     { badge: 'deliveries', label: 'Site POs to dispatch', href: '/procurement/deliveries?action_queue=site_dispatch', icon: ReceiptText },
-    { badge: 'supplier_claims', label: 'Supplier claims to follow up', href: '/procurement/supplier-claims?action_queue=my_claims', icon: AlertTriangle },
   ],
   finance_officer: [
     { badge: 'requests', label: 'Finance reviews and quoted POs', href: '/procurement/requests?action_queue=my_requests', icon: ClipboardCheck },
@@ -40,7 +37,6 @@ const queues: Record<Role, QueueItem[]> = {
     { badge: 'payments', label: 'Payment approvals / posting', href: '/finance/payments', icon: Wallet },
     { badge: 'expenses', label: 'Expense decisions', href: '/finance/expenses', icon: Banknote },
     { badge: 'ledger', label: 'Draft journals', href: '/finance/ledger', icon: ClipboardCheck },
-    { badge: 'supplier_claims', label: 'Supplier claims', href: '/procurement/supplier-claims?action_queue=my_claims', icon: AlertTriangle },
   ],
   finance_viewer: [],
   admin: [

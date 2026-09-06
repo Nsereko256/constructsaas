@@ -193,7 +193,7 @@ export function ProcurementRequestsPage() {
           </div>
         </div>
         <nav className="pr-tabs" aria-label="Procurement sections">
-          <Link to="/procurement">Overview</Link><Link className="active" to="/procurement/requests">Purchase requests</Link><Link to="/procurement/rfqs">Supplier quotes</Link><Link to="/procurement/purchase-orders">Purchase orders</Link><Link to="/procurement/grns">Receipts</Link><Link to="/procurement/deliveries">Deliveries</Link><Link to="/procurement/supplier-claims">Supplier claims</Link>
+          <Link to="/procurement">Overview</Link><Link className="active" to="/procurement/requests">Purchase requests</Link><Link to="/procurement/purchase-orders">Purchase orders</Link><Link to="/procurement/grns">Receipts</Link><Link to="/procurement/deliveries">Deliveries</Link>
         </nav>
       </section>
       <section className="pr-guidance"><AlertCircle size={18} /><span><strong>Manager review required before approval</strong><small>Confirm project, justification, quantities, budget and warehouse availability.</small></span><Link to="/procurement/requests?action_queue=my_requests">View workflow <ChevronRight size={14} /></Link></section>

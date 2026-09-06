@@ -299,8 +299,8 @@ function PurchaseOrderModal({ open, onClose, initialPurchaseRequestId }: { open:
                   <Field label="Request price">
                     <input className={inputClass} type="number" value={item.reference_unit_price} readOnly aria-label={`Reference request price for ${item.material_label}`} />
                   </Field>
-                  <Field label="Supplier quote">
-                    <input className={inputClass} type="text" inputMode="decimal" minLength={1} value={item.unit_price} onChange={(event) => setItems((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, unit_price: event.target.value } : row))} aria-label={`Supplier quoted unit price for ${item.material_label}`} placeholder="e.g. 48,100" />
+                  <Field label="Unit price">
+                    <input className={inputClass} type="text" inputMode="decimal" minLength={1} value={item.unit_price} onChange={(event) => setItems((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, unit_price: event.target.value } : row))} aria-label={`Unit price for ${item.material_label}`} placeholder="e.g. 48,100" />
                   </Field>
                   <div className="text-sm"><span className="block text-xs text-muted">Variance</span><strong className={parseQuotedPrice(item.unit_price) > Number(item.reference_unit_price) ? 'text-warning' : parseQuotedPrice(item.unit_price) < Number(item.reference_unit_price) ? 'text-primary' : ''}>{Number.isFinite(parseQuotedPrice(item.unit_price)) ? `${parseQuotedPrice(item.unit_price) - Number(item.reference_unit_price) >= 0 ? '+' : ''}${formatUGX(parseQuotedPrice(item.unit_price) - Number(item.reference_unit_price))}` : '—'}</strong></div>
                 </div>
@@ -368,7 +368,7 @@ function PurchaseOrderAmendmentModal({ order, onClose, onDone }: { order: Purcha
       if (expectedDate && expectedDate !== order.expected_delivery_date) body.expected_delivery_date = expectedDate;
       if (notes !== (order.notes || '')) body.notes = notes;
       if (quotes.length) body.price_lines = quotes.map(({ purchase_order_item, unit_price }) => ({ purchase_order_item, unit_price: parseQuotedPrice(unit_price) }));
-      if (!quotes.length && !hasOtherChange) { toast.push({ title: 'No change selected', message: 'Enter a different supplier quote, delivery date, or PO note.', tone: 'warning' }); return; }
+      if (!quotes.length && !hasOtherChange) { toast.push({ title: 'No change selected', message: 'Enter a different unit price, delivery date, or PO note.', tone: 'warning' }); return; }
       mutation.mutate(body);
     }}>
       <p className="rounded-lg border border-warning/25 bg-warning/5 p-3 text-sm text-foreground">{isPreApproval ? <><strong>Before first approval:</strong> Procurement may correct prices, delivery date, or notes directly. Finance will review the final PO once.</> : <><strong>Controlled change:</strong> Finance must approve this amendment. Unit-price changes retain the approved quantity and are only allowed before supplier dispatch, receipt, or invoice capture starts.</>}</p>
