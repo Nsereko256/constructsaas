@@ -2442,7 +2442,86 @@ class NotificationViewSet(CompanyScopedReadOnlyViewSet):
         company = self.get_company()
         if not company:
             return Notification.objects.none()
-        return Notification.objects.for_company(company).for_recipient(self.request.user)
+        queryset = Notification.objects.for_company(company).for_recipient(self.request.user)
+        category = self.request.query_params.get('category', '').strip()
+        if category == 'action':
+            queryset = queryset.filter(level__in=[Notification.LEVEL_WARNING, Notification.LEVEL_DANGER])
+        elif category == 'approvals':
+            queryset = queryset.filter(
+                Q(notification_type__icontains='approval')
+                | Q(notification_type=Notification.TYPE_PAYMENT_AWAITING_APPROVAL)
+            )
+        elif category == 'procurement':
+            queryset = queryset.filter(
+                Q(notification_type__startswith='pr_')
+                | Q(notification_type__startswith='po_')
+                | Q(notification_type=Notification.TYPE_SUPPLIER_CLAIM_OPENED)
+            )
+        elif category == 'inventory':
+            queryset = queryset.filter(
+                Q(notification_type=Notification.TYPE_LOW_STOCK)
+                | Q(notification_type=Notification.TYPE_VALUATION_ADJUSTMENT)
+            )
+        elif category == 'projects':
+            queryset = queryset.filter(notification_type__startswith='budget_')
+        elif category == 'finance':
+            queryset = queryset.filter(
+                Q(notification_type__startswith='invoice_')
+                | Q(notification_type__startswith='payment_')
+                | Q(notification_type=Notification.TYPE_STAFF_ADVANCE_OVERDUE)
+                | Q(notification_type=Notification.TYPE_JOURNAL_POSTING_FAILURE)
+            )
+        return queryset
+
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        queryset = self.get_queryset()
+        unread = queryset.filter(is_read=False)
+        approvals = queryset.filter(
+            Q(notification_type__icontains='approval')
+            | Q(notification_type=Notification.TYPE_PAYMENT_AWAITING_APPROVAL)
+        )
+        category_queries = {
+            'Procurement': Q(notification_type__startswith='pr_')
+            | Q(notification_type__startswith='po_')
+            | Q(notification_type=Notification.TYPE_SUPPLIER_CLAIM_OPENED),
+            'Inventory': Q(notification_type=Notification.TYPE_LOW_STOCK)
+            | Q(notification_type=Notification.TYPE_VALUATION_ADJUSTMENT),
+            'Projects': Q(notification_type__startswith='budget_'),
+            'Finance': Q(notification_type__startswith='invoice_')
+            | Q(notification_type__startswith='payment_')
+            | Q(notification_type=Notification.TYPE_STAFF_ADVANCE_OVERDUE)
+            | Q(notification_type=Notification.TYPE_JOURNAL_POSTING_FAILURE),
+            'Work orders': Q(notification_type__startswith='work_order_'),
+            'System updates': Q(notification_type=Notification.TYPE_SYSTEM),
+        }
+        categories = [
+            {'label': label, 'count': queryset.filter(condition).count()}
+            for label, condition in category_queries.items()
+        ]
+        priority_queries = [
+            ('Purchase requests', 'Awaiting your review', Q(notification_type__startswith='pr_'), 'urgent'),
+            ('Stock confirmations', 'Confirm stock issues', Q(notification_type=Notification.TYPE_LOW_STOCK), 'high'),
+            ('Budget approval', 'Awaiting approval', Q(notification_type__startswith='budget_'), 'medium'),
+            ('Other approvals', 'Various requests', Q(notification_type__icontains='approval'), 'neutral'),
+        ]
+        priority = [
+            {'label': label, 'detail': detail, 'count': unread.filter(condition).count(), 'tone': tone}
+            for label, detail, condition, tone in priority_queries
+        ]
+        return Response({
+            'total': queryset.count(),
+            'unread': unread.count(),
+            'today': queryset.filter(created_at__date=timezone.localdate()).count(),
+            'action_required': unread.filter(level__in=[Notification.LEVEL_WARNING, Notification.LEVEL_DANGER]).count(),
+            'approvals': unread.filter(
+                Q(notification_type__icontains='approval')
+                | Q(notification_type=Notification.TYPE_PAYMENT_AWAITING_APPROVAL)
+            ).count(),
+            'system_updates': queryset.filter(notification_type=Notification.TYPE_SYSTEM).count(),
+            'categories': categories,
+            'priority': priority,
+        })
 
     @action(detail=False, methods=['get'], url_path='unread-count')
     def unread_count(self, request):

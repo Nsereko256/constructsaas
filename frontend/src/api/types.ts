@@ -368,6 +368,17 @@ export type NotificationItem = {
   created_at: string;
 };
 
+export type NotificationSummary = {
+  total: number;
+  unread: number;
+  today: number;
+  action_required: number;
+  approvals: number;
+  system_updates: number;
+  categories: { label: string; count: number }[];
+  priority: { label: string; detail: string; count: number; tone: 'urgent' | 'high' | 'medium' | 'neutral' }[];
+};
+
 export type ChatRoom = {
   id: number;
   company: number;

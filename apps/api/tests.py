@@ -493,6 +493,44 @@ class ApiFoundationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['unread_count'], 1)
 
+    def test_notification_summary_is_scoped_and_groups_live_records(self):
+        Notification.objects.create(
+            company=self.company,
+            recipient=self.site_engineer,
+            notification_type=Notification.TYPE_PR_SUBMITTED,
+            level=Notification.LEVEL_WARNING,
+            title='Request review',
+            message='Review the purchase request.',
+        )
+        Notification.objects.create(
+            company=self.company,
+            recipient=self.site_engineer,
+            notification_type=Notification.TYPE_SYSTEM,
+            level=Notification.LEVEL_INFO,
+            title='System update',
+            message='A system update is available.',
+            is_read=True,
+        )
+        Notification.objects.create(
+            company=self.company,
+            recipient=self.project_manager,
+            notification_type=Notification.TYPE_PR_SUBMITTED,
+            level=Notification.LEVEL_WARNING,
+            title='Another user request',
+            message='Do not include this record.',
+        )
+        self.client.force_login(self.site_engineer)
+
+        response = self.client.get('/api/notifications/summary/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['total'], 2)
+        self.assertEqual(response.data['unread'], 1)
+        self.assertEqual(response.data['action_required'], 1)
+        self.assertEqual(response.data['system_updates'], 1)
+        procurement = next(item for item in response.data['categories'] if item['label'] == 'Procurement')
+        self.assertEqual(procurement['count'], 1)
+
     def test_notification_mark_read_only_affects_logged_in_user_notification(self):
         own_notification = Notification.objects.create(
             company=self.company,
