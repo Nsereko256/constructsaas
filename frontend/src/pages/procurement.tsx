@@ -63,7 +63,8 @@ function exportOrders(rows: PurchaseOrder[]) {
 }
 
 export function ProcurementPage() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
+  const financeAvailable = user?.soft_finance_enabled !== false;
   const [activeTab, setActiveTab] = useState<'all' | 'approval' | 'issued' | 'partial'>('all');
   const [search, setSearch] = useState('');
   const [project, setProject] = useState('');
@@ -74,7 +75,7 @@ export function ProcurementPage() {
   const orders = useQuery({ queryKey: qk.purchaseOrders({ page_size: 100 }), queryFn: () => api.purchaseOrders({ page_size: 100 }) });
   const receipts = useQuery({ queryKey: qk.goodsReceivedNotes({ page_size: 100 }), queryFn: () => api.goodsReceivedNotes({ page_size: 100 }) });
   const workflow = useQuery({ queryKey: qk.workflowBadges, queryFn: api.workflowBadges });
-  const invoices = useQuery({ queryKey: qk.financeInvoices({ page_size: 100, source: 'procurement' }), queryFn: () => financeApi.invoices({ page_size: 100 }), enabled: can.viewFinance(role) });
+  const invoices = useQuery({ queryKey: qk.financeInvoices({ page_size: 100, source: 'procurement' }), queryFn: () => financeApi.invoices({ page_size: 100 }), enabled: can.viewFinance(role) && financeAvailable && user?.invoice_tracking_enabled !== false });
 
   const requestRows = requests.data?.results || [];
   const orderRows = orders.data?.results || [];
@@ -125,7 +126,7 @@ export function ProcurementPage() {
     { label: 'POs', value: issuedOrders.length, note: `${issuedOrders.length} issued`, tone: 'neutral', href: '/procurement/purchase-orders' },
     { label: 'Deliveries', value: inTransit.length, note: dueToday ? `${dueToday} due today` : 'No deliveries due', tone: dueToday ? 'amber' : 'green', href: '/procurement/deliveries' },
     { label: 'Receipts', value: receiptRows.length, note: receiptRows.length ? 'Recorded' : 'None recorded', tone: receiptRows.length ? 'green' : 'neutral', href: '/procurement/grns' },
-    { label: 'Invoices', value: invoiceRows.length || workflow.data?.supplier_invoices || 0, note: invoices.isError ? 'Finance access required' : invoiceRows.filter((invoice) => !['PAID', 'REVERSED'].includes(invoice.status)).length ? `${invoiceRows.filter((invoice) => !['PAID', 'REVERSED'].includes(invoice.status)).length} pending` : 'All clear', tone: invoiceRows.some((invoice) => !['PAID', 'REVERSED'].includes(invoice.status)) ? 'amber' : 'green', href: '/finance/payables' },
+    ...(financeAvailable && user?.invoice_tracking_enabled !== false ? [{ label: 'Invoices', value: invoiceRows.length || workflow.data?.supplier_invoices || 0, note: invoices.isError ? 'Finance access required' : invoiceRows.filter((invoice) => !['PAID', 'REVERSED'].includes(invoice.status)).length ? `${invoiceRows.filter((invoice) => !['PAID', 'REVERSED'].includes(invoice.status)).length} pending` : 'All clear', tone: invoiceRows.some((invoice) => !['PAID', 'REVERSED'].includes(invoice.status)) ? 'amber' : 'green', href: '/finance/payables' }] : []),
   ];
 
   return (

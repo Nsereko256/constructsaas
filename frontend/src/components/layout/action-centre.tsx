@@ -52,9 +52,9 @@ const queues: Record<Role, QueueItem[]> = {
   ],
 };
 
-export function ActionCentre({ role, workflow }: { role: Role | null; workflow: WorkflowBadges | undefined }) {
+export function ActionCentre({ role, workflow, financeAvailable = true }: { role: Role | null; workflow: WorkflowBadges | undefined; financeAvailable?: boolean }) {
   if (!role) return null;
-  const items = queues[role].map((item) => ({ ...item, count: workflow?.[item.badge] || 0 })).filter((item) => item.count > 0);
+  const items = queues[role].filter((item) => financeAvailable || !item.href.startsWith('/finance/')).map((item) => ({ ...item, count: workflow?.[item.badge] || 0 })).filter((item) => item.count > 0);
   if (!items.length) return null;
   const total = items.reduce((sum, item) => sum + item.count, 0);
 

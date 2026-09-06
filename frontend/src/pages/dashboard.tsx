@@ -51,7 +51,8 @@ export function DashboardPage() {
     finance_viewer: { label: 'View finance position', href: '/finance' },
   };
   const isFieldRole = role === 'site_engineer' || role === 'storekeeper';
-  const isFinanceRole = role?.startsWith('finance_');
+  const financeAvailable = user?.soft_finance_enabled !== false;
+  const isFinanceRole = financeAvailable && role?.startsWith('finance_');
   const kpis = isFieldRole ? [
     { label: 'Assigned projects', value: data.active_projects, note: 'Across assigned sites', icon: FolderKanban },
     { label: role === 'storekeeper' ? 'Low-stock alerts' : 'Open requests', value: role === 'storekeeper' ? data.low_stock_count : data.pending_purchase_requests, note: 'Needs attention', icon: role === 'storekeeper' ? AlertTriangle : ClipboardList },
@@ -104,7 +105,7 @@ export function DashboardPage() {
     <div className="reference-dashboard">
       <section className="dashboard-greeting">
         <div><h1>Good day, {user?.first_name || user?.username || 'there'}</h1><p>Overview of your construction operations.</p></div>
-        <div className="dashboard-greeting-actions"><span><CalendarDays size={15} />{new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date())}</span><Link className="dashboard-primary" to={primaryAction[role || 'admin'].href}>{primaryAction[role || 'admin'].label}</Link></div>
+        <div className="dashboard-greeting-actions"><span><CalendarDays size={15} />{new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date())}</span><Link className="dashboard-primary" to={financeAvailable ? primaryAction[role || 'admin'].href : '/procurement/requests'}>{financeAvailable ? primaryAction[role || 'admin'].label : 'Open procurement'}</Link></div>
       </section>
       <section className="dashboard-kpis">
         {kpis.map((kpi, index) => <div className="dashboard-panel dashboard-kpi" key={kpi.label}>
@@ -137,7 +138,7 @@ export function DashboardPage() {
       <div className="dashboard-panel">
         <div className="dashboard-panel-heading"><h2>Procurement pipeline</h2></div>
         <div className="dashboard-pipeline">
-          {pipeline.filter(item => !['Invoices','Payments'].includes(item.label) || !isFieldRole).map((item,index)=><Link to={item.href} key={item.label} className="dashboard-pipeline-step"><span className={`dashboard-step-number ${item.count ? 'active' : ''}`}>{index+1}</span><span className="dashboard-step-content"><span>{item.label}</span><strong>{item.count}</strong><small className={item.count ? 'pending' : 'clear'}>{item.count ? item.status === 'All clear' ? 'Needs attention' : item.status : 'All clear'}</small></span><span className="dashboard-step-connector"><ChevronRight size={13}/></span></Link>)}
+          {pipeline.filter(item => financeAvailable || !['Invoices','Payments'].includes(item.label)).map((item,index)=><Link to={item.href} key={item.label} className="dashboard-pipeline-step"><span className={`dashboard-step-number ${item.count ? 'active' : ''}`}>{index+1}</span><span className="dashboard-step-content"><span>{item.label}</span><strong>{item.count}</strong><small className={item.count ? 'pending' : 'clear'}>{item.count ? item.status === 'All clear' ? 'Needs attention' : item.status : 'All clear'}</small></span><span className="dashboard-step-connector"><ChevronRight size={13}/></span></Link>)}
         </div>
       </div>
       <section className="dashboard-pair">
