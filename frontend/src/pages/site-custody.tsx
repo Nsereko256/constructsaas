@@ -8,6 +8,7 @@ import { useAuth } from '@/auth/auth-context';
 import { FormModal } from '@/components/common/form-modal';
 import { MaterialLookup } from '@/components/common/material-lookup';
 import { PageToolbar } from '@/components/common/page-toolbar';
+import { Pagination } from '@/components/common/pagination';
 import { Badge, statusTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
@@ -17,7 +18,7 @@ import { formatDate, formatNumber } from '@/lib/utils';
 
 type Mode = 'dispatch' | 'consume' | 'return' | null;
 export function SiteCustodyPage() {
-  const { role } = useAuth(); const toast = useToast(); const client = useQueryClient(); const [mode, setMode] = useState<Mode>(null);
+  const { role } = useAuth(); const toast = useToast(); const client = useQueryClient(); const [mode, setMode] = useState<Mode>(null); const [page, setPage] = useState(1);
   const transfers = useQuery({ queryKey: ['site-transfers'], queryFn: api.siteTransfers });
   const refresh = () => { void client.invalidateQueries({ queryKey: ['site-transfers'] }); void client.invalidateQueries({ queryKey: ['stock-movements'] }); void client.invalidateQueries({ queryKey: ['materials'] }); };
   const acknowledge = useMutation({ mutationFn: api.acknowledgeSiteTransfer, onSuccess: () => { toast.push({ title: 'Transfer acknowledged into site custody', tone: 'success' }); refresh(); }, onError: (e: Error) => toast.push({ title: 'Acknowledgement failed', message: e.message, tone: 'danger' }) });
@@ -31,11 +32,15 @@ export function SiteCustodyPage() {
     { header: 'Dispatched', cell: ({ row }) => formatDate(row.original.dispatched_at) },
     { id: 'action', header: '', cell: ({ row }) => row.original.status === 'DISPATCHED' && canUseSite ? <Button size="sm" onClick={() => acknowledge.mutate(row.original.id)}><Check className="h-4 w-4" />Acknowledge</Button> : null },
   ];
+  const pageSize = 20;
+  const allTransfers = transfers.data || [];
+  const visibleTransfers = allTransfers.slice((page - 1) * pageSize, page * pageSize);
+  const paginatedTransfers = { count: allTransfers.length, previous: page > 1 ? 'previous' : null, next: page * pageSize < allTransfers.length ? 'next' : null, results: visibleTransfers };
   return <div className="grid gap-4"><PageToolbar title="Site custody" subtitle="Track material custody from warehouse dispatch to site acknowledgement, use, and return.">
     {canDispatch ? <Button onClick={() => setMode('dispatch')}><Send className="h-4 w-4" />Dispatch to site</Button> : null}
     {canUseSite ? <Button variant="secondary" onClick={() => setMode('consume')}><Wrench className="h-4 w-4" />Record consumption</Button> : null}
     {canDispatch ? <Button variant="secondary" onClick={() => setMode('return')}><Undo2 className="h-4 w-4" />Return to warehouse</Button> : null}
-  </PageToolbar><DataTable columns={columns} data={transfers.data || []} emptyTitle={transfers.isLoading ? 'Loading transfers...' : 'No site transfers recorded'} />
+  </PageToolbar><DataTable columns={columns} data={visibleTransfers} emptyTitle={transfers.isLoading ? 'Loading transfers...' : 'No site transfers recorded'} /><Pagination page={page} setPage={setPage} data={paginatedTransfers} pageSize={pageSize} />
   <SiteCustodyModal mode={mode} onClose={() => setMode(null)} onDone={refresh} /></div>;
 }
 
