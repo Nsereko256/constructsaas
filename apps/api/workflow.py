@@ -10,6 +10,7 @@ from apps.finance.models import (
     SupplierInvoice,
     StaffAdvance,
 )
+from apps.finance.configuration_services import ensure_finance_settings, soft_finance_enabled
 from apps.materials.models import Material
 from apps.procurement.models import PurchaseOrder, PurchaseRequest, SupplierClaim
 from apps.projects.access import accessible_purchase_orders, accessible_purchase_requests
@@ -23,6 +24,8 @@ def workflow_badges_for_user(user):
     """Return only company-scoped queues that the current role can action."""
     company = user.company
     role = user.role
+    finance_enabled = soft_finance_enabled(company)
+    finance_settings = ensure_finance_settings(company)
     requests = accessible_purchase_requests(
         user,
         PurchaseRequest.objects.filter(company=company),
@@ -48,12 +51,12 @@ def workflow_badges_for_user(user):
             status__in=[PurchaseRequest.STATUS_APPROVED, PurchaseRequest.STATUS_PARTIAL_STOCK_ISSUED],
             purchase_orders__isnull=True,
         ))
-    elif role == User.ROLE_FINANCE_OFFICER:
+    elif finance_enabled and role == User.ROLE_FINANCE_OFFICER:
         request_count = _count(requests.filter(
             Q(status=PurchaseRequest.STATUS_PO_CREATED, budget_approval__isnull=True)
             | Q(status=PurchaseRequest.STATUS_PO_CREATED, budget_approval__status=BudgetApproval.STATUS_RETURNED)
         ))
-    elif role == User.ROLE_FINANCE_MANAGER:
+    elif finance_enabled and role == User.ROLE_FINANCE_MANAGER:
         request_count = _count(requests.filter(
             budget_approval__status__in=[BudgetApproval.STATUS_SUBMITTED, BudgetApproval.STATUS_HOLD],
         ))
@@ -111,29 +114,29 @@ def workflow_badges_for_user(user):
 
     budgets = ProjectBudget.objects.filter(company=company)
     budget_count = 0
-    if role == User.ROLE_FINANCE_OFFICER:
+    if finance_enabled and role == User.ROLE_FINANCE_OFFICER:
         budget_count = budgets.filter(status=ProjectBudget.STATUS_DRAFT).count()
-    elif role == User.ROLE_FINANCE_MANAGER:
+    elif finance_enabled and role == User.ROLE_FINANCE_MANAGER:
         budget_count = budgets.filter(status=ProjectBudget.STATUS_SUBMITTED).count()
-    elif role == User.ROLE_ADMIN:
+    elif finance_enabled and role == User.ROLE_ADMIN:
         budget_count = budgets.filter(
             status__in=[ProjectBudget.STATUS_DRAFT, ProjectBudget.STATUS_SUBMITTED],
         ).count()
 
     invoices = SupplierInvoice.objects.filter(company=company)
     invoice_count = 0
-    if role == User.ROLE_FINANCE_OFFICER:
+    if finance_enabled and finance_settings.invoice_tracking_enabled and role == User.ROLE_FINANCE_OFFICER:
         invoice_count = invoices.filter(
             status__in=[SupplierInvoice.STATUS_DRAFT, SupplierInvoice.STATUS_SUBMITTED],
         ).count()
-    elif role == User.ROLE_FINANCE_MANAGER:
+    elif finance_enabled and finance_settings.invoice_tracking_enabled and role == User.ROLE_FINANCE_MANAGER:
         invoice_count = invoices.filter(status__in=[
             SupplierInvoice.STATUS_MATCHED,
             SupplierInvoice.STATUS_MATCH_EXCEPTION,
             SupplierInvoice.STATUS_VERIFIED,
             SupplierInvoice.STATUS_APPROVED,
         ]).count()
-    elif role == User.ROLE_ADMIN:
+    elif finance_enabled and finance_settings.invoice_tracking_enabled and role == User.ROLE_ADMIN:
         invoice_count = invoices.filter(status__in=[
             SupplierInvoice.STATUS_DRAFT,
             SupplierInvoice.STATUS_SUBMITTED,
@@ -145,13 +148,13 @@ def workflow_badges_for_user(user):
 
     payments = Payment.objects.filter(company=company)
     payment_count = 0
-    if role == User.ROLE_FINANCE_OFFICER:
+    if finance_enabled and finance_settings.payment_tracking_enabled and role == User.ROLE_FINANCE_OFFICER:
         payment_count = payments.filter(status=Payment.STATUS_DRAFT).count()
-    elif role == User.ROLE_FINANCE_MANAGER:
+    elif finance_enabled and finance_settings.payment_tracking_enabled and role == User.ROLE_FINANCE_MANAGER:
         payment_count = payments.filter(
             status__in=[Payment.STATUS_SUBMITTED, Payment.STATUS_APPROVED],
         ).count()
-    elif role == User.ROLE_ADMIN:
+    elif finance_enabled and finance_settings.payment_tracking_enabled and role == User.ROLE_ADMIN:
         payment_count = payments.filter(
             status__in=[Payment.STATUS_DRAFT, Payment.STATUS_SUBMITTED, Payment.STATUS_APPROVED],
         ).count()
@@ -159,12 +162,12 @@ def workflow_badges_for_user(user):
     expenses = ExpenseClaim.objects.filter(company=company)
     advances = StaffAdvance.objects.filter(company=company)
     expense_count = 0
-    if role == User.ROLE_FINANCE_OFFICER:
+    if finance_enabled and role == User.ROLE_FINANCE_OFFICER:
         expense_count = (
             expenses.filter(status=ExpenseClaim.STATUS_DRAFT).count()
             + advances.filter(status=StaffAdvance.STATUS_DRAFT).count()
         )
-    elif role == User.ROLE_FINANCE_MANAGER:
+    elif finance_enabled and role == User.ROLE_FINANCE_MANAGER:
         expense_count = (
             expenses.filter(status__in=[
                 ExpenseClaim.STATUS_SUBMITTED,
@@ -177,7 +180,7 @@ def workflow_badges_for_user(user):
                 StaffAdvance.STATUS_APPROVED,
             ]).count()
         )
-    elif role == User.ROLE_ADMIN:
+    elif finance_enabled and role == User.ROLE_ADMIN:
         expense_count = (
             expenses.filter(status__in=[
                 ExpenseClaim.STATUS_DRAFT,
@@ -194,7 +197,7 @@ def workflow_badges_for_user(user):
         )
 
     ledger_count = 0
-    if role in {User.ROLE_FINANCE_MANAGER, User.ROLE_ADMIN}:
+    if finance_enabled and role in {User.ROLE_FINANCE_MANAGER, User.ROLE_ADMIN}:
         ledger_count = JournalEntry.objects.filter(
             company=company,
             status=JournalEntry.STATUS_DRAFT,

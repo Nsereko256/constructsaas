@@ -122,7 +122,9 @@ def _item_match(invoice, line, settings):
     po_item = line.purchase_order_item
     accepted, rejected, damaged = _receipt_quantities(invoice.purchase_order, po_item)
     previous = _previously_invoiced_quantity(invoice.company, po_item, invoice)
-    remaining = money(max(accepted - previous, ZERO))
+    two_way = settings.matching_mode == FinanceSettings.MATCHING_TWO_WAY
+    matching_quantity = po_item.quantity if two_way else accepted
+    remaining = money(max(matching_quantity - previous, ZERO))
     quantity_variance = money(line.quantity - remaining)
     invoice_base_price = base_money(line.unit_price, invoice.exchange_rate)
     price_variance = money(invoice_base_price - po_item.unit_price)
@@ -135,7 +137,10 @@ def _item_match(invoice, line, settings):
     quantity_over = max(quantity_variance, ZERO)
     if quantity_over > settings.quantity_matching_tolerance:
         status = InvoiceMatchRun.STATUS_BLOCKED
-        explanations.append('Invoice quantity exceeds cumulative accepted quantity remaining after approved invoices.')
+        explanations.append(
+            'Invoice quantity exceeds the remaining purchase-order quantity.'
+            if two_way else 'Invoice quantity exceeds cumulative accepted quantity remaining after approved invoices.'
+        )
     elif line.quantity > po_item.quantity - previous + settings.quantity_matching_tolerance:
         status = InvoiceMatchRun.STATUS_BLOCKED
         explanations.append('Invoice quantity exceeds the remaining purchase-order quantity.')
@@ -146,8 +151,8 @@ def _item_match(invoice, line, settings):
         status = InvoiceMatchRun.STATUS_WITHIN_TOLERANCE
         explanations.append('Quantity and price differences are within configured tolerances.')
     else:
-        explanations.append('Quantity and price match accepted receipts and the purchase order.')
-    if rejected or damaged:
+        explanations.append('Quantity and price match the purchase order.' if two_way else 'Quantity and price match accepted receipts and the purchase order.')
+    if not two_way and (rejected or damaged):
         explanations.append(f'Receipts include {rejected} rejected and {damaged} damaged units; neither is invoiceable.')
     return {
         'line': line, 'po_item': po_item, 'ordered_quantity': money(po_item.quantity),

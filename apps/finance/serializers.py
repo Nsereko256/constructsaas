@@ -100,6 +100,8 @@ class FinanceSettingsSerializer(CompanyScopedSerializer):
         model = FinanceSettings
         fields = [
             'id', 'company', 'base_currency', 'base_currency_code', 'financial_year_start',
+            'soft_finance_enabled', 'budget_control_mode', 'allow_unbudgeted_requests',
+            'invoice_tracking_enabled', 'payment_tracking_enabled', 'require_invoice_matching', 'matching_mode',
             'quantity_matching_tolerance', 'price_matching_tolerance',
             'finance_officer_approval_threshold', 'finance_manager_approval_threshold',
             'maker_checker_enforced', 'negative_stock_policy', 'document_retention_years',

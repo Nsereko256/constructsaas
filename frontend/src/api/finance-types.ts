@@ -98,6 +98,13 @@ export type BudgetCategory = { id: number; code: string; name: string; cost_cent
 
 export type FinanceSettings = {
   id: number;
+  soft_finance_enabled: boolean;
+  budget_control_mode: 'off' | 'warn' | 'block';
+  allow_unbudgeted_requests: boolean;
+  invoice_tracking_enabled: boolean;
+  payment_tracking_enabled: boolean;
+  require_invoice_matching: boolean;
+  matching_mode: 'two_way' | 'three_way';
   base_currency: number;
   base_currency_code: string;
   financial_year_start: string;

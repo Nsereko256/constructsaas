@@ -39,7 +39,9 @@ export const navItems: NavItem[] = [
   { label: 'Settings', href: '/settings', icon: Settings, roles: ['admin'], section: 'Team & Settings' },
 ];
 
-export function visibleNav(role: Role | null) {
+export function visibleNav(role: Role | null, softFinanceEnabled = true) {
   if (!role) return [];
-  return navItems.filter((item) => item.roles.includes(role)).map((item) => ({ ...item, section: item.section || 'Operations' }));
+  return navItems
+    .filter((item) => item.roles.includes(role) && (softFinanceEnabled || item.href !== '/finance'))
+    .map((item) => ({ ...item, section: item.section || 'Operations' }));
 }

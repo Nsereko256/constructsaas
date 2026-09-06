@@ -9,7 +9,7 @@ from rest_framework.exceptions import ValidationError
 from apps.accounts.models import User
 from apps.procurement.models import PurchaseOrder, PurchaseRequest
 
-from .configuration_services import ensure_finance_settings, record_finance_audit_event
+from .configuration_services import ensure_finance_settings, record_finance_audit_event, soft_finance_enabled
 from .models import (
     BudgetApproval,
     BudgetLine,
@@ -174,6 +174,8 @@ def _transaction(*, company, budget, line, transaction_type, amount, user, descr
 @transaction.atomic
 def record_stock_movement_actual(*, movement, user, reversal=False):
     """Record the value of project stock issues in the approved project budget."""
+    if not soft_finance_enabled(movement.company):
+        return None
     if not movement.project_id:
         return None
     budget = ProjectBudget.objects.select_for_update().filter(
@@ -414,6 +416,9 @@ def submit_purchase_request_to_finance(*, purchase_request, user, budget_line=No
         raise ValidationError({'status': ['Manager approval is required before finance submission.']})
     if request.status == PurchaseRequest.STATUS_PO_CREATED and not request.purchase_orders.exists():
         raise ValidationError({'status': ['A purchase order with supplier pricing is required before finance review.']})
+    settings = _settings(user.company)
+    if settings.budget_control_mode == FinanceSettings.BUDGET_CONTROL_OFF:
+        raise ValidationError({'settings': ['Budget control is off. This request can proceed without finance review.']})
     line = None
     if budget_line is not None:
         line = BudgetLine.objects.select_for_update().select_related('budget').get(
@@ -427,6 +432,8 @@ def submit_purchase_request_to_finance(*, purchase_request, user, budget_line=No
         status=ProjectBudget.STATUS_APPROVED,
     ).exists():
         raise ValidationError({'budget_line': ['Select an approved budget line for the purchase request project.']})
+    if line is None and not settings.allow_unbudgeted_requests:
+        raise ValidationError({'budget_line': ['An approved budget line is required by this company policy.']})
     amount = purchase_request_estimated_total(request)
     approval = BudgetApproval.objects.select_for_update().filter(purchase_request=request).first()
     if approval and approval.status in {
@@ -503,6 +510,13 @@ def review_purchase_request_finance(
         )
     requires_override = line is None or approval.requested_amount > budget_line_summary(line)['available_balance']
     if decision == BudgetApproval.STATUS_APPROVED and requires_override:
+        if settings.budget_control_mode == FinanceSettings.BUDGET_CONTROL_BLOCK:
+            message = (
+                'An approved budget line is required by the current budget-control policy.'
+                if line is None
+                else 'The request exceeds the available budget balance and is blocked by company policy.'
+            )
+            raise ValidationError({'budget_line': [message]})
         if not override:
             message = (
                 'An unbudgeted request requires Finance Manager override.'
@@ -604,6 +618,8 @@ def recommit_purchase_order_after_amendment(*, purchase_order, user, amendment):
 
 
 def ensure_purchase_order_committed(purchase_order):
+    if not soft_finance_enabled(purchase_order.company):
+        return
     approval = BudgetApproval.objects.filter(
         company=purchase_order.company,
         purchase_request_id=purchase_order.purchase_request_id,
@@ -629,6 +645,11 @@ def approve_purchase_order(*, purchase_order, user):
     )
     if po.status not in {PurchaseOrder.STATUS_DRAFT, PurchaseOrder.STATUS_PENDING}:
         raise ValidationError({'status': ['Only draft or pending purchase orders can be approved.']})
+    settings = _settings(po.company)
+    if not soft_finance_enabled(po.company) or settings.budget_control_mode == FinanceSettings.BUDGET_CONTROL_OFF:
+        po.status = PurchaseOrder.STATUS_ORDERED
+        po.save(update_fields=['status', 'updated_at'])
+        return po
     if not po.purchase_request_id:
         raise ValidationError({
             'purchase_request': ['A finance-approved purchase request is required before approving a purchase order.'],

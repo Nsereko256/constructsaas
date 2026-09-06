@@ -25,6 +25,7 @@ from apps.warehouse.models import BinLocation, SiteTransfer, StockMovement, Ware
 from apps.warehouse.valuation_services import available_for_project_issue, valuation_state
 from apps.finance.models import BudgetApproval
 from apps.finance import budget_services
+from apps.finance.configuration_services import soft_finance_enabled
 from apps.finance.services import ensure_budget_clearance
 
 
@@ -89,10 +90,13 @@ class UserSerializer(serializers.ModelSerializer):
     role_display = serializers.CharField(source='get_role_display', read_only=True)
     company_name = serializers.CharField(source='company.name', read_only=True)
     password = serializers.CharField(write_only=True, required=False, allow_blank=False)
+    soft_finance_enabled = serializers.SerializerMethodField()
+    invoice_tracking_enabled = serializers.SerializerMethodField()
+    payment_tracking_enabled = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'first_name', 'last_name', 'email', 'phone', 'role', 'role_display', 'company', 'company_name', 'is_active', 'password']
+        fields = ['id', 'username', 'first_name', 'last_name', 'email', 'phone', 'role', 'role_display', 'company', 'company_name', 'soft_finance_enabled', 'invoice_tracking_enabled', 'payment_tracking_enabled', 'is_active', 'password']
         read_only_fields = ['id', 'company', 'company_name', 'role_display']
 
     def validate_role(self, role):
@@ -100,6 +104,17 @@ class UserSerializer(serializers.ModelSerializer):
         if role not in valid_roles:
             raise serializers.ValidationError('Select a valid role.')
         return role
+
+    def get_soft_finance_enabled(self, obj):
+        return soft_finance_enabled(obj.company)
+
+    def get_invoice_tracking_enabled(self, obj):
+        from apps.finance.configuration_services import ensure_finance_settings
+        return ensure_finance_settings(obj.company).invoice_tracking_enabled
+
+    def get_payment_tracking_enabled(self, obj):
+        from apps.finance.configuration_services import ensure_finance_settings
+        return ensure_finance_settings(obj.company).payment_tracking_enabled
 
     def create(self, validated_data):
         request = self.context.get('request')

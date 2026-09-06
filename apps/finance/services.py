@@ -91,6 +91,11 @@ def purchase_request_estimated_total(purchase_request):
 
 
 def ensure_budget_clearance(purchase_request):
+    from .configuration_services import ensure_finance_settings, soft_finance_enabled
+    if not soft_finance_enabled(purchase_request.company):
+        return None
+    if ensure_finance_settings(purchase_request.company).budget_control_mode == FinanceSettings.BUDGET_CONTROL_OFF:
+        return None
     try:
         approval = purchase_request.budget_approval
     except BudgetApproval.DoesNotExist:
@@ -501,6 +506,12 @@ def submit_invoice(*, invoice, user):
     settings = ensure_finance_settings(user.company)
     if settings.require_invoice_attachment and not locked.attachments.exists():
         raise ValidationError({'attachments': ['Attach the supplier invoice or supporting document before submitting.']})
+    if not settings.require_invoice_matching:
+        locked.status = SupplierInvoice.STATUS_VERIFIED
+        locked.submitted_at = timezone.now()
+        _save(locked, update_fields=['status', 'submitted_at', 'updated_at'])
+        _record_invoice_action(locked, user, InvoiceApproval.ACTION_VERIFY, comments='Invoice matching is disabled by company policy.')
+        return locked
     # Lock and reserve the cumulative GRN quantity before this invoice enters
     # the finance workflow, rather than discovering a duplicate only at match.
     from .matching_services import assert_invoice_quantity_available

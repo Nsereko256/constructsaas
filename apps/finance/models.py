@@ -106,6 +106,20 @@ class Currency(models.Model):
 
 
 class FinanceSettings(models.Model):
+    BUDGET_CONTROL_OFF = 'off'
+    BUDGET_CONTROL_WARN = 'warn'
+    BUDGET_CONTROL_BLOCK = 'block'
+    BUDGET_CONTROL_CHOICES = [
+        (BUDGET_CONTROL_OFF, 'Off'),
+        (BUDGET_CONTROL_WARN, 'Warn'),
+        (BUDGET_CONTROL_BLOCK, 'Block'),
+    ]
+    MATCHING_TWO_WAY = 'two_way'
+    MATCHING_THREE_WAY = 'three_way'
+    MATCHING_CHOICES = [
+        (MATCHING_TWO_WAY, 'Two-way'),
+        (MATCHING_THREE_WAY, 'Three-way'),
+    ]
     NEGATIVE_STOCK_PREVENT = 'PREVENT'
     NEGATIVE_STOCK_WARN = 'WARN'
     NEGATIVE_STOCK_ALLOW = 'ALLOW'
@@ -116,6 +130,15 @@ class FinanceSettings(models.Model):
     ]
 
     company = models.OneToOneField(Company, on_delete=models.PROTECT, related_name='finance_settings')
+    # Existing ConstructSaaS tenants already use the finance workflow. Keep it
+    # enabled for a non-disruptive rollout; administrators can disable it per tenant.
+    soft_finance_enabled = models.BooleanField(default=True)
+    budget_control_mode = models.CharField(max_length=8, choices=BUDGET_CONTROL_CHOICES, default=BUDGET_CONTROL_WARN)
+    allow_unbudgeted_requests = models.BooleanField(default=True)
+    invoice_tracking_enabled = models.BooleanField(default=True)
+    payment_tracking_enabled = models.BooleanField(default=True)
+    require_invoice_matching = models.BooleanField(default=True)
+    matching_mode = models.CharField(max_length=10, choices=MATCHING_CHOICES, default=MATCHING_THREE_WAY)
     base_currency = models.ForeignKey(Currency, on_delete=models.PROTECT, related_name='base_for_settings')
     financial_year_start = models.DateField(default=default_financial_year_start)
     quantity_matching_tolerance = models.DecimalField(max_digits=14, decimal_places=4, default=0)

@@ -86,6 +86,9 @@ export type User = {
   role_display: string;
   company: number;
   company_name: string;
+  soft_finance_enabled: boolean;
+  invoice_tracking_enabled: boolean;
+  payment_tracking_enabled: boolean;
   is_active: boolean;
 };
 

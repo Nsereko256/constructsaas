@@ -2,7 +2,7 @@ import { AlertCircle, ArrowUpRight, Download } from 'lucide-react';
 import type React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { financeApi } from '@/modules/finance/api';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { can } from '@/api/roles';
 import { useAuth } from '@/auth/auth-context';
 import { Badge, statusTone } from '@/components/ui/badge';
@@ -23,17 +23,29 @@ export const financeTabs = [
 const stakeholderTabs = new Set(['/finance', '/finance/budgets', '/finance/payables', '/finance/reports']);
 
 export function FinanceGate({ children }: { children: React.ReactNode }) {
-  const { role } = useAuth();
-  return can.viewFinance(role) ? children : <Navigate to="/dashboard" replace />;
+  const { role, user } = useAuth();
+  const location = useLocation();
+  const canConfigureDisabledModule = role === 'admin' && location.pathname === '/finance/settings';
+  const disabledCapability = (
+    (location.pathname.startsWith('/finance/payables') && user?.invoice_tracking_enabled === false)
+    || (location.pathname.startsWith('/finance/payments') && user?.payment_tracking_enabled === false)
+  );
+  return ((can.viewFinance(role) && user?.soft_finance_enabled && !disabledCapability) || canConfigureDisabledModule)
+    ? children
+    : <Navigate to="/dashboard" replace />;
 }
 
 export function FinancePage({ eyebrow, title, description, actions, children }: {
   eyebrow: string; title: string; description: string; actions?: React.ReactNode; children: React.ReactNode;
 }) {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const tabs = role === 'project_manager' || role === 'procurement_officer'
     ? financeTabs.filter(([, href]) => stakeholderTabs.has(href))
     : financeTabs;
+  const enabledTabs = tabs.filter(([, href]) => (
+    !(href === '/finance/payables' && user?.invoice_tracking_enabled === false)
+    && !(href === '/finance/payments' && user?.payment_tracking_enabled === false)
+  ));
   return (
     <FinanceGate>
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
@@ -46,7 +58,7 @@ export function FinancePage({ eyebrow, title, description, actions, children }: 
             </div>
             {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
           </div>
-          <div className="px-2 pb-2 pt-1"><WorkspaceTabs links={tabs.map(([label, href]) => ({ label, href }))} /></div>
+          <div className="px-2 pb-2 pt-1"><WorkspaceTabs links={enabledTabs.map(([label, href]) => ({ label, href }))} /></div>
         </section>
         {children}
       </div>

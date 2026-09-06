@@ -18,7 +18,7 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [online, setOnline] = useState(() => navigator.onLine);
   const location = useLocation();
-  const nav = useMemo(() => visibleNav(role), [role]);
+  const nav = useMemo(() => visibleNav(role, user?.soft_finance_enabled !== false), [role, user?.soft_finance_enabled]);
   const currentNav = [...nav].sort((a, b) => b.href.length - a.href.length).find((item) =>
     item.href === '/dashboard' ? location.pathname === item.href : location.pathname.startsWith(item.href),
   );

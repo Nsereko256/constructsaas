@@ -139,6 +139,7 @@ from .permissions import (
     FinancePreparationPermission,
     FinanceProcurementWritePermission,
     FinanceReviewPermission,
+    FinanceSettingsPermission,
 )
 from .serializers import (
     AccountSerializer,
@@ -237,7 +238,7 @@ class FoundationConfigurationViewSet(CompanyScopedMixin, viewsets.ModelViewSet):
 class FinanceSettingsViewSet(CompanyScopedMixin, viewsets.ModelViewSet):
     queryset = FinanceSettings.objects.select_related('base_currency')
     serializer_class = FinanceSettingsSerializer
-    permission_classes = [FinanceFoundationPermission]
+    permission_classes = [FinanceSettingsPermission]
     http_method_names = ['get', 'patch', 'head', 'options']
 
 
@@ -512,7 +513,7 @@ class BudgetApprovalViewSet(CompanyScopedMixin, viewsets.ModelViewSet):
 class AccountViewSet(CompanyScopedMixin, viewsets.ModelViewSet):
     queryset = Account.objects.all()
     serializer_class = AccountSerializer
-    permission_classes = [FinanceAdminPermission]
+    permission_classes = [FinanceFoundationPermission]
     filterset_fields = ['account_type', 'system_key', 'is_active']
     search_fields = ['code', 'name']
     ordering_fields = ['code', 'name', 'account_type', 'created_at']

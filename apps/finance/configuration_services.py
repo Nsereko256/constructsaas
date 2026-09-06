@@ -65,6 +65,11 @@ def ensure_finance_settings(company):
     return settings
 
 
+def soft_finance_enabled(company):
+    """Return the tenant's single authoritative Soft Finance feature state."""
+    return bool(company and ensure_finance_settings(company).soft_finance_enabled)
+
+
 def validate_exchange_rate(*, company, currency, exchange_rate):
     """Validate and normalize a transaction-to-base-currency exchange rate."""
     try:

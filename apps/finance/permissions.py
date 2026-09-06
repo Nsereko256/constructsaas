@@ -1,6 +1,8 @@
 from rest_framework.permissions import SAFE_METHODS, BasePermission
+from rest_framework.exceptions import PermissionDenied
 
 from apps.accounts.models import User
+from .configuration_services import ensure_finance_settings, soft_finance_enabled
 
 
 FINANCE_READ_ROLES = {
@@ -32,6 +34,15 @@ class FinanceCompanyPermission(BasePermission):
             and user.company.is_active
         ):
             return False
+        if not soft_finance_enabled(user.company):
+            raise PermissionDenied('Soft Finance / Cost Control is disabled for this company.', code='feature_disabled')
+        settings = ensure_finance_settings(user.company)
+        path = request.path.lower()
+        if '/supplier-invoices/' in path and not settings.invoice_tracking_enabled:
+            raise PermissionDenied('Invoice tracking is disabled for this company.', code='invoice_tracking_disabled')
+        payment_paths = ('/payments/', '/payment-batches/', '/payment-attachments/', '/payment-approvals/')
+        if any(segment in path for segment in payment_paths) and not settings.payment_tracking_enabled:
+            raise PermissionDenied('Payment tracking is disabled for this company.', code='payment_tracking_disabled')
         if request.method in SAFE_METHODS:
             return user.role in FINANCE_READ_ROLES
         return user.role in self.write_roles
@@ -70,6 +81,8 @@ class FinanceFoundationPermission(BasePermission):
             and user.role in FINANCE_FOUNDATION_ROLES
         ):
             return False
+        if not soft_finance_enabled(user.company):
+            raise PermissionDenied('Soft Finance / Cost Control is disabled for this company.', code='feature_disabled')
         return request.method in SAFE_METHODS or user.role in self.write_roles
 
     def has_object_permission(self, request, view, obj):
@@ -93,3 +106,18 @@ class FinancePreparationPermission(FinanceCompanyPermission):
     # posting controls remain separate, and service-level maker-checker rules
     # prevent a manager from approving their own prepared records.
     write_roles = {User.ROLE_FINANCE_OFFICER, User.ROLE_FINANCE_MANAGER, User.ROLE_ADMIN}
+
+
+class FinanceSettingsPermission(BasePermission):
+    """Settings stay reachable for the company admin even while Finance is off."""
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated and user.company_id and user.company.is_active):
+            return False
+        if request.method in SAFE_METHODS:
+            return user.role in FINANCE_READ_ROLES
+        return user.role == User.ROLE_ADMIN
+
+    def has_object_permission(self, request, view, obj):
+        return self.has_permission(request, view) and obj.company_id == request.user.company_id
