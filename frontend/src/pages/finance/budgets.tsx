@@ -17,7 +17,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useToast } from '@/components/ui/toast';
 import { useListState } from '@/hooks/use-list-state';
 import { formatMoney } from '@/lib/utils';
-import { FinancePage, Status } from './components';
+import { FinancePage, FinanceWorkspaceSummary, Status } from './components';
 
 type Decision = { budget: ProjectBudget; action: 'approve' | 'reject' } | null;
 type Adjustment = { budget: ProjectBudget; mode: 'revise' | 'transfer' } | null;
@@ -51,6 +51,7 @@ export function FinanceBudgetsPage() {
     { id: 'actions', header: '', cell: ({ row }) => { const pending = action.isPending && action.variables?.id === row.original.id; return <div className="flex justify-end gap-2">{can.prepareFinance(role) && row.original.status === 'DRAFT' ? <Button size="sm" loading={pending && action.variables?.command === 'submit'} loadingLabel="Submitting" disabled={pending} onClick={() => action.mutate({ id: row.original.id, command: 'submit' })}><Send className="h-3.5 w-3.5" />Submit</Button> : null}{can.manageFinance(role) && row.original.status === 'SUBMITTED' ? <><Button size="sm" disabled={pending} onClick={() => setDecision({ budget: row.original, action: 'approve' })}><Check className="h-3.5 w-3.5" />Approve</Button><Button size="sm" variant="secondary" disabled={pending} onClick={() => setDecision({ budget: row.original, action: 'reject' })}><X className="h-3.5 w-3.5" />Reject</Button></> : null}{can.manageFinance(role) && row.original.status === 'APPROVED' ? <><Button size="sm" variant="secondary" onClick={() => setAdjustment({ budget: row.original, mode: 'revise' })}><SlidersHorizontal className="h-3.5 w-3.5" />Adjust</Button><Button size="sm" variant="ghost" onClick={() => setAdjustment({ budget: row.original, mode: 'transfer' })}><ArrowRightLeft className="h-3.5 w-3.5" />Transfer</Button></> : null}</div>; } },
   ];
   return <FinancePage eyebrow="Project controls" title="Budgets and commitments" description="Approve cost envelopes, monitor purchasing commitments, and protect available project balances." actions={can.prepareFinance(role) ? <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" />New budget</Button> : undefined}>
+    <FinanceWorkspaceSummary view="budgets" />
     <div className="flex flex-wrap gap-2 border border-border bg-white p-3 shadow-panel">
       <input className={inputClass} value={list.search} onChange={(event) => list.setSearch(event.target.value)} placeholder="Search project or budget" aria-label="Search budgets" />
       <select className={inputClass} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}><option value="">All statuses</option><option>DRAFT</option><option>SUBMITTED</option><option>APPROVED</option><option>REJECTED</option></select>

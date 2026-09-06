@@ -20,17 +20,19 @@ export function FinanceOverviewPage() {
   }));
   return (
     <FinancePage eyebrow="Finance control" title="Financial command centre" description={`Authoritative company position as at ${data.as_of}. Values are reported in ${currency}.`}>
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="finance-primary-kpis" aria-label="Financial position">
         <FinanceKpi label="Approved budgets" value={formatMoney(data.approved_budgets, currency)} detail={`${data.project_balances.length} approved project budgets`} href="/finance/budgets" />
         <FinanceKpi label="Open commitments" value={formatMoney(data.open_commitments, currency)} detail="Approved purchasing not yet expensed" tone="info" href="/finance/budgets" />
         <FinanceKpi label="Actual expenditure" value={formatMoney(data.actual_expenditure, currency)} detail="Posted project expenditure" href="/finance/reports" />
         <FinanceKpi label="Available balance" value={formatMoney(data.available_project_balances, currency)} detail="Budget less commitments and actuals" tone="info" href="/finance/budgets" />
+      </section>
+      <section className="finance-secondary-kpis" aria-label="Finance exceptions">
         <FinanceKpi label="Pending approvals" value={data.pending_financial_approvals} detail="Budgets, invoices, payments and expenses" tone="warning" />
         <FinanceKpi label="Unmatched invoices" value={data.unmatched_invoices} detail="Requires three-way match review" tone={data.unmatched_invoices ? 'warning' : 'primary'} href="/finance/payables" />
         <FinanceKpi label="Unpaid invoices" value={formatMoney(data.unpaid_invoices.base_amount, currency)} detail={`${data.unpaid_invoices.count} open invoices`} href="/finance/payables" />
         <FinanceKpi label="Overdue invoices" value={formatMoney(data.overdue_invoices.base_amount, currency)} detail={`${data.overdue_invoices.count} past due`} tone={data.overdue_invoices.count ? 'critical' : 'primary'} href="/finance/payables" />
       </section>
-      <section aria-label="Finance work queues" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section aria-label="Finance work queues" className="finance-queue-grid">
         <QueueLink href="/finance/payables" label="Invoice control queue" detail="Match, verify, approve and post supplier invoices." count={data.unmatched_invoices} />
         <QueueLink href="/finance/payments" label="Payment control queue" detail="Review payment vouchers and posting actions." count={data.payments_awaiting_approval.count} />
         <QueueLink href="/finance/expenses" label="Staff cost queue" detail="Review expense claims and outstanding advances." count={formatMoney(data.outstanding_staff_advances, currency)} />

@@ -1,4 +1,8 @@
-import { AlertCircle, ArrowUpRight, Download } from 'lucide-react';
+import {
+  AlertCircle, ArrowUpRight, Banknote, BookOpenCheck, BriefcaseBusiness,
+  CircleDollarSign, Clock3, Download, FileCheck2, Landmark, ReceiptText,
+  ShieldCheck, SlidersHorizontal, WalletCards, type LucideIcon,
+} from 'lucide-react';
 import type React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { financeApi } from '@/modules/finance/api';
@@ -9,7 +13,9 @@ import { Badge, statusTone } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { WorkspaceTabs } from '@/components/common/workspace-hub';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatMoney } from '@/lib/utils';
+import { qk } from '@/api/queryKeys';
+import './finance-reference.css';
 
 export const financeTabs = [
   ['Overview', '/finance'], ['Budgets', '/finance/budgets'], ['Payables', '/finance/payables'],
@@ -46,18 +52,18 @@ export function FinancePage({ eyebrow, title, description, actions, children }: 
   ));
   return (
     <FinanceGate>
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
-        <section className="min-w-0 rounded-2xl border border-border/80 bg-white shadow-panel">
-          <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3">
-            <div>
-              <div className="flex items-center gap-2"><span className="h-6 w-1 rounded-full bg-primary" aria-hidden="true" /><div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-primary">{eyebrow}</p>
-              <h2 className="mt-0.5 text-lg font-black tracking-tight sm:mt-1 sm:text-xl">{title}</h2></div></div>
-              <p className="mt-0.5 max-w-3xl text-xs text-muted sm:mt-1 sm:text-sm">{description}</p>
+      <div className="finance-reference grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
+        <header className="finance-page-head min-w-0">
+          <div className="finance-page-titlebar flex flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0">
+              <p className="finance-page-eyebrow">{eyebrow}</p>
+              <h1>{title}</h1>
+              <p className="finance-page-description">{description}</p>
             </div>
-            {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+            {actions ? <div className="finance-page-actions flex flex-wrap items-center gap-2">{actions}</div> : null}
           </div>
-          <div className="px-2 pb-2 pt-1"><WorkspaceTabs links={enabledTabs.map(([label, href]) => ({ label, href }))} /></div>
-        </section>
+          <div className="finance-tabs"><WorkspaceTabs links={enabledTabs.map(([label, href]) => ({ label, href }))} /></div>
+        </header>
         {children}
       </div>
     </FinanceGate>
@@ -67,17 +73,85 @@ export function FinancePage({ eyebrow, title, description, actions, children }: 
 export function FinanceKpi({ label, value, detail, tone = 'primary', href }: {
   label: string; value: React.ReactNode; detail?: string; tone?: 'primary' | 'info' | 'warning' | 'critical'; href?: string;
 }) {
-  const colors = { primary: 'border-l-primary', info: 'border-l-info', warning: 'border-l-warning', critical: 'border-l-critical' };
+  const Icon = kpiIcon(label);
   const body = (
-    <Card className={cn('h-full border-l-[3px]', colors[tone])}>
-      <CardContent className="p-3.5 transition-shadow hover:shadow-lift">
-        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted">{label}</p>
-        <strong className="mt-1.5 block text-xl font-black tracking-tight">{value}</strong>
-        {detail ? <p className="mt-1 text-xs text-muted">{detail}</p> : null}
+    <Card className={cn('finance-kpi h-full', `finance-kpi-${tone}`)}>
+      <CardContent className="finance-kpi-content">
+        <div className="finance-kpi-icon" aria-hidden="true"><Icon /></div>
+        <div className="min-w-0">
+          <p className="finance-kpi-label">{label}</p>
+          <strong className="finance-kpi-value">{value}</strong>
+          {detail ? <p className="finance-kpi-detail">{detail}</p> : null}
+        </div>
       </CardContent>
     </Card>
   );
   return href ? <Link to={href} className="block h-full hover:brightness-[0.99]">{body}</Link> : body;
+}
+
+type FinanceSummaryView = 'budgets' | 'payables' | 'payments' | 'expenses' | 'month-end' | 'reports';
+
+export function FinanceWorkspaceSummary({ view }: { view: FinanceSummaryView }) {
+  const query = useQuery({ queryKey: qk.financeDashboard(), queryFn: () => financeApi.dashboard() });
+  if (!query.data) return null;
+  const data = query.data;
+  const currency = data.base_currency || 'UGX';
+  const summaries: Record<FinanceSummaryView, Array<Parameters<typeof FinanceKpi>[0]>> = {
+    budgets: [
+      { label: 'Approved budgets', value: formatMoney(data.approved_budgets, currency), detail: `${data.project_balances.length} controlled projects` },
+      { label: 'Open commitments', value: formatMoney(data.open_commitments, currency), detail: 'Approved, not yet expensed', tone: 'info' },
+      { label: 'Actual expenditure', value: formatMoney(data.actual_expenditure, currency), detail: 'Posted project costs' },
+      { label: 'Available balance', value: formatMoney(data.available_project_balances, currency), detail: 'Remaining approved capacity', tone: 'info' },
+    ],
+    payables: [
+      { label: 'Unpaid invoices', value: data.unpaid_invoices.count, detail: formatMoney(data.unpaid_invoices.base_amount, currency), tone: 'info' },
+      { label: 'Unmatched invoices', value: data.unmatched_invoices, detail: 'Need matching review', tone: data.unmatched_invoices ? 'warning' : 'primary' },
+      { label: 'Overdue invoices', value: data.overdue_invoices.count, detail: formatMoney(data.overdue_invoices.base_amount, currency), tone: data.overdue_invoices.count ? 'critical' : 'primary' },
+      { label: 'Pending approvals', value: data.pending_financial_approvals, detail: 'Across finance controls', tone: 'warning' },
+    ],
+    payments: [
+      { label: 'Payments awaiting approval', value: data.payments_awaiting_approval.count, detail: formatMoney(data.payments_awaiting_approval.base_amount, currency), tone: 'warning' },
+      { label: 'Unpaid invoices', value: data.unpaid_invoices.count, detail: formatMoney(data.unpaid_invoices.base_amount, currency), tone: 'info' },
+      { label: 'Outstanding advances', value: formatMoney(data.outstanding_staff_advances, currency), detail: 'Awaiting retirement or recovery', tone: 'warning' },
+      { label: 'Available project balance', value: formatMoney(data.available_project_balances, currency), detail: 'After costs and commitments' },
+    ],
+    expenses: [
+      { label: 'Actual expenditure', value: formatMoney(data.actual_expenditure, currency), detail: 'Posted project costs' },
+      { label: 'Outstanding advances', value: formatMoney(data.outstanding_staff_advances, currency), detail: 'Staff accountability balance', tone: 'warning' },
+      { label: 'Pending approvals', value: data.pending_financial_approvals, detail: 'Finance decisions required', tone: 'warning' },
+      { label: 'Available balance', value: formatMoney(data.available_project_balances, currency), detail: 'Remaining project capacity', tone: 'info' },
+    ],
+    'month-end': [
+      { label: 'Actual expenditure', value: formatMoney(data.actual_expenditure, currency), detail: `Position at ${data.as_of}` },
+      { label: 'Unpaid invoices', value: data.unpaid_invoices.count, detail: formatMoney(data.unpaid_invoices.base_amount, currency), tone: 'info' },
+      { label: 'Pending approvals', value: data.pending_financial_approvals, detail: 'Must be reviewed before close', tone: 'warning' },
+      { label: 'Overdue invoices', value: data.overdue_invoices.count, detail: formatMoney(data.overdue_invoices.base_amount, currency), tone: data.overdue_invoices.count ? 'critical' : 'primary' },
+    ],
+    reports: [
+      { label: 'Approved budgets', value: formatMoney(data.approved_budgets, currency), detail: 'Current approved envelope' },
+      { label: 'Actual expenditure', value: formatMoney(data.actual_expenditure, currency), detail: 'Posted cost position' },
+      { label: 'Open commitments', value: formatMoney(data.open_commitments, currency), detail: 'Approved future costs', tone: 'info' },
+      { label: 'Inventory value', value: formatMoney(data.inventory_value, currency), detail: 'Current stock valuation', tone: 'info' },
+    ],
+  };
+  return <section className="finance-primary-kpis" aria-label={`${view} summary`}>
+    {summaries[view].map((item) => <FinanceKpi key={item.label} {...item} />)}
+  </section>;
+}
+
+function kpiIcon(label: string): LucideIcon {
+  const normalized = label.toLowerCase();
+  if (normalized.includes('budget') || normalized.includes('balance')) return CircleDollarSign;
+  if (normalized.includes('commitment')) return BriefcaseBusiness;
+  if (normalized.includes('approval')) return FileCheck2;
+  if (normalized.includes('invoice') || normalized.includes('payable')) return ReceiptText;
+  if (normalized.includes('payment') || normalized.includes('cash')) return WalletCards;
+  if (normalized.includes('expense') || normalized.includes('actual')) return Banknote;
+  if (normalized.includes('overdue') || normalized.includes('pending')) return Clock3;
+  if (normalized.includes('audit') || normalized.includes('control')) return ShieldCheck;
+  if (normalized.includes('report')) return BookOpenCheck;
+  if (normalized.includes('setting')) return SlidersHorizontal;
+  return Landmark;
 }
 
 export function Status({ value }: { value: string }) {

@@ -12,7 +12,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { inputClass } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
 import { formatMoney } from '@/lib/utils';
-import { FinancePage } from './components';
+import { FinancePage, FinanceWorkspaceSummary } from './components';
 
 const reports = [
   ['budget-vs-actual', 'Budget versus actual'],
@@ -74,6 +74,7 @@ export function FinanceReportsPage() {
       description="Filter, drill down, and export company-scoped financial and project-cost information."
       actions={<><Button variant="secondary" onClick={() => void download('csv')}><Download className="h-4 w-4" />CSV</Button><Button variant="secondary" onClick={() => void download('pdf')}><FileText className="h-4 w-4" />PDF</Button><Button onClick={() => void download('xlsx')}><FileSpreadsheet className="h-4 w-4" />Excel</Button></>}
     >
+      <FinanceWorkspaceSummary view="reports" />
       <div className="grid min-w-0 gap-2 border border-border bg-white p-3 shadow-panel lg:grid-cols-[minmax(180px,1.3fr)_repeat(5,minmax(0,1fr))]">
         <select className={`${inputClass} min-w-0 w-full`} value={slug} onChange={(event) => { setSlug(event.target.value as ReportSlug); setPage(1); }}>
           {reports.map(([value, label]) => <option key={value} value={value}>{label}</option>)}

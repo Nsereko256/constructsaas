@@ -18,7 +18,7 @@ import { Field, inputClass } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
 import { useListState } from '@/hooks/use-list-state';
 import { formatDate, formatMoney } from '@/lib/utils';
-import { FinanceActivityTimeline, FinancePage, Status } from './components';
+import { FinanceActivityTimeline, FinancePage, FinanceWorkspaceSummary, Status } from './components';
 
 type ReasonAction = { invoice: SupplierInvoice; action: 'reject' | 'approve-exception' | 'reject-exception' | 'reverse' } | null;
 
@@ -55,6 +55,7 @@ export function FinancePayablesPage() {
     { id: 'actions', header: '', cell: ({ row }) => <InvoiceActions invoice={row.original} role={role} pendingAction={command.isPending && command.variables?.id === row.original.id ? command.variables.action : null} view={() => setSelected(row.original)} run={(action, body) => command.mutate({ id: row.original.id, action, body })} reason={(action) => setReasonAction({ invoice: row.original, action })} deleteDraft={() => { if (window.confirm(`Delete ${row.original.internal_number}? This draft will be removed and audited.`)) deleteDraft.mutate(row.original.id); }} /> },
   ];
   return <FinancePage eyebrow="Accounts payable" title="Supplier invoices" description="Capture supplier invoices, run three-way matching, authorize exceptions, and post verified liabilities." actions={can.prepareFinance(role) || role === 'admin' ? <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" />New invoice</Button> : undefined}>
+    <FinanceWorkspaceSummary view="payables" />
     {role === 'finance_viewer' ? <div className="border border-info/20 bg-info/5 px-3 py-2.5 text-sm text-foreground"><strong>Oversight mode.</strong> You can review invoice status, matching and balances here; preparation, approval and posting remain with the finance team.</div> : null}
     <div className="grid gap-2 border border-border bg-white p-2.5 shadow-panel"><div className="flex gap-2 overflow-x-auto pb-0.5"><Button size="sm" variant={!list.filters.status ? 'default' : 'ghost'} onClick={() => list.setFilter('status', '')}>All</Button>{[['DRAFT', 'Prepare'], ['SUBMITTED', 'Run match'], ['MATCH_EXCEPTION', 'Exceptions'], ['MATCHED', 'Approve'], ['APPROVED', 'Post'], ['PARTIALLY_PAID', 'Part-paid']].map(([value, label]) => <Button key={value} size="sm" variant={list.filters.status === value ? 'default' : 'ghost'} onClick={() => list.setFilter('status', value)}>{label}</Button>)}</div><div className="flex flex-col gap-2 sm:flex-row"><input className={`${inputClass} w-full sm:max-w-md`} value={list.search} onChange={(event) => list.setSearch(event.target.value)} placeholder="Invoice, supplier, PO or project" aria-label="Search supplier invoices" /><select className={`${inputClass} w-full sm:w-auto`} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}><option value="">All statuses</option>{['DRAFT','SUBMITTED','MATCHED','MATCH_EXCEPTION','VERIFIED','APPROVED','POSTED','PARTIALLY_PAID','PAID','REJECTED','REVERSED'].map((value) => <option key={value}>{value}</option>)}</select></div></div>
     <DataTable columns={columns} data={invoices.data?.results || []} mobileSummaryCells={2} emptyTitle={invoices.isLoading ? 'Loading invoices...' : 'No supplier invoices found'} />

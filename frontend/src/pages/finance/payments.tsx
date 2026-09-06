@@ -17,7 +17,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useToast } from '@/components/ui/toast';
 import { useListState } from '@/hooks/use-list-state';
 import { formatDate, formatMoney } from '@/lib/utils';
-import { FinancePage, Status } from './components';
+import { FinancePage, FinanceWorkspaceSummary, Status } from './components';
 
 type PaymentReason = { payment: Payment; action: 'reject' | 'reverse' } | null;
 
@@ -49,6 +49,7 @@ export function FinancePaymentsPage() {
     { id: 'actions', header: '', cell: ({ row }) => { const pendingAction = command.isPending && command.variables?.id === row.original.id ? command.variables.action : null; const pending = pendingAction !== null; return <div className="flex flex-wrap justify-end gap-1.5">{can.prepareFinance(role) && row.original.status === 'DRAFT' ? <><Button size="sm" variant="secondary" disabled={pending} onClick={() => setAllocating(row.original)}><Link2 className="h-3.5 w-3.5" />Allocate / partial pay</Button><Button size="sm" loading={pendingAction === 'submit'} loadingLabel="Submitting" disabled={pending} onClick={() => command.mutate({ id: row.original.id, action: 'submit' })}><Send className="h-3.5 w-3.5" />Submit</Button></> : null}{can.manageFinance(role) && row.original.status === 'SUBMITTED' ? <><Button size="sm" loading={pendingAction === 'approve'} loadingLabel="Approving" disabled={pending} onClick={() => command.mutate({ id: row.original.id, action: 'approve', body: { authorize_advance: false } })}><Check className="h-3.5 w-3.5" />Approve</Button><Button size="sm" variant="ghost" disabled={pending} onClick={() => setReason({ payment: row.original, action: 'reject' })}><X className="h-3.5 w-3.5" />Reject</Button></> : null}{can.manageFinance(role) && row.original.status === 'APPROVED' ? <Button size="sm" loading={pendingAction === 'post'} loadingLabel="Posting" disabled={pending} onClick={() => command.mutate({ id: row.original.id, action: 'post', body: { idempotency_key: idempotencyKey('payment-post') } })}><Upload className="h-3.5 w-3.5" />Post</Button> : null}{can.manageFinance(role) && row.original.status === 'POSTED' && !row.original.is_reversed ? <Button size="sm" variant="secondary" disabled={pending} onClick={() => setReason({ payment: row.original, action: 'reverse' })}>Reverse</Button> : null}</div>; } },
   ];
   return <FinancePage eyebrow="Cash control" title="Supplier payments" description="Prepare payment vouchers, allocate approved invoice balances, and enforce maker-checker posting." actions={can.prepareFinance(role) ? <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" />New payment</Button> : undefined}>
+    <FinanceWorkspaceSummary view="payments" />
     {can.manageFinance(role) ? <PaymentAttentionPanel
       submitted={submittedPayments.data?.results || []} submittedCount={submittedPayments.data?.count || 0}
       approved={approvedPayments.data?.results || []} approvedCount={approvedPayments.data?.count || 0}
