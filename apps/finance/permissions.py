@@ -34,9 +34,9 @@ class FinanceCompanyPermission(BasePermission):
             and user.company.is_active
         ):
             return False
-        if not soft_finance_enabled(user.company):
-            raise PermissionDenied('Soft Finance / Cost Control is disabled for this company.', code='feature_disabled')
         settings = ensure_finance_settings(user.company)
+        if not settings.soft_finance_enabled:
+            raise PermissionDenied('Soft Finance / Cost Control is disabled for this company.', code='feature_disabled')
         path = request.path.lower()
         if '/supplier-invoices/' in path and not settings.invoice_tracking_enabled:
             raise PermissionDenied('Invoice tracking is disabled for this company.', code='invoice_tracking_disabled')
@@ -117,7 +117,7 @@ class FinanceSettingsPermission(BasePermission):
             return False
         if request.method in SAFE_METHODS:
             return user.role in FINANCE_READ_ROLES
-        return user.role == User.ROLE_ADMIN
+        return user.role in {User.ROLE_FINANCE_MANAGER, User.ROLE_ADMIN}
 
     def has_object_permission(self, request, view, obj):
         return self.has_permission(request, view) and obj.company_id == request.user.company_id

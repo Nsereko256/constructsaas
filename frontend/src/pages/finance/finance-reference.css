@@ -39,6 +39,11 @@
   max-width: 820px;
 }
 .finance-page-actions button { min-height: 36px; }
+.finance-unavailable { display:flex; max-width:760px; align-items:flex-start; gap:14px; margin:18px auto; padding:20px; border:1px solid #efc26f; border-radius:10px; background:#fffaf0; box-shadow:0 1px 3px rgb(15 35 45 / 5%); }
+.finance-unavailable-icon { display:grid; width:42px; height:42px; flex:0 0 42px; place-items:center; border-radius:50%; background:#fff0d3; color:var(--finance-amber); }
+.finance-unavailable h1 { color:#1b2a31; font-size:16px; font-weight:850; }
+.finance-unavailable p { max-width:620px; margin-top:5px; color:#68757c; font-size:12px; line-height:1.5; }
+.finance-unavailable-action { display:inline-flex; align-items:center; gap:5px; margin-top:12px; color:var(--finance-teal-dark); font-size:11px; font-weight:800; }
 
 .finance-tabs nav {
   background: transparent !important;

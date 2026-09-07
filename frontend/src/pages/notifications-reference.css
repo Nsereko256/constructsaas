@@ -3,6 +3,8 @@
 .notifications-eyebrow { color:#6c777c; font-size:10px; font-weight:750; letter-spacing:.14em; text-transform:uppercase; }
 .notifications-titlebar h1 { margin-top:2px; font-size:26px; font-weight:800; letter-spacing:-.55px; line-height:1.1; }
 .notifications-titlebar p:last-child { margin-top:4px; color:#687278; font-size:12px; }
+.notifications-load-error { display:flex; align-items:center; gap:8px; padding:9px 12px; border:1px solid #efc26f; border-radius:7px; background:#fff8e9; color:#8b5a0b; font-size:10px; font-weight:650; }
+.notifications-side-empty { padding:14px 11px 16px; color:#7a858a; font-size:10px; }
 .notifications-title-actions { display:flex; align-items:center; gap:9px; }
 .notifications-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
 .notifications-kpi { display:flex; min-width:0; min-height:84px; align-items:center; gap:14px; padding:13px 15px; border:1px solid #e5e9ea; border-radius:8px; background:#fff; box-shadow:0 1px 3px #172c370a; }

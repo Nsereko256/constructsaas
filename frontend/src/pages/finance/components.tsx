@@ -27,16 +27,28 @@ export const financeTabs = [
 const stakeholderTabs = new Set(['/finance', '/finance/budgets', '/finance/payables', '/finance/reports']);
 
 export function FinanceGate({ children }: { children: React.ReactNode }) {
-  const { role, user } = useAuth();
+  const { role, user, retrySession } = useAuth();
   const location = useLocation();
   const canConfigureDisabledModule = role === 'admin' && location.pathname === '/finance/settings';
   const disabledCapability = (
     (location.pathname.startsWith('/finance/payables') && user?.invoice_tracking_enabled === false)
     || (location.pathname.startsWith('/finance/payments') && user?.payment_tracking_enabled === false)
   );
-  return ((can.viewFinance(role) && user?.soft_finance_enabled && !disabledCapability) || canConfigureDisabledModule)
-    ? children
-    : <Navigate to="/dashboard" replace />;
+  if (!can.viewFinance(role)) return <Navigate to="/dashboard" replace />;
+  if (canConfigureDisabledModule) return children;
+  if (user?.soft_finance_enabled === false) {
+    return <FinanceUnavailable title="Soft Finance is disabled" message="Your company has turned off Finance / Cost Control. An administrator can turn it back on from Finance settings without changing procurement or inventory records." action="Open Finance settings" to="/finance/settings" />;
+  }
+  if (disabledCapability) {
+    const capability = location.pathname.startsWith('/finance/payables') ? 'invoice tracking' : 'payment tracking';
+    return <FinanceUnavailable title={`${capability[0].toUpperCase()}${capability.slice(1)} is disabled`} message={`This workspace is unavailable because ${capability} is turned off for your company. An administrator can re-enable it from Finance settings.`} action="Review Finance settings" to="/finance/settings" />;
+  }
+  if (!user) return <FinanceUnavailable title="Finance access needs verification" message="We could not confirm your Finance settings yet. Retry the session check, then try this page again." action="Retry session check" onAction={retrySession} />;
+  return children;
+}
+
+function FinanceUnavailable({ title, message, action, to, onAction }: { title: string; message: string; action: string; to?: string; onAction?: () => void }) {
+  return <div className="finance-unavailable" role="status"><div className="finance-unavailable-icon"><ShieldCheck className="h-6 w-6" /></div><div className="min-w-0"><h1>{title}</h1><p>{message}</p>{to ? <Link className="finance-unavailable-action" to={to}>{action} <ArrowUpRight className="h-3.5 w-3.5" /></Link> : <button type="button" className="finance-unavailable-action" onClick={onAction}>{action}</button>}</div></div>;
 }
 
 export function FinancePage({ eyebrow, title, description, actions, children }: {

@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '@/auth/protected-route';
 import { AppShell } from '@/components/layout/app-shell';
 import { FinanceGate } from '@/pages/finance/components';
+import { DeferredWorkspacePage } from '@/pages/deferred-workspace';
 
 const DashboardPage = lazy(() => import('@/pages/dashboard').then((module) => ({ default: module.DashboardPage })));
 const DeliveriesPage = lazy(() => import('@/pages/deliveries').then((module) => ({ default: module.DeliveriesPage })));
@@ -62,7 +63,7 @@ export function App() {
             <Route path="/projects/sites" element={<ProjectSitesPage />} />
             <Route path="/projects/:projectId/progress" element={<ProjectProgressPage />} />
             <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
-            <Route path="/work-orders/*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/work-orders/*" element={<DeferredWorkspacePage kind="work-orders" />} />
             <Route path="/procurement" element={<ProcurementPage />} />
             <Route path="/procurement/requests" element={<ProcurementRequestsPage />} />
             <Route path="/procurement/rfqs" element={<Navigate to="/procurement" replace />} />
@@ -75,7 +76,7 @@ export function App() {
             <Route path="/inventory/site-custody" element={<SiteCustodyPage />} />
             <Route path="/inventory/bin-locations" element={<BinLocationsPage />} />
             <Route path="/suppliers" element={<SuppliersPage />} />
-            <Route path="/messages" element={<Navigate to="/notifications" replace />} />
+            <Route path="/messages" element={<DeferredWorkspacePage kind="messages" />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/team" element={<TeamPage />} />
