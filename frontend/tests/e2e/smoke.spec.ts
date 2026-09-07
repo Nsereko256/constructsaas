@@ -36,6 +36,25 @@ test('seeded admin can follow the operational workflow surfaces', async ({ page 
     await expect(page.locator('body')).not.toContainText('Cannot read properties');
   }
 
+  const registers = [
+    ['/procurement/requests', '.pr-table'],
+    ['/procurement/purchase-orders', '.po-table'],
+    ['/procurement/deliveries', '.del-table'],
+    ['/procurement/grns', '.grn-table'],
+  ] as const;
+  for (const [path, selector] of registers) {
+    await page.goto(path);
+    const table = page.locator(selector);
+    await expect(table.locator('th').nth(1)).toHaveText(/next action/i);
+    await expect(table.locator('tbody tr').first().locator('td').nth(1)).toBeVisible();
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const [path, selector] of registers) {
+    await page.goto(path);
+    await expect(page.locator(`${selector} tbody tr`).first().locator('td').nth(1)).toBeVisible();
+  }
+
   await page.goto('/inventory');
   await expect(page.getByRole('link', { name: /issue stock/i })).toBeVisible();
 
