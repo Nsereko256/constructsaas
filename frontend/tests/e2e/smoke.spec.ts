@@ -8,6 +8,7 @@ test('login page renders the ConstructSaaS shell', async ({ page }) => {
 });
 
 test('seeded admin can follow the operational workflow surfaces', async ({ page }) => {
+  test.setTimeout(60_000);
   const username = process.env.E2E_USER || 'demo_admin';
   const password = process.env.E2E_PASSWORD || 'Demo123!';
   await page.goto('/login');
@@ -48,6 +49,19 @@ test('seeded admin can follow the operational workflow surfaces', async ({ page 
     await expect(table.locator('th').nth(1)).toHaveText(/next action/i);
     await expect(table.locator('tbody tr').first().locator('td').nth(1)).toBeVisible();
   }
+
+  await page.setViewportSize({ width: 1280, height: 844 });
+  await page.goto('/procurement/requests');
+  await page.locator('.pr-table tbody tr').first().getByRole('link').first().click();
+  await expect(page).toHaveURL(/\/procurement\/requests\/\d+\/$/);
+  await expect(page.getByRole('button', { name: /back to purchase requests/i })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/procurement\/requests$/);
+
+  await page.goto('/procurement/purchase-orders');
+  await page.locator('.po-table tbody tr').first().getByRole('link').first().click();
+  await expect(page).toHaveURL(/\/procurement\/purchase-orders\/\d+\/$/);
+  await expect(page.getByRole('button', { name: /back to purchase orders/i })).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   for (const [path, selector] of registers) {

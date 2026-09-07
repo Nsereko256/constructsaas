@@ -1181,6 +1181,19 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
         return instance
 
 
+class PurchaseRequestDetailSerializer(PurchaseRequestSerializer):
+    """Retrieve-only PR view with relationship identifiers for deep-link pages."""
+
+    related_purchase_order_ids = serializers.SerializerMethodField()
+
+    class Meta(PurchaseRequestSerializer.Meta):
+        fields = [*PurchaseRequestSerializer.Meta.fields, 'related_purchase_order_ids']
+        read_only_fields = fields
+
+    def get_related_purchase_order_ids(self, obj):
+        return [order.pk for order in obj.purchase_orders.all()]
+
+
 class PurchaseRequestCorrectionSerializer(PurchaseRequestSerializer):
     correction_summary = serializers.CharField(required=True, allow_blank=False, trim_whitespace=True, write_only=True)
 
@@ -1470,6 +1483,27 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             for item_data in items_data:
                 PurchaseOrderItem.objects.create(purchase_order=instance, **item_data)
         return instance
+
+
+class PurchaseOrderDetailSerializer(PurchaseOrderSerializer):
+    """Retrieve-only PO view with source, supplier and receipt context."""
+
+    source_request_justification = serializers.CharField(source='purchase_request.justification', read_only=True)
+    supplier_contact = serializers.CharField(source='supplier.contact_person', read_only=True)
+    supplier_phone = serializers.CharField(source='supplier.phone', read_only=True)
+    supplier_email = serializers.CharField(source='supplier.email', read_only=True)
+    receipt_ids = serializers.SerializerMethodField()
+
+    class Meta(PurchaseOrderSerializer.Meta):
+        fields = [
+            *PurchaseOrderSerializer.Meta.fields,
+            'source_request_justification', 'supplier_contact', 'supplier_phone',
+            'supplier_email', 'receipt_ids',
+        ]
+        read_only_fields = fields
+
+    def get_receipt_ids(self, obj):
+        return [receipt.pk for receipt in obj.goods_received_notes.all()]
 
 
 class GoodsReceivedNoteItemSerializer(serializers.ModelSerializer):

@@ -136,6 +136,7 @@ export const api = {
   downloadWorkOrderDetail: (id: number, kind: 'pdf' | 'xlsx', number: string) => apiDownload(`/api/work-orders/${id}/download/${kind}/`, `${number}.${kind}`),
   downloadWorkOrderProgress: (kind: 'pdf' | 'xlsx', params = {}) => apiDownload(`/api/work-order-sites/download/${kind}/${pageParams(params)}`, `work-order-site-progress.${kind}`),
   purchaseRequest: (id: number) => apiRequest<PurchaseRequest>(`/api/purchase-requests/${id}/`),
+  purchaseRequestActivity: (id: number) => apiRequest<import('./types').RecordActivity[]>(`/api/purchase-requests/${id}/activity/`),
   createPurchaseRequest: (body: unknown) => apiRequest<PurchaseRequest>('/api/purchase-requests/', { method: 'POST', body }),
   updatePurchaseRequest: (id: number, body: unknown) => apiRequest<PurchaseRequest>(`/api/purchase-requests/${id}/`, { method: 'PATCH', body }),
   deletePurchaseRequest: (id: number) => apiRequest<void>(`/api/purchase-requests/${id}/`, { method: 'DELETE' }),
@@ -162,6 +163,7 @@ export const api = {
   purchaseOrders: (params = {}) => apiRequest<Paginated<PurchaseOrder>>(`/api/purchase-orders/${pageParams(params)}`),
   downloadPurchaseOrders: (kind: 'pdf' | 'xlsx', params = {}) => apiDownload(`/api/purchase-orders/download/${kind}/${pageParams(params)}`, `purchase-order-register.${kind}`),
   purchaseOrder: (id: number) => apiRequest<PurchaseOrder>(`/api/purchase-orders/${id}/`),
+  purchaseOrderActivity: (id: number) => apiRequest<import('./types').RecordActivity[]>(`/api/purchase-orders/${id}/activity/`),
   updatePurchaseOrder: (id: number, body: unknown) => apiRequest<PurchaseOrder>(`/api/purchase-orders/${id}/`, { method: 'PATCH', body }),
   deletePurchaseOrder: (id: number) => apiRequest<void>(`/api/purchase-orders/${id}/`, { method: 'DELETE' }),
   purchaseOrderThreeWaySummary: (id: number) => apiRequest<PurchaseOrderThreeWaySummary>(`/api/purchase-orders/${id}/three-way-summary/`),
@@ -180,6 +182,8 @@ export const api = {
   receiveSupplierReplacement: (id: number, body: Record<string, unknown>) => apiRequest<GoodsReceivedNote>(`/api/supplier-claims/${id}/receive-replacement/`, { method: 'POST', body }),
   downloadSupplierClaims: (kind: 'pdf' | 'xlsx', params = {}) => apiDownload(`/api/supplier-claims/download/${kind}/${pageParams(params)}`, `supplier-claims-register.${kind}`),
   approvePurchaseOrder: (id: number) => apiRequest<PurchaseOrder>(`/api/purchase-orders/${id}/approve/`, { method: 'POST' }),
+  submitPurchaseOrderToFinance: (id: number, comments: string) =>
+    apiRequest<PurchaseOrder>(`/api/purchase-orders/${id}/submit-to-finance/`, { method: 'POST', body: { comments } }),
   cancelPurchaseOrder: (id: number, comments: string) =>
     apiRequest<PurchaseOrder>(`/api/purchase-orders/${id}/cancel/`, { method: 'POST', body: { comments } }),
   purchaseOrderAmendments: (id: number) => apiRequest<PurchaseOrderAmendment[]>(`/api/purchase-orders/${id}/amendments/`),

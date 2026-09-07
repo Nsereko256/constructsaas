@@ -205,6 +205,8 @@ export type PurchaseRequestItem = {
   notes: string;
 };
 
+export type RecordActivity = { id: number; action: string; message: string; actor: string; created_at: string };
+
 export type PurchaseRequest = {
   id: number;
   project: number | null;
@@ -287,9 +289,12 @@ export type PurchaseOrder = {
     id: number;
     material: number;
     material_name: string;
+    material_code: string;
+    unit: string;
     quantity: string;
     unit_price: string;
     line_total: string;
+    notes: string;
   }>;
 };
 

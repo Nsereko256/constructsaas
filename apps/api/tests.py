@@ -1399,6 +1399,25 @@ class ApiFoundationTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_procurement_detail_retrieves_source_and_related_record_context(self):
+        self.purchase_request.justification = 'Concrete is required for the foundation pour.'
+        self.purchase_request.save(update_fields=['justification', 'updated_at'])
+        purchase_order = PurchaseOrder.objects.get(purchase_request=self.purchase_request)
+        self.client.force_login(self.user)
+
+        request_response = self.client.get(f'/api/purchase-requests/{self.purchase_request.pk}/')
+        order_response = self.client.get(f'/api/purchase-orders/{purchase_order.pk}/')
+        request_activity_response = self.client.get(f'/api/purchase-requests/{self.purchase_request.pk}/activity/')
+        order_activity_response = self.client.get(f'/api/purchase-orders/{purchase_order.pk}/activity/')
+
+        self.assertEqual(request_response.status_code, 200)
+        self.assertIn(purchase_order.pk, request_response.data['related_purchase_order_ids'])
+        self.assertEqual(order_response.status_code, 200)
+        self.assertEqual(order_response.data['source_request_justification'], self.purchase_request.justification)
+        self.assertIn('receipt_ids', order_response.data)
+        self.assertEqual(request_activity_response.status_code, 200)
+        self.assertEqual(order_activity_response.status_code, 200)
+
     def test_purchase_request_exposes_stock_issue_availability(self):
         PurchaseOrder.objects.filter(purchase_request=self.purchase_request).delete()
         self.purchase_request.status = PurchaseRequest.STATUS_APPROVED
@@ -1542,6 +1561,39 @@ class ApiFoundationTests(TestCase):
         item = purchase_order.items.first()
         self.assertEqual(item.quantity, PurchaseRequestItem.objects.get(purchase_request=self.purchase_request).quantity)
         self.assertEqual(item.unit_price, self.material.unit_price)
+
+    def test_procurement_officer_can_submit_pending_purchase_order_to_finance(self):
+        finance_officer = User.objects.create_user(
+            username='api_finance_handoff',
+            password='password',
+            company=self.company,
+            role=User.ROLE_FINANCE_OFFICER,
+        )
+        PurchaseOrder.objects.filter(purchase_request=self.purchase_request).delete()
+        purchase_order = PurchaseOrder.objects.create(
+            company=self.company,
+            purchase_request=self.purchase_request,
+            project=self.project,
+            number='PO-FINANCE-HANDOFF-001',
+            supplier=self.supplier,
+            supplier_name=self.supplier.name,
+            status=PurchaseOrder.STATUS_PENDING,
+        )
+        self.client.force_login(self.procurement_officer)
+
+        response = self.client.post(
+            f'/api/purchase-orders/{purchase_order.pk}/submit-to-finance/',
+            {'comments': 'Please review the supplier quotation and budget clearance.'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=finance_officer,
+                title=f'Finance review requested: {purchase_order.number}',
+            ).exists()
+        )
 
     def test_create_purchase_order_from_pr_requires_approved_pr(self):
         PurchaseOrder.objects.filter(purchase_request=self.purchase_request).delete()

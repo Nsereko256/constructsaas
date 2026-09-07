@@ -20,6 +20,8 @@ const NotificationsPage = lazy(() => import('@/pages/notifications').then((modul
 const ProcurementRequestsPage = lazy(() => import('@/pages/procurement-requests').then((module) => ({ default: module.ProcurementRequestsPage })));
 const ProcurementPage = lazy(() => import('@/pages/procurement').then((module) => ({ default: module.ProcurementPage })));
 const PurchaseOrdersPage = lazy(() => import('@/pages/purchase-orders').then((module) => ({ default: module.PurchaseOrdersPage })));
+const PurchaseRequestDetailPage = lazy(() => import('@/pages/procurement-record-detail').then((module) => ({ default: module.PurchaseRequestDetailPage })));
+const PurchaseOrderDetailPage = lazy(() => import('@/pages/procurement-record-detail').then((module) => ({ default: module.PurchaseOrderDetailPage })));
 const ProjectDetailPage = lazy(() => import('@/pages/project-detail').then((module) => ({ default: module.ProjectDetailPage })));
 const ProjectsPage = lazy(() => import('@/pages/projects').then((module) => ({ default: module.ProjectsPage })));
 const ProjectSitesPage = lazy(() => import('@/pages/project-sites').then((module) => ({ default: module.ProjectSitesPage })));
@@ -65,8 +67,10 @@ export function App() {
             <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
             <Route path="/work-orders/*" element={<DeferredWorkspacePage kind="work-orders" />} />
             <Route path="/procurement" element={<ProcurementPage />} />
+            <Route path="/procurement/requests/:requestId" element={<PurchaseRequestDetailPage />} />
             <Route path="/procurement/requests" element={<ProcurementRequestsPage />} />
             <Route path="/procurement/rfqs" element={<Navigate to="/procurement" replace />} />
+            <Route path="/procurement/purchase-orders/:orderId" element={<PurchaseOrderDetailPage />} />
             <Route path="/procurement/purchase-orders" element={<PurchaseOrdersPage />} />
             <Route path="/procurement/grns" element={<GoodsReceivedNotesPage />} />
             <Route path="/procurement/supplier-claims" element={<Navigate to="/procurement/grns" replace />} />

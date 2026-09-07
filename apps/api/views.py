@@ -59,7 +59,7 @@ from apps.procurement.selectors import purchase_orders_for_user, purchase_reques
 from apps.finance.services import ensure_budget_clearance
 from apps.finance import budget_services
 from apps.finance.configuration_services import record_finance_audit_event
-from apps.finance.models import BudgetApproval, ProjectBudget, SupplierInvoice
+from apps.finance.models import BudgetApproval, FinanceAuditEvent, ProjectBudget, SupplierInvoice
 from apps.pdf_exports import pdf_table_response
 from apps.finance.report_exports import xlsx_response
 from apps.finance.permissions import FinanceAdminPermission, FinanceCompanyPermission, FinanceReviewPermission, FinanceSubmissionPermission
@@ -121,8 +121,10 @@ from .serializers import (
     ProjectStaffAssignmentSerializer,
     ApprovalDelegationSerializer,
     PurchaseOrderSerializer,
+    PurchaseOrderDetailSerializer,
     PurchaseOrderReceiptRequestSerializer,
     PurchaseRequestSerializer,
+    PurchaseRequestDetailSerializer,
     PurchaseRequestCorrectionSerializer,
     RejectPurchaseRequestSerializer,
     StockMovementSerializer,
@@ -1148,6 +1150,23 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
     ordering_fields = ['number', 'priority', 'status', 'created_at', 'updated_at']
     ordering = ['-created_at']
 
+    def get_serializer_class(self):
+        return PurchaseRequestDetailSerializer if self.action == 'retrieve' else PurchaseRequestSerializer
+
+    @action(detail=True, methods=['get'])
+    def activity(self, request, pk=None):
+        purchase_request = self.get_object()
+        events = FinanceAuditEvent.objects.filter(
+            company=purchase_request.company,
+            object_type='PurchaseRequest',
+            object_id=str(purchase_request.pk),
+        ).select_related('actor')[:100]
+        return Response([{
+            'id': event.pk, 'action': event.action, 'message': event.message,
+            'actor': event.actor.get_full_name() or event.actor.username if event.actor else 'System',
+            'created_at': event.created_at,
+        } for event in events])
+
     def get_permissions(self):
         if self.action in {'finance_approve', 'finance_reject', 'finance_return', 'finance_hold'}:
             permission_classes = [FinanceReviewPermission]
@@ -1658,6 +1677,23 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
     ordering_fields = ['number', 'status', 'created_at', 'updated_at']
     ordering = ['-created_at']
 
+    def get_serializer_class(self):
+        return PurchaseOrderDetailSerializer if self.action == 'retrieve' else PurchaseOrderSerializer
+
+    @action(detail=True, methods=['get'])
+    def activity(self, request, pk=None):
+        purchase_order = self.get_object()
+        events = FinanceAuditEvent.objects.filter(
+            company=purchase_order.company,
+            object_type='PurchaseOrder',
+            object_id=str(purchase_order.pk),
+        ).select_related('actor')[:100]
+        return Response([{
+            'id': event.pk, 'action': event.action, 'message': event.message,
+            'actor': event.actor.get_full_name() or event.actor.username if event.actor else 'System',
+            'created_at': event.created_at,
+        } for event in events])
+
     def get_permissions(self):
         if self.action in {'list', 'retrieve', 'receive', 'three_way_summary', 'amendments', 'download'}:
             permission_classes = [IsAuthenticatedCompanyUser]
@@ -1752,6 +1788,45 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
             purchase_order=self.get_object(), user=request.user,
         )
         transaction.on_commit(lambda: notify_po_approved(purchase_order))
+        transaction.on_commit(lambda: push_dashboard_update(purchase_order.company))
+        return Response(self.get_serializer(purchase_order).data)
+
+    @extend_schema(tags=['Procurement'], request=RequiredCommentsSerializer, responses=PurchaseOrderSerializer)
+    @action(detail=True, methods=['post'], url_path='submit-to-finance')
+    def submit_to_finance(self, request, pk=None):
+        """Make Procurement's Finance handoff explicit and auditable."""
+        purchase_order = self.get_object()
+        if purchase_order.status not in {PurchaseOrder.STATUS_DRAFT, PurchaseOrder.STATUS_PENDING}:
+            return Response(
+                {'status': 'Only draft or pending purchase orders can be submitted to Finance.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        payload = RequiredCommentsSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        comments = payload.validated_data['comments']
+        record_finance_audit_event(
+            company=purchase_order.company,
+            actor=request.user,
+            action='purchase_order.submitted_to_finance',
+            object_type='PurchaseOrder',
+            object_id=purchase_order.pk,
+            message=comments,
+        )
+        purchase_request_number = purchase_order.purchase_request.number if purchase_order.purchase_request_id else 'the linked purchase request'
+        recipients = User.objects.filter(
+            company=purchase_order.company,
+            role__in=[User.ROLE_FINANCE_OFFICER, User.ROLE_FINANCE_MANAGER, User.ROLE_ADMIN],
+            is_active=True,
+        )
+        for recipient in recipients:
+            send_notification(
+                recipient,
+                Notification.TYPE_PO_CREATED,
+                Notification.LEVEL_WARNING,
+                f'Finance review requested: {purchase_order.number}',
+                f'Procurement submitted {purchase_order.number} from {purchase_request_number} for Finance review. Note: {comments}',
+                f'/procurement/requests?search={purchase_request_number}',
+            )
         transaction.on_commit(lambda: push_dashboard_update(purchase_order.company))
         return Response(self.get_serializer(purchase_order).data)
 
