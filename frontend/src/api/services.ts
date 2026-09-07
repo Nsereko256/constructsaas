@@ -1,4 +1,4 @@
-import { apiDownload, apiRequest, pageParams, setTokens, clearTokens, getTokens } from './client';
+import { apiDownload, apiRequest, apiRequestWithoutSiteScope, pageParams, setTokens, clearTokens, getTokens } from './client';
 import type {
   DashboardData,
   GoodsReceivedNote,
@@ -85,6 +85,7 @@ export const api = {
   saveProject: (body: Partial<Project>, id?: number) =>
     apiRequest<Project>(id ? `/api/projects/${id}/` : '/api/projects/', { method: id ? 'PATCH' : 'POST', body }),
   materials: (params = {}) => apiRequest<Paginated<Material>>(`/api/materials/${pageParams(params)}`),
+  materialsCatalog: (params = {}) => apiRequestWithoutSiteScope<Paginated<Material>>(`/api/materials/${pageParams(params)}`),
   saveMaterial: (body: Partial<Material>, id?: number) =>
     apiRequest<Material>(id ? `/api/materials/${id}/` : '/api/materials/', { method: id ? 'PATCH' : 'POST', body }),
   deleteMaterial: (id: number) => apiRequest<void>(`/api/materials/${id}/`, { method: 'DELETE' }),

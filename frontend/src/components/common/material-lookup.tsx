@@ -23,7 +23,7 @@ export function MaterialLookup({
   const deferredLabel = useDeferredValue(label);
   const materials = useQuery({
     queryKey: qk.materials({ lookup: deferredLabel }),
-    queryFn: () => api.materials({
+    queryFn: () => api.materialsCatalog({
       search: deferredLabel,
       is_active: true,
       page_size: 20,

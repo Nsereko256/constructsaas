@@ -101,8 +101,8 @@ async function refreshAccessToken() {
   try { return await refreshPromise; } finally { refreshPromise = null; }
 }
 
-export async function apiRequest<T>(path: string, init: ApiRequestInit = {}, retry = true): Promise<T> {
-  const requestPath = (init.method || 'GET').toUpperCase() === 'GET' ? scopedPath(path) : path;
+export async function apiRequest<T>(path: string, init: ApiRequestInit = {}, retry = true, applySiteScope = true): Promise<T> {
+  const requestPath = (init.method || 'GET').toUpperCase() === 'GET' && applySiteScope ? scopedPath(path) : path;
   const tokens = getTokens();
   const headers = new Headers(init.headers);
   headers.set('Accept', 'application/json');
@@ -131,7 +131,7 @@ export async function apiRequest<T>(path: string, init: ApiRequestInit = {}, ret
 
   if (response.status === 401 && retry) {
     const nextAccess = await refreshAccessToken();
-    if (nextAccess) return apiRequest<T>(path, init, false);
+    if (nextAccess) return apiRequest<T>(path, init, false, applySiteScope);
   }
 
   const text = await response.text();
@@ -151,6 +151,10 @@ export async function apiRequest<T>(path: string, init: ApiRequestInit = {}, ret
   if (!response.ok) throw new ApiError(message, response.status, payload);
   if ((init.method || 'GET').toUpperCase() === 'GET') void cacheResponse(offlineScope(tokens?.access), requestPath, payload);
   return payload as T;
+}
+
+export function apiRequestWithoutSiteScope<T>(path: string, init: ApiRequestInit = {}) {
+  return apiRequest<T>(path, init, true, false);
 }
 
 export function pageParams(params: Record<string, string | number | boolean | null | undefined>) {
