@@ -21,7 +21,7 @@ const ProcurementRequestsPage = lazy(() => import('@/pages/procurement-requests'
 const PurchaseRequestDetailPage = lazy(() => import('@/pages/purchase-request-detail').then((module) => ({ default: module.PurchaseRequestDetailPage })));
 const ProcurementPage = lazy(() => import('@/pages/procurement').then((module) => ({ default: module.ProcurementPage })));
 const PurchaseOrdersPage = lazy(() => import('@/pages/purchase-orders').then((module) => ({ default: module.PurchaseOrdersPage })));
-const PurchaseOrderDetailPage = lazy(() => import('@/pages/procurement-record-detail').then((module) => ({ default: module.PurchaseOrderDetailPage })));
+const PurchaseOrderDetailPage = lazy(() => import('@/pages/purchase-order-detail').then((module) => ({ default: module.PurchaseOrderDetailPage })));
 const ProjectDetailPage = lazy(() => import('@/pages/project-detail').then((module) => ({ default: module.ProjectDetailPage })));
 const ProjectsPage = lazy(() => import('@/pages/projects').then((module) => ({ default: module.ProjectsPage })));
 const ProjectSitesPage = lazy(() => import('@/pages/project-sites').then((module) => ({ default: module.ProjectSitesPage })));
