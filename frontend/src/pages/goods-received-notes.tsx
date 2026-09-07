@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Box, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Download, EllipsisVertical, Eye, FileText, PackageCheck, Search, Truck } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '@/modules/procurement/api';
 import type { GoodsReceivedNote, PurchaseOrder } from '@/modules/procurement/types';
 import { qk } from '@/api/queryKeys';
@@ -23,16 +23,22 @@ const EMPTY_ORDERS: PurchaseOrder[] = [];
 
 export function GoodsReceivedNotesPage() {
   const { role } = useAuth();
+  const [searchParams] = useSearchParams();
+  const queryString = searchParams.toString();
   const toast = useToast();
   const [selected, setSelected] = useState<GoodsReceivedNote | null>(null);
   const [queue, setQueue] = useState<ReceiptQueue>('all');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
   const [destination, setDestination] = useState('');
   const [status, setStatus] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [sort, setSort] = useState<'newest' | 'oldest'>('newest');
   const [page, setPage] = useState(1);
+  useEffect(() => {
+    setSearch(searchParams.get('search') || '');
+    setPage(1);
+  }, [queryString, searchParams]);
   const notes = useQuery({ queryKey: qk.goodsReceivedNotes({ page_size: 100 }), queryFn: () => api.goodsReceivedNotes({ page_size: 100 }) });
   const orders = useQuery({ queryKey: qk.purchaseOrders({ page_size: 100 }), queryFn: () => api.purchaseOrders({ page_size: 100 }) });
 

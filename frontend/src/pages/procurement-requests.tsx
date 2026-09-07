@@ -27,10 +27,19 @@ export function ProcurementRequestsPage() {
   const { role, user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const queryString = searchParams.toString();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const list = useListState({ status: '', priority: '', project: '', action_queue: searchParams.get('action_queue') || '' });
+  const list = useListState(
+    { status: '', priority: '', project: '', action_queue: '' },
+    {
+      syncKey: queryString,
+      initialSearch: searchParams.get('search') || '',
+      initialFilters: { action_queue: searchParams.get('action_queue') || '' },
+    },
+  );
   const [queue, setQueue] = useState<'all' | 'mine' | 'awaiting' | 'stock' | 'completed'>(() => searchParams.get('action_queue') ? 'mine' : 'all');
+  useEffect(() => { setQueue(searchParams.get('action_queue') ? 'mine' : 'all'); }, [queryString, searchParams]);
   const [sort, setSort] = useState<'action' | 'newest'>('action');
   const [open, setOpen] = useState(() => searchParams.get('create') === '1' && can.submitPr(role));
   const [rejecting, setRejecting] = useState<PurchaseRequest | null>(null);

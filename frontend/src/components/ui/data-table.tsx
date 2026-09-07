@@ -4,6 +4,7 @@ import {
   useReactTable,
   type ColumnDef,
 } from '@tanstack/react-table';
+import type React from 'react';
 import { cn } from '@/lib/utils';
 import { EmptyState } from './empty-state';
 
@@ -11,6 +12,8 @@ export function DataTable<T>({
   columns,
   data,
   emptyTitle = 'No records found',
+  emptyMessage,
+  emptyAction,
   mobileSummaryCells = 3,
   mobileSummaryStacked = false,
   mobileCardClassName,
@@ -18,6 +21,8 @@ export function DataTable<T>({
   columns: ColumnDef<T>[];
   data: T[];
   emptyTitle?: string;
+  emptyMessage?: string;
+  emptyAction?: React.ReactNode;
   /** Number of leading columns shown before the compact mobile detail disclosure. */
   mobileSummaryCells?: number;
   /** Stack the leading summary cells on narrow screens when one cell contains long status text. */
@@ -26,7 +31,7 @@ export function DataTable<T>({
 }) {
   const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel() });
 
-  if (!data.length) return <EmptyState title={emptyTitle} />;
+  if (!data.length) return <EmptyState title={emptyTitle} message={emptyMessage} action={emptyAction} />;
 
   return (
     <div className="card-surface overflow-hidden">

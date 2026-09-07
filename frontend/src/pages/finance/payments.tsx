@@ -1,7 +1,8 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, ChevronRight, Link2, Plus, Send, Upload, X } from 'lucide-react';
-import { FormEvent, useState, type ReactNode } from 'react';
+import { FormEvent, useEffect, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { financeApi, idempotencyKey } from '@/modules/finance/api';
 import type { Payment } from '@/modules/finance/types';
 import { qk } from '@/api/queryKeys';
@@ -23,8 +24,14 @@ type PaymentReason = { payment: Payment; action: 'reject' | 'reverse' } | null;
 
 export function FinancePaymentsPage() {
   const { role } = useAuth();
-  const list = useListState({ status: '', supplier: '', method: '' });
-  const [creating, setCreating] = useState(false);
+  const [searchParams] = useSearchParams();
+  const queryString = searchParams.toString();
+  const initialInvoiceId = Number(searchParams.get('invoice') || 0);
+  const list = useListState(
+    { status: '', supplier: '', method: '' },
+    { syncKey: queryString, initialSearch: searchParams.get('search') || '' },
+  );
+  const [creating, setCreating] = useState(Boolean(initialInvoiceId));
   const [allocating, setAllocating] = useState<Payment | null>(null);
   const [reason, setReason] = useState<PaymentReason>(null);
   const client = useQueryClient();
@@ -61,8 +68,14 @@ export function FinancePaymentsPage() {
     /> : null}
     {can.prepareFinance(role) && !can.manageFinance(role) ? <DraftAttentionPanel drafts={draftPayments.data?.results || []} count={draftPayments.data?.count || 0} onShow={() => list.setFilter('status', 'DRAFT')} /> : null}
     <div className="flex flex-wrap gap-2 border border-border bg-white p-3 shadow-panel"><input className={inputClass} value={list.search} onChange={(event) => list.setSearch(event.target.value)} placeholder="Voucher, supplier or reference" aria-label="Search payments" /><select className={inputClass} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}><option value="">All statuses</option>{['DRAFT','SUBMITTED','APPROVED','POSTED','REJECTED','REVERSED'].map((value) => <option key={value}>{value}</option>)}</select><select className={inputClass} value={list.filters.method} onChange={(event) => list.setFilter('method', event.target.value)}><option value="">All methods</option><option>BANK</option><option>MOBILE_MONEY</option><option>CHEQUE</option><option>CASH</option></select></div>
-    <DataTable columns={columns} data={payments.data?.results || []} emptyTitle={payments.isLoading ? 'Loading payments...' : 'No supplier payments found'} /><Pagination page={list.page} setPage={list.setPage} data={payments.data} />
-    <PaymentModal open={creating} onClose={() => setCreating(false)} /><AllocationModal payment={allocating} onClose={() => setAllocating(null)} /><ReasonModal state={reason} pending={command.isPending && command.variables?.id === reason?.payment.id} onClose={() => setReason(null)} onConfirm={(text) => reason && command.mutate({ id: reason.payment.id, action: reason.action, body: reason.action === 'reverse' ? { reason: text, idempotency_key: idempotencyKey('payment-reverse') } : { reason: text } })} />
+    <DataTable
+      columns={columns}
+      data={payments.data?.results || []}
+      emptyTitle={payments.isLoading ? 'Loading payments...' : 'No supplier payments found'}
+      emptyMessage={payments.isLoading ? undefined : 'Prepare a payment voucher, then allocate it to a posted supplier invoice before approval.'}
+      emptyAction={can.prepareFinance(role) ? <Button size="sm" onClick={() => setCreating(true)}><Plus className="h-4 w-4" />Prepare payment</Button> : undefined}
+    /><Pagination page={list.page} setPage={list.setPage} data={payments.data} />
+    <PaymentModal open={creating} invoiceId={initialInvoiceId || undefined} onClose={() => setCreating(false)} /><AllocationModal payment={allocating} onClose={() => setAllocating(null)} /><ReasonModal state={reason} pending={command.isPending && command.variables?.id === reason?.payment.id} onClose={() => setReason(null)} onConfirm={(text) => reason && command.mutate({ id: reason.payment.id, action: reason.action, body: reason.action === 'reverse' ? { reason: text, idempotency_key: idempotencyKey('payment-reverse') } : { reason: text } })} />
   </FinancePage>;
 }
 
@@ -84,14 +97,33 @@ function DraftAttentionPanel({ drafts, count, onShow }: { drafts: Payment[]; cou
   return <section className="flex flex-wrap items-center justify-between gap-3 border border-warning/25 bg-warning/5 p-3 shadow-panel"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-warning">Action required</p><strong className="mt-0.5 block">{count} payment draft{count === 1 ? '' : 's'} need preparation</strong><p className="mt-0.5 text-xs text-muted">Allocate to posted invoices where applicable, then submit each voucher for Finance Manager approval.</p>{drafts.slice(0, 3).map((payment) => <p key={payment.id} className="mt-1 text-xs text-muted">{payment.number} · {payment.supplier_name || 'Supplier advance'} · {formatMoney(payment.amount, payment.currency_code)}</p>)}</div><Button size="sm" variant="secondary" onClick={onShow}>Open drafts <ChevronRight className="h-3.5 w-3.5" /></Button></section>;
 }
 
-function PaymentModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function PaymentModal({ open, invoiceId, onClose }: { open: boolean; invoiceId?: number; onClose: () => void }) {
   const suppliers = useQuery({ queryKey: qk.suppliers({ page_size: 100 }), queryFn: () => api.suppliers({ page_size: 100, is_active: true }) });
   const accounts = useQuery({ queryKey: qk.financeAccounts({ page_size: 100, account_type: 'ASSET' }), queryFn: () => financeApi.accounts({ page_size: 100, account_type: 'ASSET', is_active: true }) });
   const currencies = useQuery({ queryKey: ['finance', 'currencies'], queryFn: () => financeApi.currencies({ page_size: 100, is_active: true }) });
-  const [form, setForm] = useState({ supplier: '', source_account: '', currency: '', exchange_rate: '1', amount: '', payment_date: new Date().toISOString().slice(0, 10), method: 'BANK', reference: '', voucher_reference: '', notes: '' });
+  const linkedInvoice = useQuery({ queryKey: ['finance', 'invoice', invoiceId], queryFn: () => financeApi.invoice(invoiceId!), enabled: Boolean(invoiceId) });
+  const invoiceOptions = useQuery({ queryKey: qk.financeInvoices({ supplier: linkedInvoice.data?.supplier || '', page_size: 100 }), queryFn: () => financeApi.invoices({ supplier: linkedInvoice.data?.supplier || '', page_size: 100 }), enabled: Boolean(linkedInvoice.data?.supplier) });
+  const [form, setForm] = useState({ supplier: '', invoice: '', source_account: '', currency: '', exchange_rate: '1', amount: '', payment_date: new Date().toISOString().slice(0, 10), method: 'BANK', reference: '', voucher_reference: '', notes: '' });
+  useEffect(() => {
+    if (!linkedInvoice.data) return;
+    const currencyId = currencies.data?.results.find((currency) => currency.code === linkedInvoice.data?.currency)?.id;
+    setForm((current) => ({ ...current, supplier: String(linkedInvoice.data!.supplier), invoice: String(linkedInvoice.data!.id), amount: String(linkedInvoice.data!.balance), currency: currencyId ? String(currencyId) : current.currency }));
+  }, [currencies.data?.results, linkedInvoice.data]);
   const client = useQueryClient(); const toast = useToast();
-  const mutation = useMutation({ mutationFn: () => financeApi.createPayment({ ...form, supplier: Number(form.supplier), source_account: Number(form.source_account), currency: Number(form.currency), idempotency_key: idempotencyKey('payment') }), onSuccess: () => { toast.push({ title: 'Payment voucher draft created', tone: 'success' }); void client.invalidateQueries({ queryKey: ['finance'] }); onClose(); }, onError: (error: Error) => toast.push({ title: 'Could not create payment', message: error.message, tone: 'danger' }) });
-  return <FormModal open={open} title="Prepare supplier payment" onClose={onClose}><form className="grid gap-3" onSubmit={(event: FormEvent) => { event.preventDefault(); mutation.mutate(); }}><div className="grid gap-3 md:grid-cols-2"><Field label="Supplier" required><SearchableSelect required value={form.supplier} onChange={(supplier) => setForm({ ...form, supplier })} options={(suppliers.data?.results || []).map((supplier) => ({ value: supplier.id, label: supplier.name }))} placeholder="Search supplier" /></Field><Field label="Cash or bank account" required><SearchableSelect required value={form.source_account} onChange={(source_account) => setForm({ ...form, source_account })} options={(accounts.data?.results || []).map((account) => ({ value: account.id, label: `${account.code} / ${account.name}` }))} placeholder="Search account" /></Field><Field label="Currency" required><SearchableSelect required value={form.currency} onChange={(currency) => setForm({ ...form, currency })} options={(currencies.data?.results || []).map((currency) => ({ value: currency.id, label: `${currency.code} / ${currency.name}` }))} placeholder="Search currency" /></Field><Field label="Exchange rate" required><input className={inputClass} type="number" min="0.000001" step="0.000001" value={form.exchange_rate} onChange={(event) => setForm({ ...form, exchange_rate: event.target.value })} /></Field><Field label="Amount" required><input className={inputClass} type="number" min="0.01" step="0.01" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} /></Field><Field label="Payment date" required><input className={inputClass} type="date" value={form.payment_date} onChange={(event) => setForm({ ...form, payment_date: event.target.value })} /></Field><Field label="Method"><select className={inputClass} value={form.method} onChange={(event) => setForm({ ...form, method: event.target.value })}><option value="BANK">Bank transfer</option><option value="MOBILE_MONEY">Mobile money</option><option value="CHEQUE">Cheque</option><option value="CASH">Cash</option></select></Field><Field label="Transaction reference"><input className={inputClass} value={form.reference} onChange={(event) => setForm({ ...form, reference: event.target.value })} /></Field><Field label="Voucher reference"><input className={inputClass} value={form.voucher_reference} onChange={(event) => setForm({ ...form, voucher_reference: event.target.value })} /></Field></div><Field label="Notes"><textarea className={inputClass} rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field><Button loading={mutation.isPending} loadingLabel="Creating draft" disabled={!form.supplier || !form.source_account || !form.currency || !form.amount}>Create payment draft</Button></form></FormModal>;
+  const mutation = useMutation({ mutationFn: async () => {
+    const { invoice: _invoice, ...paymentFields } = form;
+    const payment = await financeApi.createPayment({ ...paymentFields, supplier: Number(form.supplier), source_account: Number(form.source_account), currency: Number(form.currency), idempotency_key: idempotencyKey('payment') });
+    if (_invoice) await financeApi.paymentCommand(payment.id, 'allocate', { invoice: Number(_invoice), amount: form.amount });
+    return payment;
+  }, onSuccess: () => { toast.push({ title: form.invoice ? 'Payment draft created and allocated' : 'Payment voucher draft created', tone: 'success' }); void client.invalidateQueries({ queryKey: ['finance'] }); onClose(); }, onError: (error: Error) => toast.push({ title: 'Could not create payment', message: error.message, tone: 'danger' }) });
+  const invoiceChoices = (invoiceOptions.data?.results || []).filter((invoice) => ['POSTED', 'PARTIALLY_PAID'].includes(invoice.status) && Number(invoice.balance) > 0);
+  const selectedInvoice = invoiceChoices.find((invoice) => String(invoice.id) === form.invoice);
+  const chooseInvoice = (value: string) => {
+    const invoice = invoiceChoices.find((item) => String(item.id) === value);
+    const currencyId = currencies.data?.results.find((currency) => currency.code === invoice?.currency)?.id;
+    setForm((current) => ({ ...current, invoice: value, amount: invoice ? String(invoice.balance) : current.amount, currency: currencyId ? String(currencyId) : current.currency }));
+  };
+  return <FormModal open={open} title="Prepare supplier payment" onClose={onClose}><form className="grid gap-3" onSubmit={(event: FormEvent) => { event.preventDefault(); mutation.mutate(); }}><div className="grid gap-3 md:grid-cols-2"><Field label="Supplier" required><SearchableSelect required value={form.supplier} onChange={(supplier) => setForm((current) => ({ ...current, supplier, invoice: '', amount: '' }))} options={(suppliers.data?.results || []).map((supplier) => ({ value: supplier.id, label: supplier.name }))} placeholder="Search supplier" /></Field><Field label="Supplier invoice (optional)"><SearchableSelect value={form.invoice} onChange={chooseInvoice} options={invoiceChoices.map((invoice) => ({ value: invoice.id, label: `${invoice.internal_number} / balance ${formatMoney(invoice.balance, invoice.currency)}` }))} placeholder={form.supplier ? 'Allocate to a posted invoice' : 'Select a supplier first'} /></Field><Field label="Cash or bank account" required><SearchableSelect required value={form.source_account} onChange={(source_account) => setForm((current) => ({ ...current, source_account }))} options={(accounts.data?.results || []).map((account) => ({ value: account.id, label: `${account.code} / ${account.name}` }))} placeholder="Search account" /></Field><Field label="Currency" required><SearchableSelect required value={form.currency} onChange={(currency) => setForm((current) => ({ ...current, currency }))} options={(currencies.data?.results || []).map((currency) => ({ value: currency.id, label: `${currency.code} / ${currency.name}` }))} placeholder="Search currency" /></Field><Field label="Exchange rate" required><input className={inputClass} type="number" min="0.000001" step="0.000001" value={form.exchange_rate} onChange={(event) => setForm((current) => ({ ...current, exchange_rate: event.target.value }))} /></Field><Field label="Amount" required><input className={inputClass} type="number" min="0.01" max={selectedInvoice?.balance || undefined} step="0.01" value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} /></Field><Field label="Payment date" required><input className={inputClass} type="date" value={form.payment_date} onChange={(event) => setForm((current) => ({ ...current, payment_date: event.target.value }))} /></Field><Field label="Method"><select className={inputClass} value={form.method} onChange={(event) => setForm((current) => ({ ...current, method: event.target.value }))}><option value="BANK">Bank transfer</option><option value="MOBILE_MONEY">Mobile money</option><option value="CHEQUE">Cheque</option><option value="CASH">Cash</option></select></Field><Field label="Transaction reference"><input className={inputClass} value={form.reference} onChange={(event) => setForm((current) => ({ ...current, reference: event.target.value }))} /></Field><Field label="Voucher reference"><input className={inputClass} value={form.voucher_reference} onChange={(event) => setForm((current) => ({ ...current, voucher_reference: event.target.value }))} /></Field></div><Field label="Notes"><textarea className={inputClass} rows={3} value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} /></Field><Button loading={mutation.isPending} loadingLabel="Creating draft" disabled={!form.supplier || !form.source_account || !form.currency || !form.amount || (selectedInvoice !== undefined && Number(form.amount) > Number(selectedInvoice.balance))}>Create payment draft</Button></form></FormModal>;
 }
 
 function AllocationModal({ payment, onClose }: { payment: Payment | null; onClose: () => void }) {

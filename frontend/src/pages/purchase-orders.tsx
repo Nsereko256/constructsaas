@@ -36,7 +36,16 @@ export function PurchaseOrdersPage() {
   const requestedPurchaseRequestId = (location.state as { purchaseRequestId?: number } | null)?.purchaseRequestId;
   const toast = useToast();
   const queryClient = useQueryClient();
-  const list = useListState({ status: '', project: '', purchase_request: '', delivery_destination: '', action_queue: new URLSearchParams(location.search).get('action_queue') || '' });
+  const queryString = location.search;
+  const searchParams = new URLSearchParams(queryString);
+  const list = useListState(
+    { status: '', project: '', purchase_request: '', delivery_destination: '', action_queue: '' },
+    {
+      syncKey: queryString,
+      initialSearch: searchParams.get('search') || '',
+      initialFilters: { action_queue: searchParams.get('action_queue') || '' },
+    },
+  );
   const [open, setOpen] = useState(Boolean(requestedPurchaseRequestId));
   const [cancelling, setCancelling] = useState<PurchaseOrder | null>(null);
   const [amending, setAmending] = useState<PurchaseOrder | null>(null);

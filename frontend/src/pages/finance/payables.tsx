@@ -2,6 +2,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Download, Eye, Plus, Scale, Send, Trash2, Upload, X } from 'lucide-react';
 import { FormEvent, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { financeApi, idempotencyKey } from '@/modules/finance/api';
 import type { MatchRun, SupplierInvoice } from '@/modules/finance/types';
 import { qk } from '@/api/queryKeys';
@@ -24,7 +25,12 @@ type ReasonAction = { invoice: SupplierInvoice; action: 'reject' | 'approve-exce
 
 export function FinancePayablesPage() {
   const { role } = useAuth();
-  const list = useListState({ status: '', supplier: '', project: '' });
+  const [searchParams] = useSearchParams();
+  const queryString = searchParams.toString();
+  const list = useListState(
+    { status: '', supplier: '', project: '' },
+    { syncKey: queryString, initialSearch: searchParams.get('search') || '' },
+  );
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<SupplierInvoice | null>(null);
   const [reasonAction, setReasonAction] = useState<ReasonAction>(null);
@@ -58,7 +64,14 @@ export function FinancePayablesPage() {
     <FinanceWorkspaceSummary view="payables" />
     {role === 'finance_viewer' ? <div className="border border-info/20 bg-info/5 px-3 py-2.5 text-sm text-foreground"><strong>Oversight mode.</strong> You can review invoice status, matching and balances here; preparation, approval and posting remain with the finance team.</div> : null}
     <div className="grid gap-2 border border-border bg-white p-2.5 shadow-panel"><div className="flex gap-2 overflow-x-auto pb-0.5"><Button size="sm" variant={!list.filters.status ? 'default' : 'ghost'} onClick={() => list.setFilter('status', '')}>All</Button>{[['DRAFT', 'Prepare'], ['SUBMITTED', 'Run match'], ['MATCH_EXCEPTION', 'Exceptions'], ['MATCHED', 'Approve'], ['APPROVED', 'Post'], ['PARTIALLY_PAID', 'Part-paid']].map(([value, label]) => <Button key={value} size="sm" variant={list.filters.status === value ? 'default' : 'ghost'} onClick={() => list.setFilter('status', value)}>{label}</Button>)}</div><div className="flex flex-col gap-2 sm:flex-row"><input className={`${inputClass} w-full sm:max-w-md`} value={list.search} onChange={(event) => list.setSearch(event.target.value)} placeholder="Invoice, supplier, PO or project" aria-label="Search supplier invoices" /><select className={`${inputClass} w-full sm:w-auto`} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}><option value="">All statuses</option>{['DRAFT','SUBMITTED','MATCHED','MATCH_EXCEPTION','VERIFIED','APPROVED','POSTED','PARTIALLY_PAID','PAID','REJECTED','REVERSED'].map((value) => <option key={value}>{value}</option>)}</select></div></div>
-    <DataTable columns={columns} data={invoices.data?.results || []} mobileSummaryCells={2} emptyTitle={invoices.isLoading ? 'Loading invoices...' : 'No supplier invoices found'} />
+    <DataTable
+      columns={columns}
+      data={invoices.data?.results || []}
+      mobileSummaryCells={2}
+      emptyTitle={invoices.isLoading ? 'Loading invoices...' : 'No supplier invoices found'}
+      emptyMessage={invoices.isLoading ? undefined : 'Capture an invoice from an accepted, uninvoiced receipt to begin matching.'}
+      emptyAction={can.prepareFinance(role) || role === 'admin' ? <Button size="sm" onClick={() => setCreating(true)}><Plus className="h-4 w-4" />Capture invoice</Button> : undefined}
+    />
     <Pagination page={list.page} setPage={list.setPage} data={invoices.data} />
     <InvoiceModal open={creating} onClose={() => setCreating(false)} />
     <InvoiceDetail invoice={selected} onClose={() => setSelected(null)} />
@@ -69,6 +82,7 @@ export function FinancePayablesPage() {
 function InvoiceActions({ invoice, role, pendingAction, view, run, reason, deleteDraft }: { invoice: SupplierInvoice; role: ReturnType<typeof useAuth>['role']; pendingAction: string | null; view: () => void; run: (action: string, body?: unknown) => void; reason: (action: NonNullable<ReasonAction>['action']) => void; deleteDraft: () => void }) {
   const pending = pendingAction !== null;
   return <div className="flex flex-wrap justify-end gap-1.5"><Button size="sm" variant="ghost" onClick={view}><Eye className="h-3.5 w-3.5" />View</Button>
+    {can.prepareFinance(role) && ['POSTED', 'PARTIALLY_PAID'].includes(invoice.status) && Number(invoice.balance) > 0 ? <Button size="sm" variant="secondary" asChild><Link to={`/finance/payments?invoice=${invoice.id}`}>Prepare payment</Link></Button> : null}
     {(can.prepareFinance(role) || role === 'admin') && invoice.status === 'DRAFT' ? <Button size="sm" loading={pendingAction === 'submit'} loadingLabel="Submitting" onClick={() => run('submit')} disabled={pending}><Send className="h-3.5 w-3.5" />Submit</Button> : null}
     {(can.prepareFinance(role) || role === 'admin') && invoice.status === 'DRAFT' ? <Button size="sm" variant="ghost" onClick={deleteDraft} disabled={pending}><Trash2 className="h-3.5 w-3.5" />Delete draft</Button> : null}
     {(can.prepareFinance(role) || role === 'admin') && invoice.purchase_order && ['SUBMITTED', 'MATCH_EXCEPTION'].includes(invoice.status) ? <Button size="sm" loading={pendingAction === 'run-match'} loadingLabel="Matching" onClick={() => run('run-match', { idempotency_key: idempotencyKey('match') })} disabled={pending}><Scale className="h-3.5 w-3.5" />{invoice.status === 'MATCH_EXCEPTION' ? 'Run match again' : 'Run match'}</Button> : null}

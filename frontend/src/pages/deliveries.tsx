@@ -21,11 +21,12 @@ import './deliveries-reference.css';
 export function DeliveriesPage() {
   const { role } = useAuth();
   const [searchParams] = useSearchParams();
+  const queryString = searchParams.toString();
   const replacementClaimId = Number(searchParams.get('replacement_claim') || 0);
   const [queue, setQueue] = useState<'all' | 'scheduled' | 'dispatched' | 'arrived' | 'received' | 'delayed'>('all');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
   const [destination, setDestination] = useState(searchParams.get('delivery_destination') || '');
-  const [project, setProject] = useState('');
+  const [project, setProject] = useState(searchParams.get('project') || '');
   const [status, setStatus] = useState(searchParams.get('status') || '');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -38,6 +39,14 @@ export function DeliveriesPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const [receiving, setReceiving] = useState<PurchaseOrder | null>(null);
+  const actionQueue = searchParams.get('action_queue') || '';
+  useEffect(() => {
+    setSearch(searchParams.get('search') || '');
+    setDestination(searchParams.get('delivery_destination') || '');
+    setProject(searchParams.get('project') || '');
+    setStatus(searchParams.get('status') || '');
+    setPage(1);
+  }, [queryString, searchParams]);
   useEffect(() => { if (replacementClaim.data && replacementOrder.data) setReceiving(replacementOrder.data); }, [replacementClaim.data, replacementOrder.data]);
   const refresh = () => { void queryClient.invalidateQueries({ queryKey: ['purchase-orders'] }); void queryClient.invalidateQueries({ queryKey: ['goods-received-notes'] }); };
   const dispatch = useMutation({
@@ -93,7 +102,12 @@ export function DeliveriesPage() {
     const state = deliveryState(order);
     const haystack = [order.number, order.supplier_name, order.project_name, order.delivery_destination_display].join(' ').toLowerCase();
     const date = expectedDate(order) || '';
-    return (queue === 'all' || state === queue) && (!destination || order.delivery_destination === destination) && (!project || String(order.project) === project) && (!status || order.status === status) && (!fromDate || date >= fromDate) && (!toDate || date <= toDate) && haystack.includes(search.trim().toLowerCase());
+    const matchesActionQueue = actionQueue === 'warehouse_receipts'
+      ? order.delivery_destination === 'WAREHOUSE' && ['ORDERED', 'PARTIAL'].includes(order.status)
+      : actionQueue === 'site_receipts'
+        ? order.delivery_destination === 'SITE' && ['DISPATCH_CONFIRMED', 'PARTIAL'].includes(order.status)
+        : true;
+    return matchesActionQueue && (queue === 'all' || state === queue) && (!destination || order.delivery_destination === destination) && (!project || String(order.project) === project) && (!status || order.status === status) && (!fromDate || date >= fromDate) && (!toDate || date <= toDate) && haystack.includes(search.trim().toLowerCase());
   }).sort((a, b) => sort === 'newest' ? Date.parse(b.created_at) - Date.parse(a.created_at) : Date.parse(expectedDate(a) || '9999-12-31') - Date.parse(expectedDate(b) || '9999-12-31'));
   const pageSize = 5;
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
