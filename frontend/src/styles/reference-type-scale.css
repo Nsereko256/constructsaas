@@ -159,3 +159,33 @@
 .purchase-orders-reference .po-table-footer,
 .goods-received-reference .grn-table-footer,
 .deliveries-reference .del-table-footer { font-size: 0.625rem !important; }
+
+/* Status chips are operational data, not decorative overflow. Keep the
+   complete label visible in fixed-width registers and responsive cards. */
+.projects-reference .projects-table td:has(.badge),
+.procurement-reference .procurement-table td:has(.badge),
+.purchase-requests-reference .pr-table td:has(.badge),
+.purchase-orders-reference .po-table td:has(.badge),
+.goods-received-reference .grn-table td:has(.badge),
+.deliveries-reference .del-table td:has(.badge) {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.projects-reference .projects-table .badge,
+.procurement-reference .procurement-table .badge,
+.purchase-requests-reference .pr-table .badge,
+.purchase-orders-reference .po-table .badge,
+.goods-received-reference .grn-table .badge,
+.deliveries-reference .del-table .badge {
+  display: inline-block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-align: center;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.2;
+}
