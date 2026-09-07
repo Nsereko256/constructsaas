@@ -1,10 +1,13 @@
-import { useDeferredValue, useId } from 'react';
+import { useCallback, useDeferredValue, useEffect, useId } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { qk } from '@/api/queryKeys';
 import { api } from '@/api/services';
+import type { Material } from '@/api/types';
 import { inputClass } from '@/components/ui/field';
 import { materialOption, resolveMaterialId } from '@/lib/selectors';
+
+const EMPTY_MATERIALS: Material[] = [];
 
 type MaterialLookupProps = {
   label: string;
@@ -29,15 +32,25 @@ export function MaterialLookup({
       page_size: 20,
     }),
   });
-  const options = materials.data?.results || [];
+  const options = materials.data?.results ?? EMPTY_MATERIALS;
 
-  const update = (nextLabel: string) => {
+  const findMaterial = useCallback((nextLabel: string) => {
     const normalized = nextLabel.trim().toLowerCase();
-    const selected = options.find(
+    return options.find(
       (material) => materialOption(material).toLowerCase() === normalized,
     ) || options.find(
       (material) => material.name.toLowerCase() === normalized || material.code.toLowerCase() === normalized,
     ) || (options.length === 1 && normalized ? options[0] : undefined);
+  }, [options]);
+
+  useEffect(() => {
+    if (!label.trim() || materialId || materials.isLoading || materials.isError) return;
+    const selected = findMaterial(label);
+    if (selected) onChange(String(selected.id), label);
+  }, [label, materialId, materials.isLoading, materials.isError, findMaterial, onChange]);
+
+  const update = (nextLabel: string) => {
+    const selected = findMaterial(nextLabel);
     const resolvedId = selected ? String(selected.id) : resolveMaterialId(nextLabel, options);
     onChange(resolvedId ? String(resolvedId) : '', nextLabel);
   };
