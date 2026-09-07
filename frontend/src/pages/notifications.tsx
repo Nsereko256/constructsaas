@@ -21,7 +21,8 @@ const tabs = [
 
 export function NotificationsPage() {
   const list = useListState({ is_read: '', category: '' });
-  const notifications = useQuery({ queryKey: qk.notifications(list.query), queryFn: () => api.notifications(list.query) });
+  const notificationQuery = { ...list.query, page_size: 5 };
+  const notifications = useQuery({ queryKey: qk.notifications(notificationQuery), queryFn: () => api.notifications(notificationQuery) });
   const summary = useQuery({ queryKey: ['notifications', 'summary'], queryFn: api.notificationSummary });
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -109,7 +110,7 @@ export function NotificationsPage() {
             {(notifications.data?.results || []).map((item) => <NotificationRow key={item.id} item={item} onOpen={() => { setSelected(item); if (!item.is_read) markRead.mutate(item.id); }} />)}
             {!notifications.data?.results.length ? <p className="notifications-empty">No notifications match this view.</p> : null}
           </div>
-          <Pagination page={list.page} setPage={list.setPage} data={notifications.data} />
+          <Pagination page={list.page} setPage={list.setPage} data={notifications.data} pageSize={5} />
         </section>
         <aside className="notifications-side-column">
           <section className="notifications-side-panel"><div className="notifications-panel-heading"><h2>Priority queue</h2><span className="notifications-side-link">{stats?.priority.filter((item) => item.count > 0).reduce((total, item) => total + item.count, 0) ?? 0} open</span></div>{(stats?.priority || []).map((item) => <button key={item.label} type="button" className="notifications-priority-row" onClick={() => list.setFilter('category', priorityCategory(item.label))}><span className={`notifications-priority-icon ${item.tone}`}><PriorityIcon label={item.label} /></span><span><strong>{item.label}</strong><small>{item.detail}</small></span><b>{item.count}</b><Badge tone={item.tone === 'urgent' ? 'danger' : item.tone === 'high' ? 'warning' : item.tone === 'medium' ? 'info' : 'neutral'}>{item.tone === 'neutral' ? '—' : item.tone[0].toUpperCase() + item.tone.slice(1)}</Badge></button>)}</section>
