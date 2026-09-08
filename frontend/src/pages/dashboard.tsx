@@ -12,6 +12,7 @@ import { qk } from '@/api/queryKeys';
 import './dashboard.css';
 
 import { Skeleton } from '@/components/ui/skeleton';
+import { formatUGX } from '@/lib/utils';
 import { mergeDashboardUpdate, normalizeDashboardData } from '@/lib/dashboard';
 import { useAuth } from '@/auth/auth-context';
 
@@ -74,9 +75,10 @@ export function DashboardPage() {
   ];
   const budgetRows = data.project_budget_vs_actual.slice(0, 4).map((project) => {
     const budget = Number(project.budget || 0);
-    const used = Number(project.actual_expenditure || 0) + Number(project.open_commitments || 0);
-    const utilization = budget ? Math.min(100, Math.round((used / budget) * 100)) : 0;
-    return { ...project, used, utilization, plannedProgress: Math.max(0, Math.min(100, Number(project.planned_progress ?? 0))), actualProgress: Math.max(0, Math.min(100, Number(project.actual_progress ?? 0))), atRisk: budget > 0 && used > budget };
+    const actualSpend = Number(project.actual_expenditure ?? project.actual_material_cost ?? 0);
+    const forecastCost = actualSpend + Number(project.open_commitments || 0);
+    const actualSpendPercent = budget ? Math.min(100, Math.round((actualSpend / budget) * 100)) : 0;
+    return { ...project, actualSpend, forecastCost, actualSpendPercent, plannedProgress: Math.max(0, Math.min(100, Number(project.planned_progress ?? 0))), actualProgress: Math.max(0, Math.min(100, Number(project.actual_progress ?? 0))), atRisk: budget > 0 && forecastCost > budget };
   });
   const pipeline = [
     { label: 'Requests', count: data.pending_purchase_requests, status: 'Needs attention', href: '/procurement/requests' },
@@ -119,12 +121,12 @@ export function DashboardPage() {
       </section>
       <section className="dashboard-pair">
         <div className="dashboard-panel">
-          <div className="dashboard-panel-heading"><h2>Projects overview</h2><div className="dashboard-legend"><span><i style={{background:'#D9DDDE'}} />Planned</span><span><i style={{background:'#0F7075'}} />Actual</span></div></div>
+          <div className="dashboard-panel-heading"><h2>Projects overview</h2><div className="dashboard-legend"><span><i style={{background:'#D9DDDE'}} />Planned progress</span><span><i style={{background:'#0F7075'}} />Actual spend</span></div></div>
           <div className="dashboard-project-chart">
-            {budgetRows.map(project => <Link key={project.id} className="dashboard-project-row" title={`Open ${project.name} progress · actual ${project.actualProgress}%`} to={`/projects/${project.id}/progress`}>
+            {budgetRows.map(project => <Link key={project.id} className="dashboard-project-row" title={`Open ${project.name} · actual spend ${formatUGX(project.actualSpend)}${project.budget ? ` of ${formatUGX(project.budget)}` : ''}`} to={`/projects/${project.id}/progress`}>
               <span className="dashboard-project-name"><strong>{project.name}</strong><small>{project.code}</small></span>
               <span className="dashboard-bar-pair">
-                {[{value:project.plannedProgress, color:'#D9DDDE', label:'Planned'}, {value:project.actualProgress, color:'#0F7075', label:'Actual'}].map(bar => <span key={bar.label} className="dashboard-bar-track" aria-label={`${bar.label}: ${bar.value}%`}><span className={`dashboard-bar ${bar.label.toLowerCase()}${bar.value === 0 ? ' is-zero' : ''}`} style={{width:`${bar.value}%`, background:bar.color}} /><small style={{left:`${bar.value}%`}}>{bar.value}%</small></span>)}
+                {[{value:project.plannedProgress, color:'#D9DDDE', kind:'planned', label:'Planned progress', display:`${project.plannedProgress}%`, detail:`Planned progress: ${project.plannedProgress}%`}, {value:project.actualSpendPercent, color:'#0F7075', kind:'actual', label:'Actual spend', display:formatCompactUGX(project.actualSpend), detail:`Actual spend: ${formatUGX(project.actualSpend)}${project.budget ? ` (${project.actualSpendPercent}% of ${formatUGX(project.budget)})` : ''}`}].map(bar => { const atEnd = bar.value > 80; return <span key={bar.kind} className="dashboard-bar-track" aria-label={bar.detail} title={bar.detail}><span className={`dashboard-bar ${bar.kind}${bar.value === 0 ? ' is-zero' : ''}`} style={{width:`${bar.value}%`, background:bar.color}} /><small className={bar.kind === 'actual' ? 'actual-spend' : undefined} style={{left:`${bar.value}%`, transform:atEnd ? 'translateX(-100%)' : undefined, marginLeft:atEnd ? '-5px' : undefined}}>{bar.display}</small></span>; })}
               </span>
             </Link>)}
             {budgetRows.length ? <div className="dashboard-chart-axis"><span /> <div>{[0,25,50,75,100].map(n=><span key={n}>{n}%</span>)}</div></div> : <p className="dashboard-empty">Add a project, dates and goals to track delivery progress.</p>}
@@ -166,4 +168,12 @@ export function DashboardPage() {
       </section>
     </div>
   );
+}
+
+function formatCompactUGX(value: number) {
+  const absolute = Math.abs(value);
+  if (absolute >= 1_000_000_000) return `UGX ${(value / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`;
+  if (absolute >= 1_000_000) return `UGX ${(value / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (absolute >= 1_000) return `UGX ${(value / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
+  return formatUGX(value);
 }

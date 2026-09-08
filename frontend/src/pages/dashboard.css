@@ -37,6 +37,7 @@
 .dashboard-bar.actual { border-radius:0 999px 999px 0; }
 .dashboard-bar.actual.is-zero { width:3px !important; border-radius:999px; }
 .dashboard-bar-track small { position:absolute; top:-2px; margin-left:5px; color:#626b70; font-size:9px; white-space:nowrap; }
+.dashboard-bar-track small.actual-spend { color:#0f7075; font-weight:700; }
 .dashboard-chart-axis { display:grid; grid-template-columns:110px minmax(0,1fr); gap:8px; margin-top:5px; }
 .dashboard-chart-axis > div { display:flex; justify-content:space-between; border-top:1px solid #e7eaeb; padding-top:3px; font-size:8px; color:#737c81; }
 .dashboard-attention { padding:0 12px 6px; }
