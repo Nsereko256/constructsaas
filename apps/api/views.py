@@ -1791,19 +1791,29 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
         transaction.on_commit(lambda: push_dashboard_update(purchase_order.company))
         return Response(self.get_serializer(purchase_order).data)
 
-    @extend_schema(tags=['Procurement'], request=RequiredCommentsSerializer, responses=PurchaseOrderSerializer)
+    @extend_schema(tags=['Procurement'], request=FinanceSubmissionSerializer, responses=PurchaseOrderSerializer)
     @action(detail=True, methods=['post'], url_path='submit-to-finance')
     def submit_to_finance(self, request, pk=None):
-        """Make Procurement's Finance handoff explicit and auditable."""
+        """Submit the linked quoted request into the Finance approval queue."""
         purchase_order = self.get_object()
         if purchase_order.status not in {PurchaseOrder.STATUS_DRAFT, PurchaseOrder.STATUS_PENDING}:
             return Response(
                 {'status': 'Only draft or pending purchase orders can be submitted to Finance.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        payload = RequiredCommentsSerializer(data=request.data)
+        if not purchase_order.purchase_request_id:
+            return Response(
+                {'purchase_request': 'A purchase order must be linked to a purchase request before it can be sent to Finance.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        payload = FinanceSubmissionSerializer(data=request.data, context={'request': request})
         payload.is_valid(raise_exception=True)
-        comments = payload.validated_data['comments']
+        approval = budget_services.submit_purchase_request_to_finance(
+            purchase_request=purchase_order.purchase_request,
+            user=request.user,
+            **payload.validated_data,
+        )
+        comments = payload.validated_data.get('comments', '')
         record_finance_audit_event(
             company=purchase_order.company,
             actor=request.user,
@@ -1825,7 +1835,7 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
                 Notification.LEVEL_WARNING,
                 f'Finance review requested: {purchase_order.number}',
                 f'Procurement submitted {purchase_order.number} from {purchase_request_number} for Finance review. Note: {comments}',
-                f'/procurement/requests?search={purchase_request_number}',
+                f'/procurement/requests?search={purchase_request_number}&action_queue=my_requests',
             )
         transaction.on_commit(lambda: push_dashboard_update(purchase_order.company))
         return Response(self.get_serializer(purchase_order).data)

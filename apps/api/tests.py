@@ -1570,6 +1570,10 @@ class ApiFoundationTests(TestCase):
             role=User.ROLE_FINANCE_OFFICER,
         )
         PurchaseOrder.objects.filter(purchase_request=self.purchase_request).delete()
+        self.purchase_request.status = PurchaseRequest.STATUS_PO_CREATED
+        self.purchase_request.manager_approved_by = self.project_manager
+        self.purchase_request.technical_approved_by = self.user
+        self.purchase_request.save(update_fields=['status', 'manager_approved_by', 'technical_approved_by', 'updated_at'])
         purchase_order = PurchaseOrder.objects.create(
             company=self.company,
             purchase_request=self.purchase_request,
@@ -1594,6 +1598,9 @@ class ApiFoundationTests(TestCase):
                 title=f'Finance review requested: {purchase_order.number}',
             ).exists()
         )
+        approval = BudgetApproval.objects.get(purchase_request=self.purchase_request)
+        self.assertEqual(approval.status, BudgetApproval.STATUS_SUBMITTED)
+        self.assertEqual(approval.review_reason, 'Please review the supplier quotation and budget clearance.')
 
     def test_create_purchase_order_from_pr_requires_approved_pr(self):
         PurchaseOrder.objects.filter(purchase_request=self.purchase_request).delete()

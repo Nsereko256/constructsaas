@@ -182,8 +182,8 @@ export const api = {
   receiveSupplierReplacement: (id: number, body: Record<string, unknown>) => apiRequest<GoodsReceivedNote>(`/api/supplier-claims/${id}/receive-replacement/`, { method: 'POST', body }),
   downloadSupplierClaims: (kind: 'pdf' | 'xlsx', params = {}) => apiDownload(`/api/supplier-claims/download/${kind}/${pageParams(params)}`, `supplier-claims-register.${kind}`),
   approvePurchaseOrder: (id: number) => apiRequest<PurchaseOrder>(`/api/purchase-orders/${id}/approve/`, { method: 'POST' }),
-  submitPurchaseOrderToFinance: (id: number, comments: string) =>
-    apiRequest<PurchaseOrder>(`/api/purchase-orders/${id}/submit-to-finance/`, { method: 'POST', body: { comments } }),
+  submitPurchaseOrderToFinance: (id: number, budget_line: number | null, comments = '') =>
+    apiRequest<PurchaseOrder>(`/api/purchase-orders/${id}/submit-to-finance/`, { method: 'POST', body: { budget_line, comments } }),
   cancelPurchaseOrder: (id: number, comments: string) =>
     apiRequest<PurchaseOrder>(`/api/purchase-orders/${id}/cancel/`, { method: 'POST', body: { comments } }),
   purchaseOrderAmendments: (id: number) => apiRequest<PurchaseOrderAmendment[]>(`/api/purchase-orders/${id}/amendments/`),

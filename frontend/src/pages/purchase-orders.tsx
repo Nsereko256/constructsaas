@@ -3,6 +3,7 @@ import { Box, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, 
 import { FormEvent, KeyboardEvent, MouseEvent, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/modules/procurement/api';
+import { financeApi } from '@/modules/finance/api';
 import type { PurchaseOrder, PurchaseOrderAmendment, PurchaseRequest } from '@/modules/procurement/types';
 import { qk } from '@/api/queryKeys';
 import { can, canReceivePurchaseOrder, hasRole } from '@/api/roles';
@@ -30,7 +31,7 @@ type PurchaseOrderItemDraft = {
 const parseQuotedPrice = (value: string) => Number(value.replaceAll(',', '').trim());
 
 export function PurchaseOrdersPage() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const requestedPurchaseRequestId = (location.state as { purchaseRequestId?: number } | null)?.purchaseRequestId;
@@ -57,6 +58,7 @@ export function PurchaseOrdersPage() {
   const orderQuery = { ...list.query, page_size: 5 };
   const orders = useQuery({ queryKey: list.filters.action_queue ? qk.purchaseOrderActionQueue(orderQuery) : qk.purchaseOrders(orderQuery), queryFn: () => api.purchaseOrders(orderQuery) });
   const allOrders = useQuery({ queryKey: qk.purchaseOrders({ page_size: 100 }), queryFn: () => api.purchaseOrders({ page_size: 100 }) });
+  const financeSettings = useQuery({ queryKey: ['finance', 'settings', 'purchase-orders'], queryFn: financeApi.settings, enabled: can.createPo(role) });
   const projects = useQuery({ queryKey: qk.projects({ page_size: 100 }), queryFn: () => api.projects({ page_size: 100 }) });
   const receipts = useQuery({ queryKey: qk.goodsReceivedNotes({ page_size: 100 }), queryFn: () => api.goodsReceivedNotes({ page_size: 100 }) });
   const refresh = () => {
@@ -73,6 +75,11 @@ export function PurchaseOrdersPage() {
     mutationFn: api.confirmDispatch,
     onSuccess: () => { toast.push({ title: 'Supplier dispatch confirmed', tone: 'success' }); refresh(); },
     onError: (error: Error) => toast.push({ title: 'Dispatch confirmation failed', message: error.message, tone: 'danger' }),
+  });
+  const approve = useMutation({
+    mutationFn: api.approvePurchaseOrder,
+    onSuccess: () => { toast.push({ title: 'Purchase order approved and committed', tone: 'success' }); refresh(); },
+    onError: (error: Error) => toast.push({ title: 'PO approval failed', message: error.message, tone: 'danger' }),
   });
   const receive = useMutation({
     mutationFn: api.receivePurchaseOrder,
@@ -129,6 +136,7 @@ export function PurchaseOrdersPage() {
   const receiptRate = allRows.length ? Math.round((receivedOrders.length / allRows.length) * 100) : 0;
   const averageLeadTime = receivedOrders.length ? Math.round(receivedOrders.reduce((sum, order) => sum + Math.max(0, (Date.parse(order.received_at || order.created_at) - Date.parse(order.created_at)) / 86400000), 0) / receivedOrders.length * 10) / 10 : 0;
   const projectOptions = projects.data?.results || [];
+  const financeReviewEnabled = Boolean(user?.soft_finance_enabled) && financeSettings.data?.results?.[0]?.budget_control_mode !== 'off';
   const pageSize = 5;
   const totalRows = orders.data?.count || 0;
   const pageStart = totalRows ? (list.page - 1) * pageSize + 1 : 0;
@@ -146,7 +154,8 @@ export function PurchaseOrdersPage() {
   const rowAction = (order: PurchaseOrder) => {
     const canEdit = hasRole(role, ['procurement_officer', 'admin']) && ['DRAFT', 'PENDING', 'ORDERED'].includes(order.status);
     const editLabel = ['DRAFT', 'PENDING'].includes(order.status) ? 'Edit PO' : 'Amend PO';
-    if (can.createPo(role) && order.status === 'PENDING') return <div className="po-row-actions"><Button size="sm" className="po-next-action" onClick={() => setFinanceHandoffOrder(order)}><CircleDollarSign size={13} />Send to Finance</Button>{canEdit ? <Button size="sm" variant="secondary" className="po-next-action" onClick={() => setAmending(order)}><FilePenLine size={13} />{editLabel}</Button> : null}</div>;
+    if (can.createPo(role) && order.status === 'PENDING' && financeReviewEnabled) return <div className="po-row-actions"><Button size="sm" className="po-next-action" onClick={() => setFinanceHandoffOrder(order)}><CircleDollarSign size={13} />Send to Finance</Button>{canEdit ? <Button size="sm" variant="secondary" className="po-next-action" onClick={() => setAmending(order)}><FilePenLine size={13} />{editLabel}</Button> : null}</div>;
+    if (can.createPo(role) && order.status === 'PENDING') return <div className="po-row-actions"><Button size="sm" className="po-next-action" loading={approve.isPending && approve.variables === order.id} loadingLabel="Approving" disabled={approve.isPending} onClick={() => approve.mutate(order.id)}><Check size={13} />Approve PO</Button>{canEdit ? <Button size="sm" variant="secondary" className="po-next-action" onClick={() => setAmending(order)}><FilePenLine size={13} />{editLabel}</Button> : null}</div>;
     if (can.createPo(role) && order.status === 'DRAFT') return <Button size="sm" variant="secondary" className="po-next-action" onClick={() => setAmending(order)}><FilePenLine size={13} />{editLabel}</Button>;
     if (can.createPo(role) && order.delivery_destination === 'SITE' && ['ORDERED', 'PARTIAL'].includes(order.status)) return <Button size="sm" variant="secondary" className="po-next-action" onClick={() => confirmDispatch.mutate(order.id)}><Truck size={13} />Confirm dispatch</Button>;
     if (canReceivePurchaseOrder(role, order)) return <Button size="sm" className="po-next-action" onClick={() => receive.mutate(order.id)}><CheckCircle2 size={13} />Confirm receipt</Button>;
@@ -344,17 +353,28 @@ function PurchaseOrderModal({ open, onClose, onCreated, initialPurchaseRequestId
 
 function PurchaseOrderFinanceHandoffModal({ order, onClose }: { order: PurchaseOrder | null; onClose: () => void }) {
   const [comments, setComments] = useState('');
+  const [budgetLine, setBudgetLine] = useState('');
   const queryClient = useQueryClient();
   const toast = useToast();
 
+  const budgets = useQuery({
+    queryKey: ['finance', 'budgets', 'purchase-order-handoff', order?.purchase_request],
+    queryFn: () => financeApi.budgets({ project: order?.project, status: 'APPROVED', page_size: 20 }),
+    enabled: Boolean(order?.purchase_request && order?.project),
+  });
+  const budgetLines = budgets.data?.results.flatMap((budget) => budget.lines.map((line) => ({ ...line, budgetName: budget.name }))) || [];
+
   useEffect(() => {
-    if (order) setComments('Please review the supplier quotation and confirm budget clearance.');
+    if (order) {
+      setComments('Please review the supplier quotation and confirm budget clearance.');
+      setBudgetLine('');
+    }
   }, [order]);
 
   const submit = useMutation({
     mutationFn: () => {
       if (!order) throw new Error('Select a purchase order to send to Finance.');
-      return api.submitPurchaseOrderToFinance(order.id, comments.trim());
+      return api.submitPurchaseOrderToFinance(order.id, budgetLine ? Number(budgetLine) : null, comments.trim());
     },
     onSuccess: () => {
       toast.push({ title: 'Sent to Finance', message: `${order?.number} is now in the Finance review queue.`, tone: 'success' });
@@ -368,12 +388,19 @@ function PurchaseOrderFinanceHandoffModal({ order, onClose }: { order: PurchaseO
   return <FormModal open={!!order} title={`Send ${order?.number || 'purchase order'} to Finance`} onClose={onClose}>
     <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); submit.mutate(); }}>
       <p className="text-sm text-slate-600">Finance will review the quotation and budget clearance before Procurement commits the order to the supplier.</p>
+      {order?.project ? <Field label="Budget authorization">
+        <select className={inputClass} value={budgetLine} onChange={(event) => setBudgetLine(event.target.value)}>
+          <option value="">Unbudgeted request — Finance Manager override required</option>
+          {budgetLines.map((line) => <option key={line.id} value={line.id}>{line.budgetName} / {line.category_name || line.category_code} / available {formatUGX(line.available_balance)}</option>)}
+        </select>
+        {budgets.isLoading ? <small className="text-muted">Loading approved budget lines…</small> : null}
+      </Field> : <p className="border border-info/20 bg-info/5 p-3 text-sm text-muted">This is a warehouse replenishment. Finance will review it as an unbudgeted stock purchase.</p>}
       <Field label="Finance review note" required>
         <textarea className={inputClass} rows={4} value={comments} onChange={(event) => setComments(event.target.value)} placeholder="Explain what Finance should check" required />
       </Field>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onClose}>Keep pending</Button>
-        <Button type="submit" loading={submit.isPending} loadingLabel="Sending" disabled={!comments.trim()}>Send to Finance</Button>
+        <Button type="submit" loading={submit.isPending} loadingLabel="Sending" disabled={!comments.trim() || (Boolean(order?.project) && budgets.isLoading)}>Send to Finance</Button>
       </div>
     </form>
   </FormModal>;
