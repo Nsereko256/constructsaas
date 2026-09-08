@@ -14,7 +14,7 @@ from apps.finance.models import BudgetApproval, FinanceAuditEvent
 from apps.materials.models import Category, Material
 from apps.notifications.models import Notification
 from apps.procurement.models import GoodsReceivedNote, PurchaseOrder, PurchaseOrderItem, PurchaseRequest, PurchaseRequestItem, SupplierClaim
-from apps.projects.models import Project
+from apps.projects.models import Project, ProjectGoal
 from apps.suppliers.models import Supplier
 from apps.warehouse.models import StockMovement
 
@@ -426,6 +426,32 @@ class ApiFoundationTests(TestCase):
         response = self.client.get('/api/dashboard/')
 
         self.assertEqual(response.status_code, 403)
+
+    def test_dashboard_reports_weighted_actual_project_progress(self):
+        self.project.manager = self.project_manager
+        self.project.status = Project.STATUS_ACTIVE
+        self.project.save(update_fields=['manager', 'status', 'updated_at'])
+        ProjectGoal.objects.create(
+            project=self.project,
+            title='Foundation',
+            weight=Decimal('1.00'),
+            completion_percent=25,
+            status=ProjectGoal.STATUS_IN_PROGRESS,
+        )
+        ProjectGoal.objects.create(
+            project=self.project,
+            title='Structure',
+            weight=Decimal('3.00'),
+            completion_percent=75,
+            status=ProjectGoal.STATUS_IN_PROGRESS,
+        )
+        self.client.force_login(self.project_manager)
+
+        response = self.client.get('/api/dashboard/')
+
+        self.assertEqual(response.status_code, 200)
+        row = next(item for item in response.data['project_budget_vs_actual'] if item['id'] == self.project.id)
+        self.assertEqual(row['actual_progress'], 62.5)
 
     def test_notifications_api_lists_only_logged_in_users_notifications(self):
         own_notification = Notification.objects.create(

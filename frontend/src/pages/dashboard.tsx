@@ -30,6 +30,9 @@ export function DashboardPage() {
             qk.dashboard,
             (current) => mergeDashboardUpdate(current, payload.payload || {}),
           );
+          // Project progress is role-scoped and is not included in the compact
+          // websocket payload. Refetch so goal/site changes update Actual now.
+          void queryClient.invalidateQueries({ queryKey: qk.dashboard });
         }
       },
     });
@@ -118,10 +121,10 @@ export function DashboardPage() {
         <div className="dashboard-panel">
           <div className="dashboard-panel-heading"><h2>Projects overview</h2><div className="dashboard-legend"><span><i style={{background:'#D9DDDE'}} />Planned</span><span><i style={{background:'#0F7075'}} />Actual</span></div></div>
           <div className="dashboard-project-chart">
-            {budgetRows.map(project => <Link key={project.id} className="dashboard-project-row" to={`/projects/${project.id}/progress`}>
+            {budgetRows.map(project => <Link key={project.id} className="dashboard-project-row" title={`Open ${project.name} progress · actual ${project.actualProgress}%`} to={`/projects/${project.id}/progress`}>
               <span className="dashboard-project-name"><strong>{project.name}</strong><small>{project.code}</small></span>
               <span className="dashboard-bar-pair">
-                {[{value:project.plannedProgress, color:'#D9DDDE', label:'Planned'}, {value:project.actualProgress, color:'#0F7075', label:'Actual'}].map(bar => <span key={bar.label} className="dashboard-bar-track" aria-label={`${bar.label}: ${bar.value}%`}><span className="dashboard-bar" style={{width:`${bar.value}%`, background:bar.color}} /><small style={{left:`${bar.value}%`}}>{bar.value}%</small></span>)}
+                {[{value:project.plannedProgress, color:'#D9DDDE', label:'Planned'}, {value:project.actualProgress, color:'#0F7075', label:'Actual'}].map(bar => <span key={bar.label} className="dashboard-bar-track" aria-label={`${bar.label}: ${bar.value}%`}><span className={`dashboard-bar ${bar.label.toLowerCase()}${bar.value === 0 ? ' is-zero' : ''}`} style={{width:`${bar.value}%`, background:bar.color}} /><small style={{left:`${bar.value}%`}}>{bar.value}%</small></span>)}
               </span>
             </Link>)}
             {budgetRows.length ? <div className="dashboard-chart-axis"><span /> <div>{[0,25,50,75,100].map(n=><span key={n}>{n}%</span>)}</div></div> : <p className="dashboard-empty">Add a project, dates and goals to track delivery progress.</p>}
