@@ -81,11 +81,6 @@ export function PurchaseOrdersPage() {
     onSuccess: () => { toast.push({ title: 'Purchase order approved and committed', tone: 'success' }); refresh(); },
     onError: (error: Error) => toast.push({ title: 'PO approval failed', message: error.message, tone: 'danger' }),
   });
-  const receive = useMutation({
-    mutationFn: api.receivePurchaseOrder,
-    onSuccess: () => { toast.push({ title: 'Purchase order received', tone: 'success' }); refresh(); },
-    onError: (error: Error) => toast.push({ title: 'Receipt failed', message: error.message, tone: 'danger' }),
-  });
   const cancel = useMutation({
     mutationFn: ({ id, comments }: { id: number; comments: string }) => api.cancelPurchaseOrder(id, comments),
     onSuccess: () => { toast.push({ title: 'Purchase order cancelled and commitment released', tone: 'warning' }); setCancelling(null); refresh(); },
@@ -160,7 +155,7 @@ export function PurchaseOrdersPage() {
     if (can.createPo(role) && order.status === 'PENDING') return <div className="po-row-actions"><Button size="sm" className="po-next-action" loading={approve.isPending && approve.variables === order.id} loadingLabel="Approving" disabled={approve.isPending} onClick={() => approve.mutate(order.id)}><Check size={13} />Approve PO</Button>{canEdit ? <Button size="sm" variant="secondary" className="po-next-action" onClick={() => setAmending(order)}><FilePenLine size={13} />{editLabel}</Button> : null}</div>;
     if (can.createPo(role) && order.status === 'DRAFT') return <Button size="sm" variant="secondary" className="po-next-action" onClick={() => setAmending(order)}><FilePenLine size={13} />{editLabel}</Button>;
     if (can.createPo(role) && order.delivery_destination === 'SITE' && ['ORDERED', 'PARTIAL'].includes(order.status)) return <Button size="sm" variant="secondary" className="po-next-action" onClick={() => confirmDispatch.mutate(order.id)}><Truck size={13} />Confirm dispatch</Button>;
-    if (canReceivePurchaseOrder(role, order)) return <Button size="sm" className="po-next-action" onClick={() => receive.mutate(order.id)}><CheckCircle2 size={13} />Confirm receipt</Button>;
+    if (canReceivePurchaseOrder(role, order)) return <Button asChild size="sm" className="po-next-action"><Link to={`/procurement/deliveries?search=${encodeURIComponent(order.number)}&open_receipt=${order.id}`}><PackageCheck size={13} />Record receipt</Link></Button>;
     if (canEdit) return <Button size="sm" variant="secondary" className="po-next-action" onClick={() => setAmending(order)}><FilePenLine size={13} />{editLabel}</Button>;
     if (order.status === 'RECEIVED') return <Link className="po-view-action" to={`/procurement/grns?search=${encodeURIComponent(order.number)}`}>{order.delivery_destination === 'SITE' ? 'View receipt' : 'View GRN'}</Link>;
     if (order.pending_preapproval_edit && hasRole(role, ['finance_officer', 'finance_manager', 'admin'])) return <Button size="sm" variant="warning" className="po-next-action" onClick={() => { const amendment = (amendments.data?.get(order.id) || []).find((item) => item.status === 'SUBMITTED'); if (amendment) setReviewingPreapproval({ order, amendment, canConfirm: hasRole(role, ['finance_manager', 'admin']) }); }}>Review edit</Button>;

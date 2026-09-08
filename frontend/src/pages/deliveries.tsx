@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { BarChart3, Box, CalendarDays, ChevronDown, ChevronRight, CircleAlert, Download, EllipsisVertical, Eye, FileText, PackageCheck, Search, Truck } from 'lucide-react';
 import { api } from '@/api/services';
 import { getTokens } from '@/api/client';
@@ -20,6 +20,7 @@ import './deliveries-reference.css';
 
 export function DeliveriesPage() {
   const { role } = useAuth();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const queryString = searchParams.toString();
   const replacementClaimId = Number(searchParams.get('replacement_claim') || 0);
@@ -40,6 +41,17 @@ export function DeliveriesPage() {
   const toast = useToast();
   const [receiving, setReceiving] = useState<PurchaseOrder | null>(null);
   const actionQueue = searchParams.get('action_queue') || '';
+  const openReceiptId = Number(searchParams.get('open_receipt') || 0);
+  const clearOpenReceipt = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('open_receipt');
+    navigate(`/procurement/deliveries${next.toString() ? `?${next.toString()}` : ''}`, { replace: true });
+  };
+  useEffect(() => {
+    if (!openReceiptId || !orders.data?.results?.length) return;
+    const order = orders.data.results.find((candidate) => candidate.id === openReceiptId);
+    if (order) setReceiving(order);
+  }, [openReceiptId, orders.data]);
   useEffect(() => {
     setSearch(searchParams.get('search') || '');
     setDestination(searchParams.get('delivery_destination') || '');
@@ -77,6 +89,7 @@ export function DeliveriesPage() {
         refresh();
       }
       setReceiving(null);
+      if (openReceiptId) clearOpenReceipt();
     },
     onError: (error: Error) => toast.push({ title: 'Receipt blocked', message: error.message, tone: 'danger' }),
   });
@@ -124,7 +137,7 @@ export function DeliveriesPage() {
     <section className="del-guidance"><CircleAlert size={17} /><span><strong>Warehouse receipts are confirmed by Storekeepers; direct-to-site receipts are confirmed by assigned Site Engineers.</strong><small>Dispatch confirmation and physical receiving stay separated for an auditable delivery trail.</small></span><Link to="/procurement/purchase-orders">Delivery workflow <ChevronRight size={14} /></Link></section>
     <section className="del-kpis"><DeliveryKpi icon={Truck} tone="blue" label="Total deliveries" value={deliveryOrders.length} note="Issued purchase orders" /><DeliveryKpi icon={Truck} tone="amber" label="In transit" value={inTransitOrders.length} note={inTransitOrders.length ? 'Supplier follow-up active' : 'No active dispatches'} /><DeliveryKpi icon={CalendarDays} tone="indigo" label="Arrived today" value={arrivedToday.length} note={arrivedToday.length ? 'Receipt recorded today' : 'No arrivals today'} /><DeliveryKpi icon={Box} tone="green" label="Received" value={receivedOrders.length} note="Linked to GRNs" /><DeliveryKpi icon={BarChart3} tone="green" label="On-time delivery" value={receivedOrders.length ? `${onTimeRate}%` : '—'} note={receivedOrders.length ? 'Received against expected date' : 'No received orders'} /></section>
     <section className="del-workspace-grid"><div className="del-register-panel"><div className="del-panel-heading"><h2>Delivery register</h2></div><div className="del-queue-tabs">{([['all', 'All', deliveryOrders.length], ['scheduled', 'Scheduled', deliveryOrders.filter((order) => deliveryState(order) === 'scheduled').length], ['dispatched', 'Dispatched', deliveryOrders.filter((order) => deliveryState(order) === 'dispatched').length], ['arrived', 'Arrived', deliveryOrders.filter((order) => deliveryState(order) === 'arrived').length], ['received', 'Received', receivedOrders.length], ['delayed', 'Delayed', delayedOrders.length]] as const).map(([value, label, count]) => <button type="button" key={value} className={queue === value ? 'active' : ''} onClick={() => update(() => setQueue(value))}>{label}<b>{count}</b></button>)}</div><div className="del-filters"><label><Search size={14} /><input aria-label="Search deliveries" placeholder="Search PO, supplier or destination" value={search} onChange={(event) => update(() => setSearch(event.target.value))} /></label><select aria-label="Filter deliveries by destination" className={inputClass} value={destination} onChange={(event) => update(() => setDestination(event.target.value))}><option value="">Destination</option><option value="WAREHOUSE">Main warehouse</option><option value="SITE">Direct to site</option></select><select aria-label="Filter deliveries by project" className={inputClass} value={project} onChange={(event) => update(() => setProject(event.target.value))}><option value="">Project</option>{projects.map(([id, name]) => <option value={id} key={id}>{name}</option>)}</select><select aria-label="Filter deliveries by status" className={inputClass} value={status} onChange={(event) => update(() => setStatus(event.target.value))}><option value="">Status</option><option value="ORDERED">Scheduled</option><option value="DISPATCH_CONFIRMED">Dispatched</option><option value="PARTIAL">Part received</option><option value="RECEIVED">Received</option></select><label className="del-date-range"><CalendarDays size={14} /><input aria-label="Filter deliveries from date" type="date" value={fromDate} onChange={(event) => update(() => setFromDate(event.target.value))} /><span>–</span><input aria-label="Filter deliveries to date" type="date" value={toDate} onChange={(event) => update(() => setToDate(event.target.value))} /></label><select aria-label="Sort deliveries" className={inputClass} value={sort} onChange={(event) => update(() => setSort(event.target.value as typeof sort))}><option value="expected">Sort: Expected arrival</option><option value="newest">Sort: Newest first</option></select></div><div className="del-table-wrap"><table className="del-table"><thead><tr><th>Delivery / PO</th><th>Next action</th><th>Supplier</th><th>Project / site</th><th>Destination</th><th>Dispatched</th><th>Expected</th><th>Arrived</th><th>Status</th><th>Receipt</th><th>Total</th><th aria-label="Actions" /></tr></thead><tbody>{displayedOrders.map((order) => <DeliveryRow key={order.id} order={order} receipts={receiptByOrder.get(order.id) || []} role={role} onDispatch={() => dispatch.mutate(order.id)} onReceive={() => setReceiving(order)} />)}</tbody></table>{!displayedOrders.length ? <p className="del-empty">{orders.isLoading ? 'Loading deliveries…' : 'No deliveries match this view.'}</p> : null}</div><footer className="del-table-footer"><span>Showing {pageStart} to {pageEnd} of {filteredOrders.length} deliveries</span><span><button type="button" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>‹</button><b>{page}</b><button type="button" disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>›</button></span></footer></div><aside className="del-side-column"><section className="del-status-panel"><div className="del-panel-heading"><h2>Delivery status</h2></div><div className="del-status-body"><div className="del-donut" style={{ background: deliveryOrders.length ? `conic-gradient(#138d68 0 ${Math.round(receivedOrders.length / deliveryOrders.length * 100)}%, #2d83c8 ${Math.round(receivedOrders.length / deliveryOrders.length * 100)}% ${Math.round((receivedOrders.length + inTransitOrders.length) / deliveryOrders.length * 100)}%, #ef9c27 ${Math.round((receivedOrders.length + inTransitOrders.length) / deliveryOrders.length * 100)}% ${Math.round((receivedOrders.length + inTransitOrders.length + delayedOrders.length) / deliveryOrders.length * 100)}%, #e9edef ${Math.round((receivedOrders.length + inTransitOrders.length + delayedOrders.length) / deliveryOrders.length * 100)}% 100%)` : '#e9edef' }}><strong>{deliveryOrders.length}</strong><small>deliveries</small></div><div className="del-status-list"><StatusRow label="Received" tone="received" value={receivedOrders.length} /><StatusRow label="In transit" tone="transit" value={inTransitOrders.length} /><StatusRow label="Delayed" tone="delayed" value={delayedOrders.length} /><StatusRow label="Awaiting receipt" tone="awaiting" value={deliveryOrders.filter((order) => order.status === 'PARTIAL').length} /></div></div></section><section className="del-summary-panel"><div className="del-panel-heading"><h2>Destination summary</h2></div><Link to="/procurement/deliveries?action_queue=warehouse_receipts"><Box size={17} /><span>Main warehouse<small>{warehouseOrders.length} deliveries</small></span><strong>{formatUGX(warehouseOrders.reduce((sum, order) => sum + Number(order.total_cost || 0), 0))}</strong></Link><Link to="/procurement/deliveries?action_queue=site_receipts"><Truck size={17} /><span>Direct to site<small>{siteOrders.length} deliveries</small></span><strong>{formatUGX(siteOrders.reduce((sum, order) => sum + Number(order.total_cost || 0), 0))}</strong></Link></section><section className="del-confirmation-panel"><div className="del-panel-heading"><h2>Arrival confirmations</h2><Badge tone={inTransitOrders.length || delayedOrders.length ? 'warning' : 'success'}>{inTransitOrders.length || delayedOrders.length ? 'Attention' : 'All clear'}</Badge></div><Link to="/procurement/deliveries?action_queue=warehouse_receipts"><PackageCheck size={17} /><span>Warehouse awaiting GRN<small>Storekeeper receipt queue</small></span><strong>{allOrders.filter((order) => order.delivery_destination === 'WAREHOUSE' && ['ORDERED', 'PARTIAL'].includes(order.status)).length}</strong></Link><Link to="/procurement/deliveries?action_queue=site_receipts"><Truck size={17} /><span>Site engineer confirmations<small>Direct-to-site receipt queue</small></span><strong>{allOrders.filter((order) => order.delivery_destination === 'SITE' && ['DISPATCH_CONFIRMED', 'PARTIAL'].includes(order.status)).length}</strong></Link><Link to="/procurement/purchase-orders"><FileText size={17} /><span>Delayed deliveries<small>Supplier follow-up required</small></span><strong>{delayedOrders.length}</strong></Link></section><section className="del-performance-panel"><div className="del-panel-heading"><h2>Supplier performance</h2><Link to="/suppliers">View all <ChevronRight size={13} /></Link></div><strong>{deliveryOrders[0]?.supplier_name || 'No supplier data'}</strong><PerformanceRow label="On-time delivery" value={onTimeRate} display={receivedOrders.length ? `${onTimeRate}%` : 'No data'} /><PerformanceRow label="Average transit time" value={averageTransit ? Math.min(100, 100 / averageTransit * 3) : 0} display={receivedOrders.length ? `${averageTransit} days` : 'No data'} /><PerformanceRow label="Total deliveries" value={deliveryOrders.length ? 100 : 0} display={String(deliveryOrders.length)} /></section></aside></section>
-    <ReceiptModal order={receiving} receipts={allReceipts} pending={receive.isPending} role={role} replacementClaim={replacementClaim.data} onClose={() => setReceiving(null)} onSubmit={(body) => receiving && receive.mutate({ id: receiving.id, body: body as Record<string, unknown> })} />
+    <ReceiptModal order={receiving} receipts={allReceipts} pending={receive.isPending} role={role} replacementClaim={replacementClaim.data} onClose={() => { setReceiving(null); if (openReceiptId) clearOpenReceipt(); }} onSubmit={(body) => receiving && receive.mutate({ id: receiving.id, body: body as Record<string, unknown> })} />
   </div>;
 }
 
@@ -153,11 +166,13 @@ function ReceiptModal({ order, receipts, pending, role, replacementClaim, onClos
   const [receiptDate, setReceiptDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<ReceiptLine[]>([]);
+  const [confirmed, setConfirmed] = useState(false);
   const open = Boolean(order);
 
   const resetForOrder = (next: PurchaseOrder | null) => {
     setReceiptDate(new Date().toISOString().slice(0, 10));
     setNotes('');
+    setConfirmed(false);
     if (replacementClaim) {
       setLines([{ purchase_order_item: replacementClaim.purchase_order_item, accepted_quantity: String(replacementClaim.replacement_quantity), rejected_quantity: '0', damaged_quantity: '0', notes: `Supplier replacement for claim #${replacementClaim.id}` }]);
       return;
@@ -166,7 +181,7 @@ function ReceiptModal({ order, receipts, pending, role, replacementClaim, onClos
     receipts.filter((receipt) => receipt.purchase_order === next?.id && receipt.status === 'ACCEPTED').forEach((receipt) => receipt.items.forEach((item) => dispositioned.set(item.purchase_order_item, (dispositioned.get(item.purchase_order_item) || 0) + Number(item.accepted_quantity) + Number(item.rejected_quantity) + Number(item.damaged_quantity))));
     setLines(next?.items.flatMap((item) => {
       const remaining = Math.max(Number(item.quantity) - (dispositioned.get(item.id) || 0), 0);
-      return remaining > 0 ? [{ purchase_order_item: item.id, accepted_quantity: String(remaining), rejected_quantity: '0', damaged_quantity: '0', notes: '' }] : [];
+      return remaining > 0 ? [{ purchase_order_item: item.id, accepted_quantity: '', rejected_quantity: '0', damaged_quantity: '0', notes: '' }] : [];
     }) || []);
   };
   // Receipt defaults intentionally refresh only when the selected PO or server receipt list changes.
@@ -179,11 +194,12 @@ function ReceiptModal({ order, receipts, pending, role, replacementClaim, onClos
     const dispositioned = receipts.filter((receipt) => receipt.purchase_order === order?.id && receipt.status === 'ACCEPTED').flatMap((receipt) => receipt.items).filter((line) => line.purchase_order_item === item.id).reduce((total, line) => total + Number(line.accepted_quantity) + Number(line.rejected_quantity) + Number(line.damaged_quantity), 0);
     return Math.max(Number(item.quantity) - dispositioned, 0);
   };
-  const valid = lines.length > 0 && (replacementClaim ? lines.every((line) => Number(line.accepted_quantity) === Number(replacementClaim.replacement_quantity) && Number(line.rejected_quantity) === 0 && Number(line.damaged_quantity) === 0) : lines.every((line) => lineTotal(line) > 0 && lineTotal(line) <= remainingQty(line.purchase_order_item) && (!((Number(line.rejected_quantity) > 0 || Number(line.damaged_quantity) > 0)) || line.notes.trim().length > 0)));
+  const receivedQuantity = lines.reduce((total, line) => total + lineTotal(line), 0);
+  const valid = confirmed && lines.length > 0 && (replacementClaim ? lines.every((line) => Number(line.accepted_quantity) === Number(replacementClaim.replacement_quantity) && Number(line.rejected_quantity) === 0 && Number(line.damaged_quantity) === 0) : lines.every((line) => lineTotal(line) > 0 && lineTotal(line) <= remainingQty(line.purchase_order_item) && (!((Number(line.rejected_quantity) > 0 || Number(line.damaged_quantity) > 0)) || line.notes.trim().length > 0)));
 
-  return <FormModal open={open} title={`${replacementClaim ? 'Receive supplier replacement for' : 'Receive'} ${order?.number || 'purchase order'}`} onClose={() => { resetForOrder(null); onClose(); }}>
+  return <FormModal open={open} title={`${replacementClaim ? 'Receive supplier replacement' : 'Record goods receipt'}${order ? ` · ${order.number}` : ''}`} onClose={() => { resetForOrder(null); onClose(); }}>
     <form className="grid gap-4" onSubmit={(event: FormEvent) => { event.preventDefault(); if (valid) onSubmit({ receipt_date: receiptDate, notes, items: lines }); }}>
-      <p className="border border-info/20 bg-info/5 p-3 text-sm text-muted">{replacementClaim ? `This replacement closes supplier claim #${replacementClaim.id}. It must accept exactly ${replacementClaim.replacement_quantity} ${replacementClaim.material_name}; a further rejection requires Procurement to open a new claim.` : order?.delivery_destination === 'SITE' && role === 'site_engineer' ? 'You are recording the physical site GRN. Count what arrived, attach delivery details in the notes, and record any rejection or damage. Storekeeper is notified for oversight; only accepted quantities update the site store and may be invoiced.' : 'You are recording the physical Goods Received Note (GRN). Only accepted quantities update stock and may be invoiced. Rejected or damaged quantities require a line reason and remain visible to Procurement and Finance as a supplier exception.'}</p>
+      <div className="grid gap-2 rounded-lg border border-info/20 bg-info/5 p-3 text-sm"><strong>Check the delivery before recording it</strong><p className="text-muted">{replacementClaim ? `This replacement closes supplier claim #${replacementClaim.id}. It must accept exactly ${replacementClaim.replacement_quantity} ${replacementClaim.material_name}; a further rejection requires Procurement to open a new claim.` : order?.delivery_destination === 'SITE' && role === 'site_engineer' ? 'Record what physically arrived at the site. Only accepted quantities update stock and may be invoiced.' : 'Record what physically arrived at the warehouse. Only accepted quantities update stock and may be invoiced.'}</p><div className="grid gap-1 text-xs text-muted sm:grid-cols-3"><span><b className="text-foreground">Supplier:</b> {order?.supplier_name || 'Not recorded'}</span><span><b className="text-foreground">Destination:</b> {order?.delivery_destination_display || 'Not recorded'}</span><span><b className="text-foreground">PO value:</b> {order ? formatUGX(order.total_cost) : '—'}</span></div></div>
       <div className="grid gap-3 md:grid-cols-2"><Field label="Receipt date" required><input className={inputClass} type="date" value={receiptDate} onChange={(event) => setReceiptDate(event.target.value)} /></Field><Field label="Receipt notes"><input className={inputClass} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Delivery note, condition, or escalation reference" /></Field></div>
       <div className="grid gap-3">
         {lines.map((line) => {
@@ -201,6 +217,7 @@ function ReceiptModal({ order, receipts, pending, role, replacementClaim, onClos
           </div>;
         })}
       </div>
+      <div className="grid gap-3 rounded-lg border border-border bg-background p-3"><div className="flex items-center justify-between text-sm"><span className="text-muted">Quantity being recorded</span><strong>{receivedQuantity || '—'}</strong></div><label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} className="mt-0.5" /><span>I confirm these quantities and conditions match the physical delivery.</span></label><p className="text-xs text-muted">This creates an auditable GRN. It cannot be edited after acceptance; corrections require a reversal.</p></div>
       <Button loading={pending} loadingLabel="Recording receipt" disabled={!valid}>Record receipt</Button>
     </form>
   </FormModal>;
