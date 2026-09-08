@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import UntypedToken
+from apps.api.session_auth import session_matches, touch_session
 
 
 @database_sync_to_async
@@ -20,8 +21,9 @@ def get_user_from_token(token):
             is_active=True,
             company__is_active=True,
         )
-        if not user.active_session_started_at or str(user.active_session_id) != str(validated_token.get('sid')):
+        if not session_matches(user, validated_token):
             return AnonymousUser()
+        touch_session(user)
         return user
     except (InvalidToken, TokenError, get_user_model().DoesNotExist, KeyError, TypeError):
         return AnonymousUser()

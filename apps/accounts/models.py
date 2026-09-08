@@ -62,6 +62,7 @@ class User(AbstractUser):
     phone = models.CharField(max_length=30, blank=True)
     active_session_id = models.UUIDField(default=uuid4, editable=False)
     active_session_started_at = models.DateTimeField(null=True, blank=True)
+    active_session_device_id = models.CharField(max_length=64, blank=True)
 
     @property
     def role_label(self):

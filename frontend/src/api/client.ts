@@ -14,6 +14,7 @@ type ApiRequestInit = Omit<RequestInit, 'body'> & {
 
 const ACCESS_KEY = 'construct.access';
 const REFRESH_KEY = 'construct.refresh';
+const DEVICE_KEY = 'construct.device-id';
 
 export class ApiError extends Error {
   status: number;
@@ -40,6 +41,20 @@ export function setTokens(tokens: Tokens) {
 export function clearTokens() {
   sessionStorage.removeItem(ACCESS_KEY);
   sessionStorage.removeItem(REFRESH_KEY);
+}
+
+export function getDeviceId() {
+  try {
+    const existing = window.localStorage.getItem(DEVICE_KEY);
+    if (existing) return existing;
+    const generated = typeof globalThis.crypto?.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    window.localStorage.setItem(DEVICE_KEY, generated);
+    return generated;
+  } catch {
+    return '';
+  }
 }
 
 function endLocalSession(reason = 'Your session has expired. Please sign in again.') {
@@ -88,14 +103,27 @@ async function refreshAccessToken() {
       body: JSON.stringify({ refresh: tokens.refresh }),
     });
     if (!response.ok) {
-      endLocalSession('Your session expired or was ended on another device. Please sign in again.');
-      return null;
+      const text = await response.text();
+      let payload: ApiErrorPayload | null = null;
+      if (text) {
+        try { payload = JSON.parse(text) as ApiErrorPayload; } catch { /* non-JSON error */ }
+      }
+      const message = errorMessage(payload, response.statusText || 'Session renewal failed');
+      if ([400, 401, 403].includes(response.status)) {
+        const reason = /another device|signed in elsewhere/i.test(message)
+          ? 'This session ended because the account signed in from another browser or device.'
+          : 'Your session expired. Please sign in again.';
+        endLocalSession(reason);
+        return null;
+      }
+      throw new ApiError('Session verification is temporarily unavailable. Your sign-in has been kept.', response.status, payload);
     }
     const data = (await response.json()) as { access: string; refresh?: string };
     setTokens({ access: data.access, refresh: data.refresh || tokens.refresh });
     return data.access;
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError('Cannot renew the session while the server or network is unavailable. Your sign-in has been kept.', 0, null);
   }
   })();
   try { return await refreshPromise; } finally { refreshPromise = null; }

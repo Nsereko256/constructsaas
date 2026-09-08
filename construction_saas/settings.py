@@ -260,6 +260,12 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
 }
 
+# A different browser only sees a conflict while the current browser is
+# actively polling the application. Same-browser sign-ins are recognised by a
+# random local device id and do not invalidate each other.
+ACTIVE_SESSION_CONFLICT_WINDOW = timedelta(minutes=5)
+ACTIVE_SESSION_TOUCH_INTERVAL = timedelta(seconds=60)
+
 if not DEBUG:
     # Render terminates TLS at its proxy and forwards the original scheme.
     # Trust this header so Django does not redirect an already-HTTPS request.

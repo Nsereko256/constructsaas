@@ -10,12 +10,12 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, Toke
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from .session_auth import session_matches
+from .session_auth import session_is_recent, session_matches, touch_session
 
 
 class ActiveSessionConflict(APIException):
     status_code = 409
-    default_detail = 'This account is already active on another device. Confirm to sign out that device and continue here.'
+    default_detail = 'This account is active in another browser or device. Confirm to end that session and continue here.'
     default_code = 'active_session'
 
 
@@ -26,6 +26,7 @@ def _blacklist_other_refresh_tokens(user, current_jti):
 
 class CompanyTokenObtainPairSerializer(TokenObtainPairSerializer):
     terminate_other_session = serializers.BooleanField(required=False, default=False, write_only=True)
+    device_id = serializers.CharField(required=False, allow_blank=True, max_length=64, write_only=True)
 
     def validate(self, attrs):
         data = super().validate(attrs)
@@ -34,13 +35,22 @@ class CompanyTokenObtainPairSerializer(TokenObtainPairSerializer):
                 'No active company account was found for these credentials.',
                 code='no_active_account',
             )
-        if self.user.active_session_started_at and not attrs.get('terminate_other_session'):
+        device_id = attrs.get('device_id', '').strip()
+        same_device = bool(
+            self.user.active_session_started_at
+            and device_id
+            and device_id == self.user.active_session_device_id
+        )
+        if session_is_recent(self.user) and not same_device and not attrs.get('terminate_other_session'):
             raise ActiveSessionConflict()
         refresh = RefreshToken(data['refresh'])
-        self.user.active_session_id = uuid4()
+        if not same_device:
+            self.user.active_session_id = uuid4()
         self.user.active_session_started_at = timezone.now()
-        self.user.save(update_fields=['active_session_id', 'active_session_started_at'])
-        _blacklist_other_refresh_tokens(self.user, refresh['jti'])
+        self.user.active_session_device_id = device_id
+        self.user.save(update_fields=['active_session_id', 'active_session_started_at', 'active_session_device_id'])
+        if not same_device:
+            _blacklist_other_refresh_tokens(self.user, refresh['jti'])
         refresh['sid'] = str(self.user.active_session_id)
         data['refresh'] = str(refresh)
         data['access'] = str(refresh.access_token)
@@ -60,8 +70,10 @@ class CompanyTokenRefreshSerializer(TokenRefreshSerializer):
         except (User.DoesNotExist, KeyError):
             raise InvalidToken({'detail': 'Invalid refresh token.'})
         if not session_matches(user, refresh):
-            raise InvalidToken({'detail': 'This session has ended because the account signed in on another device.'})
-        return super().validate(attrs)
+            raise InvalidToken({'detail': 'This session has ended because the account signed in from another browser or device.'})
+        data = super().validate(attrs)
+        touch_session(user)
+        return data
 
 
 class CompanyTokenRefreshView(TokenRefreshView):
@@ -82,7 +94,8 @@ class CompanyTokenLogoutAPIView(APIView):
             OutstandingToken.objects.filter(user=request.user, jti=refresh['jti']).first()
             _blacklist_other_refresh_tokens(request.user, None)
             request.user.active_session_started_at = None
-            request.user.save(update_fields=['active_session_started_at'])
+            request.user.active_session_device_id = ''
+            request.user.save(update_fields=['active_session_started_at', 'active_session_device_id'])
         except Exception:
             return Response({'detail': 'Session could not be closed.'}, status=400)
         return Response(status=204)

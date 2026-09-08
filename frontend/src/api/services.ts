@@ -1,4 +1,4 @@
-import { apiDownload, apiRequest, apiRequestWithoutSiteScope, pageParams, setTokens, clearTokens, getTokens } from './client';
+import { apiDownload, apiRequest, apiRequestWithoutSiteScope, pageParams, setTokens, clearTokens, getDeviceId, getTokens } from './client';
 import type {
   DashboardData,
   GoodsReceivedNote,
@@ -34,7 +34,7 @@ import type {
 export async function login(username: string, password: string, terminateOtherSession = false) {
   const tokens = await apiRequest<{ access: string; refresh: string }>('/api/token/', {
     method: 'POST',
-    body: { username, password, terminate_other_session: terminateOtherSession },
+    body: { username, password, terminate_other_session: terminateOtherSession, device_id: getDeviceId() },
   });
   setTokens(tokens);
   return tokens;
