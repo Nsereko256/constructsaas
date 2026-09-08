@@ -728,7 +728,7 @@ class ApprovalDelegationViewSet(viewsets.ModelViewSet):
 
 class SupplierViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
     serializer_class = SupplierSerializer
-    filterset_fields = ['rating', 'is_active']
+    filterset_fields = ['rating', 'is_active', 'is_preferred']
     search_fields = ['name', 'contact_person', 'phone', 'email', 'address', 'notes']
     ordering_fields = ['name', 'rating', 'created_at']
     ordering = ['name']

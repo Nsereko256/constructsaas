@@ -910,6 +910,18 @@ class ApiFoundationTests(TestCase):
         self.assertEqual(search_response.data['results'][0]['name'], 'Uganda Supplies')
         self.assertEqual(detail_response.status_code, 404)
 
+    def test_supplier_directory_can_filter_preferred_suppliers(self):
+        self.supplier.is_preferred = True
+        self.supplier.save(update_fields=['is_preferred'])
+        Supplier.objects.create(company=self.company, name='Standard Supplies', is_preferred=False)
+        self.client.force_login(self.procurement_officer)
+
+        response = self.client.get('/api/suppliers/', {'is_preferred': 'true'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['id'], self.supplier.pk)
+
     def test_storekeeper_can_create_stock_movement_with_company_and_creator_set(self):
         self.client.force_login(self.storekeeper)
 

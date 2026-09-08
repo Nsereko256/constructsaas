@@ -3,7 +3,7 @@ import { ArrowLeft, Box, CheckCircle2, ClipboardList, FileText, PackageCheck, Tr
 import type { ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '@/modules/procurement/api';
-import type { GoodsReceivedNote, PurchaseOrder, PurchaseRequest } from '@/modules/procurement/types';
+import type { GoodsReceivedNote } from '@/modules/procurement/types';
 import type { RecordActivity } from '@/api/types';
 import { qk } from '@/api/queryKeys';
 import { useAuth } from '@/auth/auth-context';

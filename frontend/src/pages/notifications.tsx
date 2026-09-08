@@ -71,7 +71,13 @@ export function NotificationsPage() {
       toast.push({ title: result.delivered ? 'Test notification sent' : 'No device is subscribed yet', tone: result.delivered ? 'success' : 'warning' });
     } finally { setPushBusy(false); }
   };
-  const markRead = useMutation({ mutationFn: api.markNotificationRead, onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['notifications'] }); } });
+  const markRead = useMutation({
+    mutationFn: api.markNotificationRead,
+    onSuccess: (_, id) => {
+      setSelected((current) => current?.id === id ? { ...current, is_read: true } : current);
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
   const markAll = useMutation({
     mutationFn: api.markAllNotificationsRead,
     onSuccess: () => { toast.push({ title: 'All notifications marked as read', tone: 'success' }); void queryClient.invalidateQueries({ queryKey: ['notifications'] }); },
@@ -90,7 +96,7 @@ export function NotificationsPage() {
   return (
     <div className="notifications-reference">
       <header className="notifications-titlebar">
-        <div><p className="notifications-eyebrow">Notifications</p><h1>Notifications</h1><p>Review alerts, approvals and updates across your operations.</p></div>
+        <div><h1>Notifications</h1><p>Review alerts, approvals and updates across your operations.</p></div>
         <div className="notifications-title-actions"><Button asChild variant="secondary"><Link to="/settings"><Settings className="h-4 w-4" />Notification settings</Link></Button><Button onClick={() => markAll.mutate()} disabled={markAll.isPending}><CheckCheck className="h-4 w-4" />Mark all as read</Button></div>
       </header>
       {summary.isError || notifications.isError ? <div className="notifications-load-error" role="alert"><CircleAlert className="h-4 w-4" /><span>{summary.isError ? 'Notification summary could not be loaded.' : null}{summary.isError && notifications.isError ? ' ' : null}{notifications.isError ? 'Notification list could not be loaded.' : null} Refresh the page or try again shortly.</span></div> : null}
@@ -135,4 +141,4 @@ function NotificationIcon({ level }: { level: string }) { if (level === 'danger'
 function Detail({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border border-border bg-background px-2.5 py-2"><span className="block text-[10px] font-bold uppercase tracking-wide text-muted">{label}</span><strong className="mt-0.5 block truncate text-xs text-foreground" title={value}>{value}</strong></div>; }
 function notificationLabel(notificationType: string) { return notificationType.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function notificationDestination(item: { notification_type: string; link: string }) { if (item.link.startsWith('/') && !item.link.startsWith('/api/')) return item.link; if (item.notification_type === 'low_stock') return '/inventory'; if (item.notification_type.includes('budget_approval') && item.link.includes('/budgets/')) return '/finance/budgets'; if (item.notification_type.startsWith('pr_') || item.notification_type.includes('budget_approval')) return '/procurement/requests'; if (item.notification_type === 'po_created') return '/procurement/purchase-orders'; if (item.notification_type === 'po_received') return '/procurement/grns'; if (item.notification_type.startsWith('invoice_')) return '/finance/payables'; if (item.notification_type.startsWith('payment_')) return '/finance/payments'; if (item.notification_type === 'staff_advance_overdue') return '/finance/expenses'; if (item.notification_type === 'valuation_adjustment') return '/inventory/movements'; if (item.notification_type === 'journal_posting_failure') return '/finance/reports'; if (item.notification_type === 'po_exceeding_budget') return '/procurement/requests'; return null; }
-function notificationActionLabel(type: string) { if (type.startsWith('invoice_')) return 'Open invoice actions'; if (type.startsWith('payment_')) return 'Open payment actions'; if (type.startsWith('pr_')) return 'Open purchase request'; if (type.startsWith('po_')) return 'Open purchase order'; if (type.includes('budget')) return 'Open budget review'; if (type.includes('valuation')) return 'Open inventory movements'; return 'Open related work'; }
+function notificationActionLabel(type: string) { if (type === 'po_received') return 'Open receipt'; if (type === 'low_stock') return 'Open inventory'; if (type.startsWith('invoice_')) return 'Open invoice actions'; if (type.startsWith('payment_')) return 'Open payment actions'; if (type.startsWith('pr_')) return 'Open purchase request'; if (type.startsWith('po_')) return 'Open purchase order'; if (type.includes('budget')) return 'Open budget review'; if (type.includes('valuation')) return 'Open inventory movements'; return 'Open related work'; }
