@@ -285,6 +285,8 @@ export type PurchaseOrder = {
     submitted_by_username: string;
     created_at: string;
   } | null;
+  finance_status: string;
+  finance_status_display: string;
   items: Array<{
     id: number;
     material: number;

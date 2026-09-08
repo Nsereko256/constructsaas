@@ -1271,6 +1271,8 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     delivery_follow_up_owner_name = serializers.CharField(source='delivery_follow_up_owner.get_full_name', read_only=True)
     is_overdue = serializers.SerializerMethodField()
     pending_preapproval_edit = serializers.SerializerMethodField()
+    finance_status = serializers.SerializerMethodField()
+    finance_status_display = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseOrder
@@ -1307,6 +1309,8 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
             'pending_preapproval_edit',
+            'finance_status',
+            'finance_status_display',
         ]
         read_only_fields = [
             'id',
@@ -1367,6 +1371,22 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             'submitted_by_username': edit.submitted_by.username,
             'created_at': edit.created_at,
         }
+
+    def _finance_approval(self, obj):
+        if not obj.purchase_request_id:
+            return None
+        try:
+            return obj.purchase_request.budget_approval
+        except BudgetApproval.DoesNotExist:
+            return None
+
+    def get_finance_status(self, obj):
+        approval = self._finance_approval(obj)
+        return approval.status if approval else BudgetApproval.STATUS_DRAFT
+
+    def get_finance_status_display(self, obj):
+        approval = self._finance_approval(obj)
+        return approval.get_status_display() if approval else 'Not submitted'
 
     def validate_supplier(self, supplier):
         if supplier is None:

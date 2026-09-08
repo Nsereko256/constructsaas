@@ -1601,6 +1601,7 @@ class ApiFoundationTests(TestCase):
         approval = BudgetApproval.objects.get(purchase_request=self.purchase_request)
         self.assertEqual(approval.status, BudgetApproval.STATUS_SUBMITTED)
         self.assertEqual(approval.review_reason, 'Please review the supplier quotation and budget clearance.')
+        self.assertEqual(response.data['finance_status'], BudgetApproval.STATUS_SUBMITTED)
 
     def test_create_purchase_order_from_pr_requires_approved_pr(self):
         PurchaseOrder.objects.filter(purchase_request=self.purchase_request).delete()
