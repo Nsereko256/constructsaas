@@ -20,6 +20,9 @@ class PurchaseRequest(models.Model):
     PRIORITY_HIGH = 'HIGH'
     PRIORITY_URGENT = 'URGENT'
 
+    DESTINATION_WAREHOUSE = 'WAREHOUSE'
+    DESTINATION_SITE = 'SITE'
+
     STATUS_CHOICES = [
         (STATUS_PENDING, 'Pending'),
         (STATUS_RETURNED, 'Returned for Correction'),
@@ -36,6 +39,11 @@ class PurchaseRequest(models.Model):
         (PRIORITY_NORMAL, 'Normal'),
         (PRIORITY_HIGH, 'High'),
         (PRIORITY_URGENT, 'Urgent'),
+    ]
+
+    DESTINATION_CHOICES = [
+        (DESTINATION_WAREHOUSE, 'Main Warehouse'),
+        (DESTINATION_SITE, 'Direct to Site'),
     ]
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='purchase_requests')
@@ -59,6 +67,8 @@ class PurchaseRequest(models.Model):
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default=PRIORITY_NORMAL)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default=STATUS_PENDING)
     justification = models.TextField(blank=True)
+    required_date = models.DateField(null=True, blank=True)
+    delivery_destination = models.CharField(max_length=20, choices=DESTINATION_CHOICES, default=DESTINATION_WAREHOUSE)
     requested_by = models.ForeignKey(
         'accounts.User',
         on_delete=models.SET_NULL,
@@ -100,6 +110,8 @@ class PurchaseRequest(models.Model):
         return f'/api/purchase-requests/{self.pk}/'
 
     def clean(self):
+        if self.delivery_destination == self.DESTINATION_SITE and not self.project_id:
+            raise ValidationError({'delivery_destination': 'Direct-to-site requests require a project.'})
         if self.project_id and self.company_id and self.project.company_id != self.company_id:
             raise ValidationError({'project': 'Selected project must belong to the same company.'})
         if self.work_order_id:

@@ -840,7 +840,7 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
     requested_by_username = serializers.CharField(source='requested_by.username', read_only=True)
     technical_approved_by_name = serializers.SerializerMethodField()
     manager_approved_by_name = serializers.SerializerMethodField()
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    status_display = serializers.SerializerMethodField()
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     items = PurchaseRequestItemSerializer(many=True)
     total_estimated_cost = serializers.SerializerMethodField()
@@ -861,6 +861,7 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
     finance_budget_line = serializers.SerializerMethodField()
     can_submit_finance = serializers.SerializerMethodField()
     can_correct_finance_return = serializers.SerializerMethodField()
+    lifecycle_status_display = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseRequest
@@ -875,13 +876,15 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
             'priority_display',
             'status',
             'status_display',
+            'lifecycle_status_display',
             'justification',
+            'required_date',
+            'delivery_destination',
             'requested_by',
             'requested_by_username',
             'technical_approved_by_name',
             'manager_approved_by_name',
-            'manager_approved_by_name',
-              'rejection_reason',
+            'rejection_reason',
             'technical_return_reason',
               'client_uuid',
             'total_estimated_cost',
@@ -889,7 +892,6 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
             'can_request_stock_issue',
             'can_approve_stock_issue',
             'next_action_message',
-            'can_approve_stock_issue',
             'can_fulfill_from_stock',
             'can_issue_from_stock',
             'can_create_purchase_order',
@@ -949,6 +951,17 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
                 user,
                 Project.objects.filter(is_active=True),
             ).order_by('name')
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        project = attrs.get('project', getattr(self.instance, 'project', None))
+        destination = attrs.get(
+            'delivery_destination',
+            getattr(self.instance, 'delivery_destination', PurchaseRequest.DESTINATION_WAREHOUSE),
+        )
+        if destination == PurchaseRequest.DESTINATION_SITE and not project:
+            raise serializers.ValidationError({'delivery_destination': 'Direct-to-site requests require a project.'})
+        return attrs
 
     def get_total_estimated_cost(self, obj) -> Decimal:
         return sum(item.quantity * item.material.unit_price for item in obj.items.all())
@@ -1058,16 +1071,24 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
             if obj.project_id and not obj.purchase_orders.exists() and not (
                 obj.technical_approved_by_id and obj.technical_approved_by.role == User.ROLE_ADMIN
             ):
-                return 'Awaiting Procurement to obtain a supplier quote; Admin approval is required if warehouse stock issue is chosen.'
+                return 'Awaiting Procurement to create and price a purchase order; Admin approval is required if warehouse stock issue is chosen.'
             if obj.purchase_orders.exists():
-                return 'Awaiting Procurement to send the quoted purchase order to Finance.'
+                return 'Awaiting Procurement to send the priced purchase order to Finance.'
             return 'Awaiting Procurement to choose warehouse issue or create a purchase order.'
         if obj.status == PurchaseRequest.STATUS_PO_CREATED:
+            purchase_order = obj.purchase_orders.order_by('-id').first()
+            invoice = purchase_order.supplier_invoices.order_by('-id').first() if purchase_order else None
+            if invoice and invoice.status == invoice.STATUS_PAID:
+                return 'Fulfilment complete: materials were received and the supplier invoice is paid.'
+            if invoice and invoice.status in {invoice.STATUS_POSTED, invoice.STATUS_PARTIALLY_PAID}:
+                return 'Materials received; Finance is completing supplier payment.'
+            if purchase_order and purchase_order.status == PurchaseOrder.STATUS_RECEIVED:
+                return 'Materials received; Finance can capture and match the supplier invoice.'
             approval = self._finance_approval(obj)
             if approval is None:
-                return 'Awaiting Procurement to send the quoted purchase order to Finance.'
+                return 'Awaiting Procurement to send the purchase order to Finance.'
             if approval.status in {BudgetApproval.STATUS_SUBMITTED, BudgetApproval.STATUS_HOLD}:
-                return 'Awaiting Finance review of the quoted purchase order.'
+                return 'Awaiting Finance review of the purchase order and budget impact.'
             if approval.status == BudgetApproval.STATUS_RETURNED:
                 return 'Finance returned this purchase order for correction and resubmission.'
             if approval.status in {BudgetApproval.STATUS_APPROVED, BudgetApproval.STATUS_OVERRIDDEN}:
@@ -1076,6 +1097,24 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
                 return 'Finance rejected this purchase order; review the finance comments.'
             return 'Follow up the purchase order finance review.'
         return 'No further action is currently required.'
+
+    def get_lifecycle_status_display(self, obj):
+        if obj.status != PurchaseRequest.STATUS_PO_CREATED:
+            return obj.get_status_display()
+        purchase_order = obj.purchase_orders.order_by('-id').first()
+        invoice = purchase_order.supplier_invoices.order_by('-id').first() if purchase_order else None
+        if invoice and invoice.status == invoice.STATUS_PAID:
+            return 'Completed / paid'
+        if invoice and invoice.status == invoice.STATUS_PARTIALLY_PAID:
+            return 'Partially paid'
+        if invoice and invoice.status in {invoice.STATUS_POSTED, invoice.STATUS_APPROVED, invoice.STATUS_VERIFIED, invoice.STATUS_MATCHED}:
+            return 'Invoiced'
+        if purchase_order and purchase_order.status == PurchaseOrder.STATUS_RECEIVED:
+            return 'Received'
+        return obj.get_status_display()
+
+    def get_status_display(self, obj):
+        return self.get_lifecycle_status_display(obj)
 
     def _finance_approval(self, obj):
         try:
@@ -1261,7 +1300,7 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
 class PurchaseOrderSerializer(serializers.ModelSerializer):
     purchase_request_number = serializers.CharField(source='purchase_request.number', read_only=True)
     project_name = serializers.CharField(source='project.name', read_only=True)
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    status_display = serializers.SerializerMethodField()
     delivery_destination_display = serializers.CharField(source='get_delivery_destination_display', read_only=True)
     dispatch_confirmed_by_username = serializers.CharField(source='dispatch_confirmed_by.username', read_only=True)
     received_by_username = serializers.CharField(source='received_by.username', read_only=True)
@@ -1273,6 +1312,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     pending_preapproval_edit = serializers.SerializerMethodField()
     finance_status = serializers.SerializerMethodField()
     finance_status_display = serializers.SerializerMethodField()
+    lifecycle_status_display = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseOrder
@@ -1290,6 +1330,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             'delivery_destination_display',
             'status',
             'status_display',
+            'lifecycle_status_display',
             'expected_delivery_date',
             'supplier_confirmed_delivery_date',
             'revised_delivery_date',
@@ -1388,6 +1429,21 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         approval = self._finance_approval(obj)
         return approval.get_status_display() if approval else 'Not submitted'
 
+    def get_lifecycle_status_display(self, obj):
+        invoice = obj.supplier_invoices.order_by('-id').first()
+        if invoice and invoice.status == invoice.STATUS_PAID:
+            return 'Paid / complete'
+        if invoice and invoice.status == invoice.STATUS_PARTIALLY_PAID:
+            return 'Partially paid'
+        if invoice and invoice.status in {invoice.STATUS_POSTED, invoice.STATUS_APPROVED, invoice.STATUS_VERIFIED, invoice.STATUS_MATCHED}:
+            return 'Invoiced'
+        if obj.status == PurchaseOrder.STATUS_RECEIVED:
+            return 'Received / ready to invoice'
+        return obj.get_status_display()
+
+    def get_status_display(self, obj):
+        return self.get_lifecycle_status_display(obj)
+
     def validate_supplier(self, supplier):
         if supplier is None:
             return supplier
@@ -1450,11 +1506,10 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'project': 'Project must match the linked purchase request project.'})
         if delivery_destination == PurchaseOrder.DELIVERY_SITE and not (attrs.get('project') or project):
             raise serializers.ValidationError({'project': 'Direct-to-site purchase orders must be linked to a project.'})
-        if self.instance is None and purchase_request.project_id and 'delivery_destination' not in attrs:
-            # Project shortage POs go to the site by default. Procurement may
-            # explicitly choose Warehouse only when the goods must be held as
-            # reserved project stock before a controlled site transfer.
-            attrs['delivery_destination'] = PurchaseOrder.DELIVERY_SITE
+        if self.instance is None and 'delivery_destination' not in attrs:
+            attrs['delivery_destination'] = purchase_request.delivery_destination
+        if self.instance is None and 'expected_delivery_date' not in attrs and purchase_request.required_date:
+            attrs['expected_delivery_date'] = purchase_request.required_date
         # A PO executes an approval. Supplier and delivery choices can change,
         # but procurement must not alter the approved material scope or value.
         items = attrs.get('items')

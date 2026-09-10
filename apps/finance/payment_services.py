@@ -10,6 +10,7 @@ from .configuration_services import record_finance_audit_event, validate_exchang
 from apps.api.upload_validation import validate_image_upload
 from .models import (
     Account,
+    CashAccount,
     FinanceDocumentSequence,
     FinanceSettings,
     InvoiceReversal,
@@ -36,12 +37,23 @@ from .services import (
 )
 
 
-BALANCE_ALLOCATION_STATUSES = [PaymentAllocation.STATUS_APPROVED, PaymentAllocation.STATUS_POSTED]
+BALANCE_ALLOCATION_STATUSES = [PaymentAllocation.STATUS_POSTED]
+RESERVED_ALLOCATION_STATUSES = [PaymentAllocation.STATUS_APPROVED, PaymentAllocation.STATUS_POSTED]
 
 
 def approved_allocations(invoice, *, exclude_payment=None):
     queryset = invoice.payment_allocations.filter(
         status__in=BALANCE_ALLOCATION_STATUSES, payment__reversal__isnull=True,
+    )
+    if exclude_payment:
+        queryset = queryset.exclude(payment=exclude_payment)
+    return money(queryset.aggregate(total=Sum('amount'))['total'] or ZERO)
+
+
+def reserved_allocations(invoice, *, exclude_payment=None):
+    """Amounts already authorised, used to prevent two vouchers reserving one balance."""
+    queryset = invoice.payment_allocations.filter(
+        status__in=RESERVED_ALLOCATION_STATUSES, payment__reversal__isnull=True,
     )
     if exclude_payment:
         queryset = queryset.exclude(payment=exclude_payment)
@@ -126,8 +138,16 @@ def create_payment(
     for field, value in [('supplier', supplier), ('source_account', source_account), ('currency', currency)]:
         if value.company_id != user.company_id:
             raise ValidationError({field: ['Selection must belong to your company.']})
-    if not source_account.is_active or source_account.account_type != Account.TYPE_ASSET or not currency.is_active:
-        raise ValidationError({'non_field_errors': ['Payment account must be an active asset account and currency must be active.']})
+    valid_cash_account = source_account.system_key == Account.SYSTEM_CASH or CashAccount.objects.filter(
+        company=user.company,
+        account=source_account,
+        currency=currency,
+        is_active=True,
+    ).exists()
+    if not source_account.is_active or not currency.is_active or not valid_cash_account:
+        raise ValidationError({
+            'source_account': ['Select an active cash or bank account configured for this currency.'],
+        })
     amount = money(amount)
     exchange_rate = validate_exchange_rate(
         company=user.company, currency=currency, exchange_rate=exchange_rate,
@@ -164,9 +184,17 @@ def update_draft_payment(*, payment, user, values):
         not locked.source_account_id
         or locked.source_account.company_id != user.company_id
         or not locked.source_account.is_active
-        or locked.source_account.account_type != Account.TYPE_ASSET
+        or not (
+            locked.source_account.system_key == Account.SYSTEM_CASH
+            or CashAccount.objects.filter(
+                company=user.company,
+                account=locked.source_account,
+                currency=locked.currency,
+                is_active=True,
+            ).exists()
+        )
     ):
-        raise ValidationError({'source_account': ['Select an active company asset account.']})
+        raise ValidationError({'source_account': ['Select an active cash or bank account configured for this currency.']})
     if (
         not locked.currency_id
         or locked.currency.company_id != user.company_id
@@ -286,7 +314,12 @@ def approve_payment(*, payment, user, authorize_advance=False, advance_reason=''
     ).order_by('pk')}
     for allocation in allocations:
         invoice = invoices[allocation.invoice_id]
-        balance = invoice_balance(invoice, exclude_payment=locked)
+        balance = money(max(
+            invoice.total_amount
+            - reserved_allocations(invoice, exclude_payment=locked)
+            - approved_credit_notes(invoice),
+            ZERO,
+        ))
         if allocation.amount > balance:
             raise ValidationError({'allocations': [{invoice.pk: [f'Allocation exceeds balance of {balance}.']}]})
     unallocated = money(locked.amount - sum((item.amount for item in allocations), ZERO))
@@ -304,8 +337,6 @@ def approve_payment(*, payment, user, authorize_advance=False, advance_reason=''
     locked.approved_by = user
     locked.approved_at = timezone.now()
     _save(locked, update_fields=['status', 'approved_by', 'approved_at'])
-    for invoice in invoices.values():
-        _refresh_invoice(invoice)
     _action(locked, user, PaymentApproval.ACTION_APPROVE, comments=advance_reason)
     from .notification_services import payment_decided
 
@@ -400,6 +431,22 @@ def post_payment(*, payment, user, idempotency_key):
     locked.posted_at = timezone.now()
     locked.journal_entry = entry
     _save(locked, update_fields=['status', 'posted_by', 'posted_at', 'journal_entry'])
+    for allocation in allocations:
+        _refresh_invoice(allocation.invoice)
+        record_finance_audit_event(
+            company=user.company,
+            actor=user,
+            action='invoice.payment_posted',
+            object_type='SupplierInvoice',
+            object_id=allocation.invoice_id,
+            message=f'Payment voucher {locked.number} posted for {allocation.amount}.',
+            metadata={
+                'payment_id': locked.pk,
+                'payment_number': locked.number,
+                'allocation_amount': allocation.amount,
+                'journal_entry_id': entry.pk,
+            },
+        )
     _action(locked, user, PaymentApproval.ACTION_POST, idempotency_key=f'post:{idempotency_key}')
     return entry
 

@@ -1573,7 +1573,9 @@ class ApiFoundationTests(TestCase):
 
     def test_procurement_officer_can_create_purchase_order_from_approved_pr(self):
         self.purchase_request.status = PurchaseRequest.STATUS_APPROVED
-        self.purchase_request.save(update_fields=['status', 'updated_at'])
+        self.purchase_request.delivery_destination = PurchaseRequest.DESTINATION_SITE
+        self.purchase_request.required_date = timezone.localdate() + timedelta(days=7)
+        self.purchase_request.save(update_fields=['status', 'delivery_destination', 'required_date', 'updated_at'])
         PurchaseOrder.objects.filter(purchase_request=self.purchase_request).delete()
         PurchaseRequestItem.objects.create(
             purchase_request=self.purchase_request,
@@ -1595,6 +1597,8 @@ class ApiFoundationTests(TestCase):
         self.assertEqual(purchase_order.purchase_request, self.purchase_request)
         self.assertEqual(purchase_order.project, self.project)
         self.assertEqual(purchase_order.status, PurchaseOrder.STATUS_PENDING)
+        self.assertEqual(purchase_order.delivery_destination, PurchaseOrder.DELIVERY_SITE)
+        self.assertEqual(purchase_order.expected_delivery_date, self.purchase_request.required_date)
         self.assertEqual(purchase_order.items.count(), 1)
         item = purchase_order.items.first()
         self.assertEqual(item.quantity, PurchaseRequestItem.objects.get(purchase_request=self.purchase_request).quantity)

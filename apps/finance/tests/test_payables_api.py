@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 from tempfile import TemporaryDirectory
 
@@ -51,6 +52,7 @@ class SupplierPayablesApiTests(TestCase):
             'purchase_order': self.po.pk,
             'invoice_number': number or f'INV-{key}',
             'invoice_date': str(timezone.localdate()),
+            'due_date': str(timezone.localdate() + timedelta(days=30)),
             'currency': 'UGX',
             'exchange_rate': '1.000000',
             'discount_amount': '10000.00',
@@ -113,6 +115,13 @@ class SupplierPayablesApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 403)
+
+    def test_invoice_due_date_is_persisted_and_returned(self):
+        response = self.create_invoice(key='due-date')
+
+        invoice = SupplierInvoice.objects.get(pk=response.data['id'])
+        self.assertEqual(str(invoice.due_date), response.data['due_date'])
+        self.assertEqual(response.data['due_date'], self.payload(key='due-date')['due_date'])
 
     def test_duplicate_supplier_invoice_number_is_rejected(self):
         self.create_invoice(number='DUP-1', key='dup-one')

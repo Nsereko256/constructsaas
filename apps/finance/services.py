@@ -863,7 +863,7 @@ def post_invoice(*, invoice, user, idempotency_key=''):
 
 def invoice_paid_amount(invoice):
     paid = invoice.payment_allocations.filter(
-        status__in=[PaymentAllocation.STATUS_APPROVED, PaymentAllocation.STATUS_POSTED],
+        status=PaymentAllocation.STATUS_POSTED,
         payment__reversal__isnull=True,
     ).aggregate(total=Sum('amount'))['total'] or ZERO
     return money(paid)

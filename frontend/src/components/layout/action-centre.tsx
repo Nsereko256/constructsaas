@@ -25,7 +25,7 @@ const queues: Record<Role, QueueItem[]> = {
     { badge: 'deliveries', label: 'Site POs to dispatch', href: '/procurement/deliveries?action_queue=site_dispatch', icon: ReceiptText },
   ],
   finance_officer: [
-    { badge: 'requests', label: 'Finance reviews and quoted POs', href: '/procurement/requests?action_queue=my_requests', icon: ClipboardCheck },
+    { badge: 'requests', label: 'Finance reviews and priced POs', href: '/procurement/requests?action_queue=my_requests', icon: ClipboardCheck },
     { badge: 'supplier_invoices', label: 'Supplier invoices to prepare', href: '/finance/payables', icon: FileText },
     { badge: 'payments', label: 'Payment drafts to prepare', href: '/finance/payments', icon: Wallet },
     { badge: 'expenses', label: 'Expense drafts to prepare', href: '/finance/expenses', icon: Banknote },

@@ -122,6 +122,35 @@ class SupplierPaymentApiTests(TestCase):
         self.assertEqual(self.invoice_one.balance, Decimal('350000.00'))
         self.assertEqual(self.invoice_one.status, SupplierInvoice.STATUS_POSTED)
 
+    def test_approved_payment_does_not_reduce_invoice_until_posted(self):
+        payment_id = self.create_payment(
+            amount='350000.00', key='approved-not-posted', reference='APPROVED-1',
+        )
+        self.allocate(payment_id, self.invoice_one, '350000.00')
+        self.client.post(f'/api/v1/finance/payments/{payment_id}/submit/')
+        self.client.force_authenticate(self.fixture.finance_manager)
+        approved = self.client.post(
+            f'/api/v1/finance/payments/{payment_id}/approve/',
+            {'authorize_advance': False}, format='json',
+        )
+        self.assertEqual(approved.status_code, 200, approved.data)
+        self.invoice_one.refresh_from_db()
+        self.assertEqual(self.invoice_one.balance, Decimal('350000.00'))
+        self.assertEqual(self.invoice_one.status, SupplierInvoice.STATUS_POSTED)
+
+    def test_payment_rejects_asset_account_not_configured_for_cash(self):
+        inventory = Account.objects.get(
+            company=self.fixture.company, system_key=Account.SYSTEM_INVENTORY,
+        )
+        self.client.force_authenticate(self.fixture.finance_officer)
+        payload = self.payment_payload(
+            key='invalid-payment-account', reference='INVALID-ACCOUNT',
+        )
+        payload['source_account'] = inventory.pk
+        response = self.client.post('/api/v1/finance/payments/', payload, format='json')
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn('source_account', response.data)
+
     def test_unallocate_before_submission_and_reject_require_controlled_actions(self):
         payment_id = self.create_payment(amount='100000.00', key='unallocate', reference='UNALLOCATE-1')
         self.allocate(payment_id, self.invoice_one, '100000.00')

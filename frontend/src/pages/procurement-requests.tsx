@@ -336,6 +336,8 @@ function RequestModal({ open, onClose }: { open: boolean; onClose: () => void })
       title: form.title,
       priority: form.priority,
       justification: form.justification,
+      required_date: form.required_date || null,
+      delivery_destination: isWarehouseReplenishment ? 'WAREHOUSE' : form.delivery_destination,
       items: form.items.map((item) => ({
         material: Number(item.material_id),
         quantity: item.quantity,
@@ -387,6 +389,8 @@ function RequestModal({ open, onClose }: { open: boolean; onClose: () => void })
               <option value="URGENT">Urgent</option>
             </select>
           </Field>
+          <Field label="Required date"><input className={inputClass} type="date" value={form.required_date} onChange={(event) => set('required_date', event.target.value)} /></Field>
+          {!isWarehouseReplenishment ? <Field label="Delivery destination"><select className={inputClass} value={form.delivery_destination} onChange={(event) => set('delivery_destination', event.target.value)}><option value="SITE">Direct to site</option><option value="WAREHOUSE">Main warehouse</option></select></Field> : null}
           <Field label="Justification"><input className={inputClass} value={form.justification} onChange={(event) => set('justification', event.target.value)} /></Field>
         </div>
         <Card>
@@ -434,6 +438,8 @@ type RequestDraft = {
   title: string;
   priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
   justification: string;
+  required_date: string;
+  delivery_destination: 'WAREHOUSE' | 'SITE';
   items: Array<{
     material_id: string;
     material_label: string;
@@ -448,6 +454,8 @@ function defaultDraft(): RequestDraft {
     title: '',
     priority: 'NORMAL',
     justification: '',
+    required_date: '',
+    delivery_destination: 'SITE',
     items: [{ material_id: '', material_label: '', quantity: '', notes: '' }],
   };
 }
@@ -499,9 +507,9 @@ function FinanceSubmissionModal({ request, pending, onClose, onSubmit }: { reque
   const [budgetLine, setBudgetLine] = useState('');
   const [comments, setComments] = useState('');
   const lines = budgets.data?.results.flatMap((budget) => budget.lines.map((line) => ({ ...line, budgetName: budget.name }))) || [];
-  return <FormModal open={!!request} title={`Send quoted PO ${request?.number || 'request'} to Finance`} onClose={onClose}>
+  return <FormModal open={!!request} title={`Send priced PO ${request?.number || 'request'} to Finance`} onClose={onClose}>
     <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); onSubmit(budgetLine ? Number(budgetLine) : null, comments); }}>
-      <p className="border border-border bg-background p-3 text-sm">Quoted PO total for Finance review: <strong>{formatUGX(request?.total_estimated_cost)}</strong></p>
+      <p className="border border-border bg-background p-3 text-sm">Priced PO total for Finance review: <strong>{formatUGX(request?.total_estimated_cost)}</strong></p>
       <Field label="Budget authorization">
         <select className={inputClass} value={budgetLine} onChange={(event) => setBudgetLine(event.target.value)}>
           <option value="">Unbudgeted request - Finance Manager override required</option>
@@ -509,7 +517,7 @@ function FinanceSubmissionModal({ request, pending, onClose, onSubmit }: { reque
         </select>
       </Field>
       <Field label="Submission comments"><textarea className={inputClass} rows={3} value={comments} onChange={(event) => setComments(event.target.value)} /></Field>
-      <Button loading={pending} loadingLabel="Sending quoted PO">Send quoted PO for Finance review</Button>
+      <Button loading={pending} loadingLabel="Sending priced PO">Send priced PO for Finance review</Button>
     </form>
   </FormModal>;
 }

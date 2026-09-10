@@ -217,7 +217,10 @@ export type PurchaseRequest = {
   priority_display: string;
   status: string;
   status_display: string;
+  lifecycle_status_display: string;
   justification: string;
+  required_date: string | null;
+  delivery_destination: 'WAREHOUSE' | 'SITE';
   requested_by: number;
   requested_by_username: string;
   technical_approved_by_name: string;
@@ -260,6 +263,7 @@ export type PurchaseOrder = {
   delivery_destination_display: string;
   status: string;
   status_display: string;
+  lifecycle_status_display: string;
   expected_delivery_date: string | null;
   supplier_confirmed_delivery_date: string | null;
   revised_delivery_date: string | null;

@@ -1114,7 +1114,7 @@ class SupplierInvoice(OfflineDraftMixin):
     @property
     def amount_paid(self):
         return self.payment_allocations.filter(
-            status__in=[PaymentAllocation.STATUS_APPROVED, PaymentAllocation.STATUS_POSTED],
+            status=PaymentAllocation.STATUS_POSTED,
             payment__reversal__isnull=True,
         ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
 
