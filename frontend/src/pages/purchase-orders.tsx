@@ -147,15 +147,20 @@ export function PurchaseOrdersPage() {
     navigate(`/procurement/purchase-orders/${orderId}/`);
   };
   const rowAction = (order: PurchaseOrder) => {
-    const canEdit = hasRole(role, ['procurement_officer', 'admin']) && ['DRAFT', 'PENDING', 'ORDERED'].includes(order.status);
+    // Once a PO is issued, amendment remains available from the overflow menu,
+    // but it is no longer the operational next step.
+    const canEdit = hasRole(role, ['procurement_officer', 'admin']) && ['DRAFT', 'PENDING'].includes(order.status);
     const editLabel = ['DRAFT', 'PENDING'].includes(order.status) ? 'Edit PO' : 'Amend PO';
     if (can.createPo(role) && order.status === 'PENDING' && financeReviewEnabled && ['DRAFT', 'RETURNED'].includes(order.finance_status)) return <div className="po-row-actions"><Button size="sm" className="po-next-action" onClick={() => setFinanceHandoffOrder(order)}><CircleDollarSign size={13} />Send to Finance</Button>{canEdit ? <Button size="sm" variant="secondary" className="po-next-action" onClick={() => setAmending(order)}><FilePenLine size={13} />{editLabel}</Button> : null}</div>;
     if (can.createPo(role) && order.status === 'PENDING' && financeReviewEnabled && ['SUBMITTED', 'HOLD'].includes(order.finance_status)) return <span className="po-next-message" title="Finance is reviewing this purchase order">Awaiting Finance review</span>;
     if (can.createPo(role) && order.status === 'PENDING' && financeReviewEnabled && ['REJECTED'].includes(order.finance_status)) return <span className="po-next-message" title="Finance rejected this purchase order">Finance correction required</span>;
     if (can.createPo(role) && order.status === 'PENDING') return <div className="po-row-actions"><Button size="sm" className="po-next-action" loading={approve.isPending && approve.variables === order.id} loadingLabel="Approving" disabled={approve.isPending} onClick={() => approve.mutate(order.id)}><Check size={13} />Approve PO</Button>{canEdit ? <Button size="sm" variant="secondary" className="po-next-action" onClick={() => setAmending(order)}><FilePenLine size={13} />{editLabel}</Button> : null}</div>;
     if (can.createPo(role) && order.status === 'DRAFT') return <Button size="sm" variant="secondary" className="po-next-action" onClick={() => setAmending(order)}><FilePenLine size={13} />{editLabel}</Button>;
-    if (can.createPo(role) && order.delivery_destination === 'SITE' && ['ORDERED', 'PARTIAL'].includes(order.status)) return <Button size="sm" variant="secondary" className="po-next-action" onClick={() => confirmDispatch.mutate(order.id)}><Truck size={13} />Confirm dispatch</Button>;
+    if (can.createPo(role) && order.delivery_destination === 'SITE' && order.status === 'ORDERED') return <Button size="sm" variant="secondary" className="po-next-action" onClick={() => confirmDispatch.mutate(order.id)}><Truck size={13} />Confirm dispatch</Button>;
     if (canReceivePurchaseOrder(role, order)) return <Button asChild size="sm" className="po-next-action"><Link to={`/procurement/deliveries?search=${encodeURIComponent(order.number)}&open_receipt=${order.id}`}><PackageCheck size={13} />Record receipt</Link></Button>;
+    if (order.delivery_destination === 'WAREHOUSE' && ['ORDERED', 'PARTIAL'].includes(order.status)) return <Button asChild size="sm" variant="secondary" className="po-next-action"><Link to={`/procurement/deliveries?search=${encodeURIComponent(order.number)}`}><PackageCheck size={13} />Track receipt</Link></Button>;
+    if (order.delivery_destination === 'SITE' && ['DISPATCH_CONFIRMED', 'PARTIAL'].includes(order.status)) return <Button asChild size="sm" variant="secondary" className="po-next-action"><Link to={`/procurement/deliveries?search=${encodeURIComponent(order.number)}`}><Truck size={13} />Track site receipt</Link></Button>;
+    if (order.delivery_destination === 'SITE' && order.status === 'ORDERED') return <span className="po-next-message" title="Procurement must confirm dispatch before the Site Engineer can receive it.">Awaiting dispatch</span>;
     if (canEdit) return <Button size="sm" variant="secondary" className="po-next-action" onClick={() => setAmending(order)}><FilePenLine size={13} />{editLabel}</Button>;
     if (order.status === 'RECEIVED') return <Link className="po-view-action" to={`/procurement/grns?search=${encodeURIComponent(order.number)}`}>{order.delivery_destination === 'SITE' ? 'View receipt' : 'View GRN'}</Link>;
     if (order.pending_preapproval_edit && hasRole(role, ['finance_officer', 'finance_manager', 'admin'])) return <Button size="sm" variant="warning" className="po-next-action" onClick={() => { const amendment = (amendments.data?.get(order.id) || []).find((item) => item.status === 'SUBMITTED'); if (amendment) setReviewingPreapproval({ order, amendment, canConfirm: hasRole(role, ['finance_manager', 'admin']) }); }}>Review edit</Button>;
@@ -191,7 +196,7 @@ function PurchaseOrderPerformance({ label, value, suffix }: { label: string; val
 function poNextAction(order: PurchaseOrder, role: ReturnType<typeof useAuth>['role']) {
   if (order.pending_preapproval_edit && hasRole(role, ['finance_officer', 'finance_manager', 'admin'])) return 'Review the edited PO before it proceeds.';
   if (['DRAFT', 'PENDING'].includes(order.status) && can.createPo(role)) return 'Approve the PO or adjust it before approval.';
-  if (order.delivery_destination === 'SITE' && ['ORDERED', 'PARTIAL'].includes(order.status) && can.createPo(role)) return 'Confirm dispatch to the project site.';
+  if (order.delivery_destination === 'SITE' && order.status === 'ORDERED' && can.createPo(role)) return 'Confirm dispatch to the project site.';
   if (canReceivePurchaseOrder(role, order)) return order.delivery_destination === 'SITE' ? 'Confirm the site receipt.' : 'Confirm the warehouse receipt.';
   if (order.is_overdue) return 'Follow up the overdue supplier delivery.';
   if (order.status === 'RECEIVED') return 'Receipt complete; continue with invoice matching.';

@@ -1,1 +1,0 @@
-import{j as a,Y as e,Z as i}from"./index-Cqo96qyM.js";function x({open:o,title:n,children:r,onClose:s}){return a.jsx(e,{open:o,onOpenChange:t=>!t&&s(),children:a.jsx(i,{title:n,variant:"form",className:"max-w-3xl",children:r})})}export{x as F};
