@@ -44,16 +44,29 @@ export function clearTokens() {
 }
 
 export function getDeviceId() {
+  const createId = () => typeof globalThis.crypto?.randomUUID === 'function'
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   try {
     const existing = window.localStorage.getItem(DEVICE_KEY);
     if (existing) return existing;
-    const generated = typeof globalThis.crypto?.randomUUID === 'function'
-      ? globalThis.crypto.randomUUID()
-      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    const generated = window.sessionStorage.getItem(DEVICE_KEY) || createId();
     window.localStorage.setItem(DEVICE_KEY, generated);
+    window.sessionStorage.setItem(DEVICE_KEY, generated);
     return generated;
   } catch {
-    return '';
+    // Privacy modes can deny localStorage while sessionStorage remains usable.
+    // Keeping a tab-scoped fallback avoids reporting the same browser as a
+    // different device on every login.
+    try {
+      const existing = window.sessionStorage.getItem(DEVICE_KEY);
+      if (existing) return existing;
+      const generated = createId();
+      window.sessionStorage.setItem(DEVICE_KEY, generated);
+      return generated;
+    } catch {
+      return '';
+    }
   }
 }
 

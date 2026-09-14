@@ -27,7 +27,8 @@ export function GoodsReceivedNotesPage() {
   const queryString = searchParams.toString();
   const toast = useToast();
   const [selected, setSelected] = useState<GoodsReceivedNote | null>(null);
-  const [queue, setQueue] = useState<ReceiptQueue>('all');
+  const requestedQueue = searchParams.get('queue');
+  const [queue, setQueue] = useState<ReceiptQueue>(requestedQueue === 'exceptions' ? 'exceptions' : requestedQueue === 'reversed' ? 'reversed' : requestedQueue === 'accepted' ? 'accepted' : 'all');
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [destination, setDestination] = useState('');
   const [status, setStatus] = useState('');
@@ -37,6 +38,8 @@ export function GoodsReceivedNotesPage() {
   const [page, setPage] = useState(1);
   useEffect(() => {
     setSearch(searchParams.get('search') || '');
+    const nextQueue = searchParams.get('queue');
+    setQueue(nextQueue === 'exceptions' ? 'exceptions' : nextQueue === 'reversed' ? 'reversed' : nextQueue === 'accepted' ? 'accepted' : 'all');
     setPage(1);
   }, [queryString, searchParams]);
   const notes = useQuery({ queryKey: qk.goodsReceivedNotes({ page_size: 100 }), queryFn: () => api.goodsReceivedNotes({ page_size: 100 }) });

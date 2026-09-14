@@ -73,7 +73,7 @@ export function App() {
             <Route path="/procurement/purchase-orders/:orderId" element={<PurchaseOrderDetailPage />} />
             <Route path="/procurement/purchase-orders" element={<PurchaseOrdersPage />} />
             <Route path="/procurement/grns" element={<GoodsReceivedNotesPage />} />
-            <Route path="/procurement/supplier-claims" element={<Navigate to="/procurement/grns" replace />} />
+            <Route path="/procurement/supplier-claims" element={<Navigate to="/procurement/grns?queue=exceptions" replace />} />
             <Route path="/procurement/deliveries" element={<DeliveriesPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/inventory/movements" element={<InventoryMovementsPage />} />

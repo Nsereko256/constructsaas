@@ -2,6 +2,7 @@ import asyncio
 from threading import Thread
 
 from asgiref.sync import async_to_sync
+from channels.layers import InMemoryChannelLayer
 from channels.layers import get_channel_layer
 import json
 
@@ -23,6 +24,14 @@ async def _bounded_group_send(channel_layer, group_name, message):
 
 def _dispatch_realtime(channel_layer, group_name, message):
     """Deliver realtime updates outside the request/transaction thread."""
+    # The in-memory layer is used by local development and tests. Its queues
+    # belong to the current event loop, so moving group_send into a second
+    # thread can silently strand messages and make the bell appear unreliable.
+    # Keep that layer synchronous; retain bounded background delivery for
+    # network-backed layers so a Redis outage cannot block a completed action.
+    if isinstance(channel_layer, InMemoryChannelLayer):
+        async_to_sync(_bounded_group_send)(channel_layer, group_name, message)
+        return
     Thread(
         target=async_to_sync(_bounded_group_send),
         args=(channel_layer, group_name, message),

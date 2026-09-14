@@ -203,7 +203,7 @@ export type MatchItemResult = {
 
 export type MatchRun = { id: number; status: string; explanation: string; exception_reason: string; item_results: MatchItemResult[] };
 
-export type PaymentAllocation = { id: number; invoice: number; invoice_number: string; amount: Money; invoice_balance: Money };
+export type PaymentAllocation = { id: number; invoice: number; invoice_number: string; amount: Money; status: string; invoice_balance: Money };
 export type Payment = {
   id: number;
   version: number;

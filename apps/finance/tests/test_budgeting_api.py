@@ -95,8 +95,9 @@ class ProjectBudgetingApiTests(TestCase):
         self.client.force_authenticate(self.fixture.procurement)
         approved_po = self.client.post(f'/api/purchase-orders/{po.id}/approve/')
         self.assertEqual(approved_po.status_code, 200, approved_po.data)
-        dispatched = self.client.post(f'/api/purchase-orders/{po.id}/confirm-dispatch/')
-        self.assertEqual(dispatched.status_code, 200, dispatched.data)
+        # Warehouse orders move directly from approval to physical receipt.
+        # Dispatch confirmation is intentionally reserved for direct-to-site
+        # orders and is not part of this budgeting scenario.
         budget.refresh_from_db()
         self.assertEqual(budget.open_commitments, Decimal('350000.00'))
         self.assertEqual(budget.actual_expenditure, Decimal('0.00'))

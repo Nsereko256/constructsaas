@@ -468,7 +468,7 @@ class Command(BaseCommand):
                     created_by=users[User.ROLE_STOREKEEPER],
                 )
 
-        pending_po, _ = PurchaseOrder.objects.update_or_create(
+        pending_po, pending_po_created = PurchaseOrder.objects.get_or_create(
             company=company,
             number='PO-20260726-0002',
             defaults={
@@ -480,6 +480,9 @@ class Command(BaseCommand):
                 'notes': 'Seed demo pending PO awaiting supplier confirmation.',
             },
         )
+        if pending_po_created or approved_pr.status != PurchaseRequest.STATUS_PO_CREATED:
+            approved_pr.status = PurchaseRequest.STATUS_PO_CREATED
+            approved_pr.save(update_fields=['status', 'updated_at'])
         self.sync_po_items(
             pending_po,
             [

@@ -41,7 +41,14 @@ class CompanyTokenObtainPairSerializer(TokenObtainPairSerializer):
             and device_id
             and device_id == self.user.active_session_device_id
         )
-        if session_is_recent(self.user) and not same_device and not attrs.get('terminate_other_session'):
+        # Session markers created before device tracking was introduced cannot
+        # prove that a second device is involved. Treat those markers as stale
+        # instead of showing a false takeover warning in the same browser.
+        identifiable_other_device = bool(
+            (not device_id and not self.user.active_session_device_id)
+            or (device_id and self.user.active_session_device_id and not same_device)
+        )
+        if session_is_recent(self.user) and identifiable_other_device and not attrs.get('terminate_other_session'):
             raise ActiveSessionConflict()
         refresh = RefreshToken(data['refresh'])
         if not same_device:

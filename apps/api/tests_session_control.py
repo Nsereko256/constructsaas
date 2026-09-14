@@ -77,6 +77,46 @@ class SingleDeviceSessionTests(TestCase):
         )
         self.assertEqual(replacement.status_code, 200)
 
+    def test_legacy_session_without_device_id_does_not_show_false_conflict(self):
+        type(self.user).objects.filter(pk=self.user.pk).update(
+            active_session_started_at=timezone.now(),
+            active_session_device_id='',
+        )
+
+        replacement = self.client.post(
+            '/api/token/',
+            {
+                'username': self.user.username,
+                'password': 'secure-password',
+                'device_id': 'this-browser',
+            },
+            format='json',
+        )
+
+        self.assertEqual(replacement.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.active_session_device_id, 'this-browser')
+
+    def test_missing_device_id_does_not_claim_another_device(self):
+        first = self.client.post(
+            '/api/token/',
+            {
+                'username': self.user.username,
+                'password': 'secure-password',
+                'device_id': 'browser-installation-1',
+            },
+            format='json',
+        )
+        self.assertEqual(first.status_code, 200)
+
+        replacement = self.client.post(
+            '/api/token/',
+            {'username': self.user.username, 'password': 'secure-password'},
+            format='json',
+        )
+
+        self.assertEqual(replacement.status_code, 200)
+
     def test_authenticated_requests_keep_the_session_marker_current(self):
         login = self.client.post(
             '/api/token/',

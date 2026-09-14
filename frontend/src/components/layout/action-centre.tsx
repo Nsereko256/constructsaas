@@ -20,7 +20,7 @@ const queues: Record<Role, QueueItem[]> = {
     { badge: 'budgets', label: 'Budgets awaiting review', href: '/finance/budgets', icon: Banknote },
   ],
   procurement_officer: [
-    { badge: 'requests', label: 'Manager-approved requests to quote', href: '/procurement/requests?action_queue=my_requests', icon: ClipboardList },
+    { badge: 'requests', label: 'Approved requests to source', href: '/procurement/requests?action_queue=my_requests', icon: ClipboardList },
     { badge: 'purchase_orders', label: 'Purchase orders to progress', href: '/procurement/purchase-orders?action_queue=po_progress', icon: PackageCheck },
     { badge: 'deliveries', label: 'Site POs to dispatch', href: '/procurement/deliveries?action_queue=site_dispatch', icon: ReceiptText },
   ],
@@ -31,7 +31,7 @@ const queues: Record<Role, QueueItem[]> = {
     { badge: 'expenses', label: 'Expense drafts to prepare', href: '/finance/expenses', icon: Banknote },
   ],
   finance_manager: [
-    { badge: 'requests', label: 'Quoted PO reviews', href: '/procurement/requests?action_queue=my_requests', icon: ClipboardCheck },
+    { badge: 'requests', label: 'Purchase requests and PO reviews', href: '/procurement/requests?action_queue=my_requests', icon: ClipboardCheck },
     { badge: 'budgets', label: 'Budget approvals', href: '/finance/budgets', icon: Banknote },
     { badge: 'supplier_invoices', label: 'Invoice authorizations', href: '/finance/payables', icon: FileText },
     { badge: 'payments', label: 'Payment approvals / posting', href: '/finance/payments', icon: Wallet },

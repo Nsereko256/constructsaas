@@ -280,6 +280,38 @@
   }
   .deliveries-reference .del-date-range { grid-column: span 2; }
 }
+
+/* Preserve the record identity and its primary action while a wide register
+   scrolls. Users should never have to scroll back to discover what a row is
+   or what they can do next. */
+@media (min-width: 561px) {
+  :is(.pr-table, .po-table, .grn-table, .del-table) :is(th, td):first-child {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: #fff;
+    box-shadow: 1px 0 0 #e4e9ea;
+  }
+  :is(.pr-table, .po-table, .grn-table, .del-table) :is(th, td):nth-child(2) {
+    position: sticky;
+    left: 172px;
+    z-index: 3;
+    background: #fff;
+    box-shadow: 2px 0 3px rgb(16 37 50 / 8%);
+  }
+  :is(.pr-table, .po-table, .grn-table, .del-table) thead :is(th:first-child, th:nth-child(2)) {
+    z-index: 4;
+    background: #f7f9f9;
+  }
+}
+
+/* Detail pages are decision screens. Keep their dense reference composition,
+   but do not require browser zoom to read operational labels. */
+:is(.pr-detail-page, .po-detail-page) :is(.text-xs, small) { font-size: .75rem; line-height: 1.4; }
+:is(.pr-detail-page, .po-detail-page) :is(p, td, a, button) { line-height: 1.45; }
+.po-detail-page :is(.po-detail-breadcrumb, .po-detail-source, .po-detail-text, .po-detail-primary p, .po-detail-table-wrap td, .po-detail-links a) { font-size: .8125rem; }
+.po-detail-page :is(.po-detail-meta span, .po-detail-summary span, .po-detail-table-wrap th) { font-size: .75rem; }
+.po-detail-page :is(.po-detail-meta strong, .po-detail-table-wrap td strong, .po-detail-activity strong) { font-size: .8125rem; }
 @media (max-width: 560px) {
   :is(.pr-guidance, .po-guidance, .grn-guidance, .del-guidance) { flex-wrap: wrap; }
   :is(.pr-guidance, .po-guidance, .grn-guidance, .del-guidance) > span { flex: 1 1 80%; }

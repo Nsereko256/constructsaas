@@ -53,12 +53,12 @@ export function FinancePayablesPage() {
   });
   const columns: ColumnDef<SupplierInvoice>[] = [
     { header: 'Invoice', cell: ({ row }) => <div><strong>{row.original.internal_number}</strong><p className="mt-0.5 text-xs font-semibold text-foreground">{row.original.supplier_name}</p><p className="text-xs text-muted">Supplier ref: {row.original.invoice_number}</p></div> },
+    { id: 'actions', header: 'Next action', cell: ({ row }) => <InvoiceActions invoice={row.original} role={role} pendingAction={command.isPending && command.variables?.id === row.original.id ? command.variables.action : null} view={() => setSelected(row.original)} run={(action, body) => command.mutate({ id: row.original.id, action, body })} reason={(action) => setReasonAction({ invoice: row.original, action })} deleteDraft={() => { if (window.confirm(`Delete ${row.original.internal_number}? This draft will be removed and audited.`)) deleteDraft.mutate(row.original.id); }} /> },
     { header: 'Status', cell: ({ row }) => <Status value={row.original.status} /> },
     { header: 'Supplier / PO', cell: ({ row }) => <div><strong>{row.original.supplier_name}</strong><p className="text-xs text-muted">{row.original.purchase_order_number} / {row.original.project_name || 'Overhead'}</p></div> },
     { header: 'Dates', cell: ({ row }) => <div>{formatDate(row.original.invoice_date)}<p className="text-xs text-muted">Due {formatDate(row.original.due_date)}</p></div> },
     { header: 'Total', cell: ({ row }) => formatMoney(row.original.total_amount, row.original.currency) },
     { header: 'Balance', cell: ({ row }) => <strong>{formatMoney(row.original.balance, row.original.currency)}</strong> },
-    { id: 'actions', header: '', cell: ({ row }) => <InvoiceActions invoice={row.original} role={role} pendingAction={command.isPending && command.variables?.id === row.original.id ? command.variables.action : null} view={() => setSelected(row.original)} run={(action, body) => command.mutate({ id: row.original.id, action, body })} reason={(action) => setReasonAction({ invoice: row.original, action })} deleteDraft={() => { if (window.confirm(`Delete ${row.original.internal_number}? This draft will be removed and audited.`)) deleteDraft.mutate(row.original.id); }} /> },
   ];
   return <FinancePage eyebrow="Accounts payable" title="Supplier invoices" description="Capture supplier invoices, run three-way matching, authorize exceptions, and post verified liabilities." actions={can.prepareFinance(role) || role === 'admin' ? <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" />New invoice</Button> : undefined}>
     <FinanceWorkspaceSummary view="payables" />
