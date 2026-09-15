@@ -170,7 +170,9 @@ export async function apiRequest<T>(path: string, init: ApiRequestInit = {}, ret
     );
   }
 
-  if (response.status === 401 && retry) {
+  const invalidToken = response.status === 403
+    && (await response.clone().json().catch(() => null))?.code === 'token_not_valid';
+  if ((response.status === 401 || invalidToken) && retry) {
     const nextAccess = await refreshAccessToken();
     if (nextAccess) return apiRequest<T>(path, init, false, applySiteScope);
   }
@@ -188,7 +190,7 @@ export async function apiRequest<T>(path: string, init: ApiRequestInit = {}, ret
     }
   }
   const message = errorMessage(payload, response.statusText);
-  if (!response.ok && /session has ended|signed in on another device/i.test(message)) endLocalSession();
+  if (!response.ok && (invalidToken || /session has ended|signed in on another device/i.test(message))) endLocalSession();
   if (!response.ok) throw new ApiError(message, response.status, payload);
   if ((init.method || 'GET').toUpperCase() === 'GET') void cacheResponse(offlineScope(tokens?.access), requestPath, payload);
   return payload as T;
@@ -227,7 +229,9 @@ export async function apiDownload(path: string, filename: string, retry = true) 
     );
   }
 
-  if (response.status === 401 && retry) {
+  const invalidToken = response.status === 403
+    && (await response.clone().json().catch(() => null))?.code === 'token_not_valid';
+  if ((response.status === 401 || invalidToken) && retry) {
     const nextAccess = await refreshAccessToken();
     if (nextAccess) return apiDownload(path, filename, false);
   }
@@ -239,7 +243,7 @@ export async function apiDownload(path: string, filename: string, retry = true) 
       try { payload = JSON.parse(text) as ApiErrorPayload; } catch { /* non-JSON error */ }
     }
     const message = errorMessage(payload, response.statusText || 'Download failed');
-    if (/session has ended|signed in on another device/i.test(message)) endLocalSession();
+    if (invalidToken || /session has ended|signed in on another device/i.test(message)) endLocalSession();
     throw new ApiError(message, response.status, payload);
   }
 

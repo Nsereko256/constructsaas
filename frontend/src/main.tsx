@@ -8,6 +8,7 @@ import { OfflineBanner } from '@/components/common/offline-banner';
 import { NotificationStream } from '@/components/common/notification-stream';
 import { ToastProvider } from '@/components/ui/toast';
 import { App } from './App';
+import { AppErrorBoundary } from '@/components/common/app-error-boundary';
 import './styles/globals.css';
 import './styles/reference-type-scale.css';
 
@@ -33,6 +34,7 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
+    <AppErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ToastProvider>
@@ -46,5 +48,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         </ToastProvider>
       </BrowserRouter>
     </QueryClientProvider>
+    </AppErrorBoundary>
   </React.StrictMode>,
 );
