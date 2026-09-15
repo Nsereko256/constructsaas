@@ -50,7 +50,8 @@ export function AppShell() {
     };
   }, []);
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="professional-workspace min-h-screen bg-background text-foreground">
+      <a href="#workspace-content" className="workspace-skip-link">Skip to content</a>
       <aside
         className={cn(
           'fixed inset-y-0 left-0 z-40 flex w-[min(82vw,296px)] flex-col border-r border-sidebar-border bg-sidebar py-3 text-white transition-all md:w-auto md:translate-x-0',
@@ -79,6 +80,8 @@ export function AppShell() {
               ) : null}
             <NavLink
               to={item.href}
+              aria-label={item.label}
+              title={collapsed ? item.label : undefined}
               onClick={() => setMobileOpen(false)}
               className={({ isActive }) =>
                 cn(
@@ -105,7 +108,7 @@ export function AppShell() {
           ); })}
         </nav>
         <div className="mt-auto border-t border-sidebar-border p-2">
-          <Button className="hidden w-full border-white/10 bg-transparent text-white hover:bg-white/10 md:inline-flex" onClick={() => setCollapsed((v) => !v)}>
+          <Button aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'} className="hidden w-full border-white/10 bg-transparent text-white hover:bg-white/10 md:inline-flex" onClick={() => setCollapsed((v) => !v)}>
             <ChevronsLeft className={cn('h-4 w-4', collapsed && 'rotate-180')} />
             {!collapsed ? 'Collapse' : null}
           </Button>
@@ -133,13 +136,13 @@ export function AppShell() {
           <NavLink to="/notifications" aria-label={`Notifications${unread.data?.unread_count ? `, ${unread.data.unread_count} unread` : ''}`} className="relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-border transition-colors hover:bg-[#EEF2F6]">
             <Bell className="h-4 w-4" />
             {unread.data?.unread_count ? (
-              <span className="absolute -right-2 -top-2 rounded-md bg-critical px-1.5 text-xs font-bold text-white">{unread.data.unread_count}</span>
+              <span className="absolute -right-2 -top-2 rounded-md bg-critical px-1.5 text-xs font-bold text-white">{unread.data.unread_count > 99 ? '99+' : unread.data.unread_count}</span>
             ) : null}
           </NavLink>
           <div className="hidden items-center gap-2 lg:flex"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#5C322E] text-xs font-bold text-white">{(user?.first_name || user?.username || 'U').slice(0, 1).toUpperCase()}</span><div className="text-right text-xs"><strong className="block">{user?.username}</strong><span className="inline-flex items-center gap-1 text-muted"><ShieldCheck className="h-3 w-3" />{user?.role_display}</span></div></div>
           <Button variant="ghost" size="sm" className="px-2 sm:px-3" onClick={logout} aria-label="Logout"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Logout</span></Button>
         </header>
-        <main className="app-sheen min-h-[calc(100vh-4rem)] min-w-0 p-2.5 sm:p-4 md:px-5 md:py-2"><div className="mx-auto max-w-[1600px]">
+        <main id="workspace-content" tabIndex={-1} className="app-sheen min-h-[calc(100vh-4rem)] min-w-0 p-2.5 sm:p-4 md:px-5 md:py-2"><div className="mx-auto max-w-[1600px]">
           {site ? <div className="mb-3 rounded-md border border-info/20 bg-info/5 px-3 py-2 text-xs text-info">Site scope: <strong>{site.project_name} · {site.name}</strong>. Use “All sites” to return to the company view.</div> : null}
           {location.pathname !== '/dashboard' && location.pathname !== '/notifications' && !location.pathname.startsWith('/projects') && !location.pathname.startsWith('/procurement') && !location.pathname.startsWith('/finance') && !location.pathname.startsWith('/inventory') && !location.pathname.startsWith('/suppliers') ? <ActionCentre role={role} workflow={workflowBadges.data} financeAvailable={user?.soft_finance_enabled !== false} /> : null}
           <Outlet />

@@ -11,6 +11,7 @@ import { App } from './App';
 import { AppErrorBoundary } from '@/components/common/app-error-boundary';
 import './styles/globals.css';
 import './styles/reference-type-scale.css';
+import './styles/workspace-polish.css';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

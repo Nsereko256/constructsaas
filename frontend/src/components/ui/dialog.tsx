@@ -36,7 +36,6 @@ export function DialogContent({
             {isForm ? <span className="dialog-title-mark" aria-hidden="true"><ClipboardPenLine className="h-4 w-4" /></span> : null}
             <div className="min-w-0">
               <div className="mb-1 h-1 w-10 rounded-full bg-primary/25 sm:hidden" aria-hidden="true" />
-              {isForm ? <p className="dialog-eyebrow">Workflow form</p> : null}
               <DialogPrimitive.Title className="dialog-title text-base font-black tracking-tight sm:text-lg">{title}</DialogPrimitive.Title>
               {description ? <DialogPrimitive.Description className="dialog-description mt-1 text-sm text-muted">{description}</DialogPrimitive.Description> : null}
             </div>

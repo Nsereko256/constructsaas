@@ -1,0 +1,46 @@
+/* Shared workspace finish. Keep status colours and workflow visibility intact.
+   Explicit selectors avoid affecting charts, sticky action cells or overlays. */
+.professional-workspace { background: #f5f7f9; color: #243442; }
+.professional-workspace .app-sheen { background: #f5f7f9; padding-top: 20px; padding-bottom: 28px; }
+.professional-workspace > div > header { background: #fff; min-height: 56px; }
+.professional-workspace aside nav a { font-size: 13px; line-height: 1.4; }
+.professional-workspace aside nav a[aria-current='page'] { box-shadow: inset 3px 0 #5bd2cb; }
+.professional-workspace main :is(h1, h2) { text-wrap: balance; }
+.professional-workspace main :is(h1, .workspace-toolbar h2) { font-weight: 700; letter-spacing: -.025em; line-height: 1.2; }
+.professional-workspace main :is(.ops-panel h2, .ops-register h2, .finance-panel h2, .projects-panel-heading h2, .procurement-panel-heading h2) { font-size: 16px !important; font-weight: 650; }
+.professional-workspace :is(.ops-panel, .ops-register, .finance-panel, .projects-panel, .procurement-panel, .dashboard-panel, .card-surface) { border-color: #dce3e8; border-radius: 8px; box-shadow: 0 1px 2px rgb(24 44 60 / 3%); }
+.professional-workspace :is(.ops-kpi, .finance-kpi, .projects-kpi, .procurement-kpi, .dashboard-kpi) { border-color: #dce3e8; box-shadow: none; }
+.professional-workspace main table { font-variant-numeric: tabular-nums; }
+.professional-workspace main table th { color: #526371; font-weight: 650; letter-spacing: .015em; }
+.professional-workspace main table td { line-height: 1.5; }
+.professional-workspace .ops-row-actions { flex-wrap: wrap; max-width: 150px; gap: 4px; }
+.professional-workspace .suppliers-reference .ops-register table td:first-child { min-width: 150px; }
+.professional-workspace .suppliers-reference .ops-register table td:nth-child(4) { white-space: nowrap; }
+.professional-workspace .projects-health-body { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.professional-workspace .projects-health-body .projects-donut { justify-self: center; }
+.professional-workspace .projects-health-row { grid-template-columns: minmax(75px, 1fr) minmax(24px, 1fr) 24px 38px; gap: 6px; }
+.professional-workspace main table tbody tr:focus-within { outline: 2px solid #0f7075; outline-offset: -2px; }
+.professional-workspace :is(button, a, select, input, textarea):focus-visible { outline: 2px solid #0f7075; outline-offset: 3px; }
+.professional-workspace main :is(.ops-tabs, .finance-tabs) nav a { min-height: 40px; display: inline-flex; align-items: center; }
+.workspace-toolbar { min-width: 0; padding-bottom: 4px; }
+.workspace-toolbar > div { min-width: 0; }
+.workspace-toolbar h2 { overflow-wrap: anywhere; }
+.workspace-skip-link { position: fixed; left: 12px; top: -80px; z-index: 100; padding: 12px 18px; background: #fff; color: #075e63; border: 2px solid #0f7075; border-radius: 6px; }
+.workspace-skip-link:focus { top: 12px; }
+.dialog-surface .dialog-title { font-weight: 700; letter-spacing: -.02em; }
+.dialog-surface .dialog-header { background: #fff; }
+.dialog-surface .field-label { font-size: 14px; font-weight: 600; }
+.dialog-surface .field-required { background: transparent; color: #9c3030; font-size: 10px; padding: 0; letter-spacing: 0; text-transform: none; }
+.dialog-surface .form-modal-body { background: #fff; }
+@media (max-width: 639px) {
+  .professional-workspace .app-sheen { padding-top: 16px; }
+  .professional-workspace > div > header { gap: 6px; padding-inline: 10px; }
+  .professional-workspace > div > header > p { display: none; }
+  .professional-workspace > div > header select { max-width: 155px; }
+  .professional-workspace main :is(h1, .workspace-toolbar h2) { font-size: 25px; }
+  .professional-workspace main :is(.ops-tabs, .finance-tabs) nav a { min-height: 44px; }
+  .dialog-surface :is(input, select, textarea) { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .professional-workspace *, .dialog-surface * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
