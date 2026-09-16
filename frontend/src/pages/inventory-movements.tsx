@@ -10,6 +10,9 @@ import { useAuth } from '@/auth/auth-context';
 import { FormModal } from '@/components/common/form-modal';
 import { MaterialLookup } from '@/components/common/material-lookup';
 import { PageToolbar } from '@/components/common/page-toolbar';
+import { InventoryTabs } from '@/components/common/inventory-tabs';
+import './operations-reference.css';
+import './inventory-registers.css';
 import { Pagination } from '@/components/common/pagination';
 import { Badge, statusTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -41,22 +44,30 @@ export function InventoryMovementsPage() {
   ];
 
   return (
-    <div className="grid gap-4">
-      <PageToolbar title="Stock movements" subtitle="Storekeeper-controlled record of material entering or leaving stock." search={list.search} onSearch={list.setSearch}>
-        <select className={inputClass} value={list.filters.movement_type} onChange={(event) => list.setFilter('movement_type', event.target.value)}>
+    <div className="operations-reference inventory-register-page grid gap-4">
+      <PageToolbar title="Stock movements" subtitle="Track receipts, issues and adjustments across your stores.">
+        <Button variant="secondary" onClick={() => void download('pdf')}><Download className="h-4 w-4" />PDF</Button>
+        <Button variant="secondary" onClick={() => void download('xlsx')}><Download className="h-4 w-4" />Excel</Button>
+        {allowed ? <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" />Record stock entry</Button> : null}
+      </PageToolbar>
+      <InventoryTabs />
+      <section className="ops-register">
+      <div className="ops-register-head"><h2>Movement history</h2><span className="text-sm text-muted">{movements.data ? `${movements.data.count} records` : 'Stock audit trail'}</span></div>
+      <div className="inventory-history-filters">
+        <Field label="Search"><input className={inputClass} value={list.search} onChange={event => list.setSearch(event.target.value)} placeholder="Search movements" /></Field>
+        <Field label="Movement type"><select className={inputClass} value={list.filters.movement_type} onChange={(event) => list.setFilter('movement_type', event.target.value)}>
           <option value="">All movement types</option>
           <option value="IN">Stock in</option>
           <option value="OUT">Stock out</option>
           <option value="ADJUST_IN">Adjustment in</option>
           <option value="ADJUST_OUT">Adjustment out</option>
-        </select>
-        <input className={inputClass} type="date" value={list.filters.date_from} onChange={(event) => list.setFilter('date_from', event.target.value)} />
-        <Button variant="secondary" onClick={() => void download('pdf')}><Download className="h-4 w-4" />PDF</Button>
-        <Button variant="secondary" onClick={() => void download('xlsx')}><Download className="h-4 w-4" />Excel</Button>
-        {allowed ? <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" />Record stock entry</Button> : null}
-      </PageToolbar>
-      <DataTable columns={columns} data={movements.data?.results || []} emptyTitle={movements.isLoading ? 'Loading stock movements...' : 'No movements found'} />
+        </select></Field>
+        <Field label="From date"><input className={inputClass} type="date" value={list.filters.date_from} onChange={(event) => list.setFilter('date_from', event.target.value)} /></Field>
+        <Field label="To date"><input className={inputClass} type="date" min={list.filters.date_from || undefined} value={list.filters.date_to} onChange={(event) => list.setFilter('date_to', event.target.value)} /></Field>
+      </div>
+      {movements.isError ? <div className="p-4" role="alert"><p>Could not load movement history.</p><Button variant="secondary" onClick={() => void movements.refetch()}>Retry</Button></div> : <DataTable columns={columns} data={movements.data?.results || []} emptyTitle={movements.isLoading ? 'Loading stock movements...' : 'No movements found'} />}
       <Pagination page={list.page} setPage={list.setPage} data={movements.data} />
+      </section>
       <MovementModal open={open} onClose={() => setOpen(false)} />
     </div>
   );
@@ -114,7 +125,7 @@ function MovementModal({ open, onClose }: { open: boolean; onClose: () => void }
         <Field label="Unit price"><input className={inputClass} type="number" min="0" step="0.01" value={form.unit_price} onChange={(event) => set('unit_price', event.target.value)} /></Field>
         <Field label="Date"><input className={inputClass} type="date" value={form.date} onChange={(event) => set('date', event.target.value)} /></Field>
         <Field label="Notes" className="md:col-span-2"><textarea className={inputClass} value={form.notes} onChange={(event) => set('notes', event.target.value)} /></Field>
-        <Button className="md:col-span-2" disabled={!material.id || !form.quantity || mutation.isPending}>Save movement</Button>
+        <Button className="md:col-span-2" loading={mutation.isPending} loadingLabel="Saving movement…" disabled={!material.id || Number(form.quantity) <= 0}>Save movement</Button>
       </form>
     </FormModal>
   );
