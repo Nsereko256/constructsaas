@@ -87,7 +87,7 @@ export function OpeningStockImportModal({ open, onClose }: { open: boolean; onCl
 
   return (
     <Dialog open={open} onOpenChange={(value) => !value && close()}>
-      <DialogContent title="Import materials with opening stock" description="Prepare opening balances from Excel for Admin approval and posting." variant="form" className="max-w-6xl">
+      <DialogContent title="Import materials with opening stock" description="Validate the workbook, then send a locked snapshot to an Admin for posting." variant="form" className="max-w-5xl">
         {submission ? (
           <div className="grid gap-5">
             <div className="rounded-lg border border-success/30 bg-success/5 p-5">
@@ -98,42 +98,41 @@ export function OpeningStockImportModal({ open, onClose }: { open: boolean; onCl
             <div className="flex justify-end"><Button onClick={close}>Done</Button></div>
           </div>
         ) : (
-          <div className="grid gap-4">
-            <div className="flex flex-col gap-3 rounded-lg border border-warning/35 bg-warning/5 p-4 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" /><div><strong className="block">Use only for company onboarding</strong><p className="text-sm text-muted">Your workbook is submitted as a locked snapshot. Only an Admin can approve and post it; no inventory changes occur at submission. Opening stock is blocked where a material and warehouse already have ledger activity.</p></div></div>
+          <div className="grid gap-3">
+            <div className="flex flex-col gap-3 rounded-lg border border-warning/35 bg-warning/5 p-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-start gap-2.5"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" /><div><strong className="block text-sm">Company onboarding only</strong><p className="text-xs leading-5 text-muted">Submission does not change inventory. An Admin must approve the locked snapshot before opening stock is posted.</p></div></div>
               <Button variant="secondary" className="shrink-0" onClick={() => void downloadTemplate()}><Download className="h-4 w-4" />Download template</Button>
             </div>
 
-            <section aria-label="Excel import requirements" className="rounded-lg border border-border bg-surface/55 p-4">
-              <div className="mb-3 flex items-start gap-2">
-                <FileSpreadsheet className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-                <div><h3 className="font-black">Excel file requirements</h3><p className="text-xs text-muted">Use the downloaded template and keep the required headings unchanged.</p></div>
+            <section aria-label="Excel import requirements" className="rounded-lg border border-border bg-white p-3">
+              <div className="mb-2 flex items-start gap-2">
+                <FileSpreadsheet className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div><h3 className="text-sm font-black">Workbook requirements</h3><p className="text-xs text-muted">Keep the headings and sequence exactly as shown.</p></div>
               </div>
-              <div className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 text-xs lg:grid-cols-4">
                 <Requirement title="File"><strong>.xlsx only</strong><span>Maximum 5 MB and 1,000 material rows.</span></Requirement>
                 <Requirement title="Column order"><strong>9 columns, left to right</strong><span>Keep the names and sequence shown below.</span></Requirement>
                 <Requirement title="Accepted units"><strong>bag · ton · kg · litre</strong><span>piece · metre · sqm · cbm</span></Requirement>
                 <Requirement title="Stock rules"><strong>Use active warehouse codes</strong><span>See the Warehouse reference sheet. Values must be zero or greater.</span></Requirement>
               </div>
-              <div className="mt-3 rounded-md border border-primary/20 bg-white p-3">
+              <div className="mt-2 rounded-md border border-primary/15 bg-surface/45 p-2.5">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-wide text-foreground">Excel columns in template order</p>
-                    <p className="text-xs text-muted">Name each heading exactly as shown and arrange the columns from 1 to 9.</p>
+                    <p className="text-[11px] font-black uppercase tracking-wide text-foreground">Columns in template order</p>
                   </div>
-                  <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[11px] font-bold text-muted">Columns 8–9 are optional</span>
+                  <span className="text-[11px] font-bold text-muted">8–9 optional</span>
                 </div>
-                <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                <ol className="grid grid-cols-2 gap-x-4 gap-y-1 md:grid-cols-3">
                   {importColumns.map((column, index) => (
-                    <li key={column.name} className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-surface/60 px-3 py-2">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-black text-white">{index + 1}</span>
-                      <strong className="min-w-0 flex-1 text-sm">{column.name}</strong>
-                      <span className={`text-[10px] font-bold uppercase tracking-wide ${column.required ? 'text-primary' : 'text-muted'}`}>{column.required ? 'Required' : 'Optional'}</span>
+                    <li key={column.name} className="flex min-w-0 items-center gap-2 border-b border-border/70 py-1.5 last:border-0">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-black text-white">{index + 1}</span>
+                      <strong className="min-w-0 flex-1 truncate text-xs">{column.name}</strong>
+                      <span className={`text-[9px] font-bold uppercase tracking-wide ${column.required ? 'text-primary' : 'text-muted'}`}>{column.required ? 'Req' : 'Opt'}</span>
                     </li>
                   ))}
                 </ol>
               </div>
-              <p className="mt-3 border-t border-border pt-3 text-xs text-muted"><strong className="text-foreground">Important:</strong> repeat a material only when loading it into a different warehouse, keep its name/category/unit identical, and do not load opening stock where that material and warehouse already have movement history.</p>
+              <p className="mt-2 text-[11px] leading-4 text-muted"><strong className="text-foreground">Control:</strong> repeat a material only for a different warehouse. Existing movement history blocks opening stock.</p>
             </section>
 
             <div className="grid gap-3 md:grid-cols-[1.3fr_.7fr_1fr]">
@@ -188,5 +187,5 @@ function Summary({ label, value, tone = '' }: { label: string; value: number; to
 }
 
 function Requirement({ title, children }: { title: string; children: ReactNode }) {
-  return <div className="rounded-md border border-border bg-white p-3"><p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-muted">{title}</p><div className="grid gap-0.5"><>{children}</></div></div>;
+  return <div className="rounded-md bg-surface px-2.5 py-2"><p className="mb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted">{title}</p><div className="grid gap-0.5 leading-4"><>{children}</></div></div>;
 }

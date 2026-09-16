@@ -8,7 +8,6 @@ import { useAuth } from '@/auth/auth-context';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { visibleNav } from './navigation';
-import { ActionCentre } from './action-centre';
 import { useSiteScope } from '@/context/site-scope';
 
 export function AppShell() {
@@ -144,7 +143,6 @@ export function AppShell() {
         </header>
         <main id="workspace-content" tabIndex={-1} className="app-sheen min-h-[calc(100vh-4rem)] min-w-0 p-2.5 sm:p-4 md:px-5 md:py-2"><div className="mx-auto max-w-[1600px]">
           {site ? <div className="mb-3 rounded-md border border-info/20 bg-info/5 px-3 py-2 text-xs text-info">Site scope: <strong>{site.project_name} · {site.name}</strong>. Use “All sites” to return to the company view.</div> : null}
-          {location.pathname !== '/dashboard' && location.pathname !== '/notifications' && !location.pathname.startsWith('/projects') && !location.pathname.startsWith('/procurement') && !location.pathname.startsWith('/finance') && !location.pathname.startsWith('/inventory') && !location.pathname.startsWith('/suppliers') ? <ActionCentre role={role} workflow={workflowBadges.data} financeAvailable={user?.soft_finance_enabled !== false} /> : null}
           <Outlet />
         </div></main>
       </div>
