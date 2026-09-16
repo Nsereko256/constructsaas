@@ -16,8 +16,10 @@ from apps.pdf_exports import pdf_table_response
 from .report_exports import xlsx_response
 from rest_framework.views import APIView
 from apps.suppliers.models import Supplier
+from apps.accounts.models import User
 from apps.dashboard.helpers import push_dashboard_update
 from apps.api.lifecycle import audit_lifecycle
+from apps.api.permissions import IsAuthenticatedCompanyUser
 
 from . import services
 from . import invoice_services
@@ -32,6 +34,7 @@ from . import expense_claim_services, staff_advance_services, cash_services
 from . import ledger_workflow_services, month_end_workflow_services
 from . import ledger_services
 from . import month_end_services
+from . import confirmation_services
 from .selectors import expense_claim_queryset, payment_batch_queryset, payment_queryset, supplier_invoice_queryset
 from .filters import (
     BudgetApprovalFilter,
@@ -105,6 +108,7 @@ from .models import (
     StaffAdvance,
     TaxCode,
     ThreeWayMatch,
+    WorkflowConfirmation,
 )
 
 
@@ -164,6 +168,7 @@ from .serializers import (
     CurrencySerializer,
     FinanceAuditEventSerializer,
     FinanceSettingsSerializer,
+    WorkflowConfirmationSerializer,
     FiscalPeriodSerializer,
     ExpenseApprovalSerializer,
     ExpenseCategorySerializer,
@@ -223,6 +228,43 @@ class CompanyScopedMixin:
         if not user.is_authenticated or not user.company_id:
             return self.queryset.none()
         return self.queryset.filter(company_id=user.company_id)
+
+
+class WorkflowConfirmationViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = WorkflowConfirmationSerializer
+    permission_classes = [IsAuthenticatedCompanyUser]
+    filterset_fields = ['document_type', 'stage', 'status', 'required_role', 'submitted_by', 'confirmed_by']
+    search_fields = ['object_label', 'object_id', 'return_reason', 'comments']
+    ordering_fields = ['submitted_at', 'decided_at', 'status', 'document_type', 'stage']
+    ordering = ['-submitted_at', '-id']
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = WorkflowConfirmation.objects.filter(company=user.company).select_related(
+            'submitted_by', 'assigned_to', 'confirmed_by',
+        )
+        if user.role == User.ROLE_ADMIN:
+            return queryset
+        role_filter = Q(required_role=user.role)
+        if user.role == User.ROLE_FINANCE_MANAGER:
+            role_filter |= Q(required_role=User.ROLE_FINANCE_OFFICER)
+        return queryset.filter(
+            role_filter | Q(assigned_to=user) | Q(submitted_by=user) | Q(confirmed_by=user)
+        ).distinct()
+
+    @action(detail=True, methods=['post'], url_path='return-for-correction')
+    def return_for_correction(self, request, pk=None):
+        task = self.get_object()
+        if task.document_type != WorkflowConfirmation.DOCUMENT_OPENING_STOCK:
+            raise ValidationError({'detail': 'Return this record from its dedicated workflow page.'})
+        reason = str(request.data.get('reason', '')).strip()
+        task = confirmation_services.return_confirmation(
+            task=task,
+            user=request.user,
+            reason=reason,
+            override_reason=str(request.data.get('override_reason', '')).strip(),
+        )
+        return Response(self.get_serializer(task).data)
 
 
 class FoundationConfigurationViewSet(CompanyScopedMixin, viewsets.ModelViewSet):
@@ -556,12 +598,42 @@ class SupplierInvoiceViewSet(DraftDeletionMixin, CompanyScopedMixin, viewsets.Mo
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
         invoice = invoice_services.submit_invoice(invoice=self.get_object(), user=request.user)
+        confirmation_services.submit_confirmation(
+            company=invoice.company,
+            document_type=WorkflowConfirmation.DOCUMENT_SUPPLIER_INVOICE,
+            object_id=invoice.pk,
+            object_label=invoice.internal_number,
+            stage=WorkflowConfirmation.STAGE_FINANCE,
+            required_role=User.ROLE_FINANCE_OFFICER,
+            submitted_by=request.user,
+            action_url=f'/finance/payables?invoice={invoice.pk}',
+            snapshot={
+                'supplier_id': invoice.supplier_id,
+                'supplier': invoice.supplier.name,
+                'supplier_invoice_number': invoice.invoice_number,
+                'purchase_order_id': invoice.purchase_order_id,
+                'currency': invoice.currency,
+                'total_amount': str(invoice.total_amount),
+                'invoice_date': invoice.invoice_date.isoformat(),
+                'due_date': invoice.due_date.isoformat() if invoice.due_date else None,
+            },
+        )
         return Response(self.get_serializer(invoice).data)
 
     @extend_schema(tags=['Finance - Invoices'], request=None, responses=SupplierInvoiceSerializer)
     @action(detail=True, methods=['post'], url_path='withdraw-submission')
     def withdraw_submission(self, request, pk=None):
-        invoice = invoice_services.withdraw_invoice(invoice=self.get_object(), user=request.user)
+        invoice = self.get_object()
+        with transaction.atomic():
+            confirmation_services.cancel_pending(
+                company=invoice.company,
+                document_type=WorkflowConfirmation.DOCUMENT_SUPPLIER_INVOICE,
+                object_id=invoice.pk,
+                stage=WorkflowConfirmation.STAGE_FINANCE,
+                user=request.user,
+                reason='Invoice submission withdrawn by its preparer.',
+            )
+            invoice = invoice_services.withdraw_invoice(invoice=invoice, user=request.user)
         return Response(self.get_serializer(invoice).data)
 
     @extend_schema(tags=['Finance - Invoices'], request=VerifyRequestSerializer, responses=ThreeWayMatchSerializer)
@@ -657,7 +729,33 @@ class SupplierInvoiceViewSet(DraftDeletionMixin, CompanyScopedMixin, viewsets.Mo
     @extend_schema(tags=['Finance - Invoices'], request=None, responses=SupplierInvoiceSerializer)
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
-        invoice = invoice_services.approve_invoice(invoice=self.get_object(), user=request.user)
+        invoice = self.get_object()
+        with transaction.atomic():
+            task = confirmation_services.pending_confirmation(
+                company=invoice.company,
+                document_type=WorkflowConfirmation.DOCUMENT_SUPPLIER_INVOICE,
+                object_id=invoice.pk,
+                stage=WorkflowConfirmation.STAGE_FINANCE,
+            )
+            if task is None:
+                task = confirmation_services.submit_confirmation(
+                    company=invoice.company,
+                    document_type=WorkflowConfirmation.DOCUMENT_SUPPLIER_INVOICE,
+                    object_id=invoice.pk,
+                    object_label=invoice.internal_number,
+                    stage=WorkflowConfirmation.STAGE_FINANCE,
+                    required_role=User.ROLE_FINANCE_OFFICER,
+                    submitted_by=invoice.created_by,
+                    action_url=f'/finance/payables?invoice={invoice.pk}',
+                    snapshot={'supplier_id': invoice.supplier_id, 'total_amount': str(invoice.total_amount)},
+                )
+            confirmation_services.confirm_confirmation(
+                task=task, user=request.user,
+                confirmation_data={'decision': 'approved', 'matched_status': invoice.status},
+                comments=str(request.data.get('comments', '')).strip(),
+                override_reason=str(request.data.get('override_reason', '')).strip(),
+            )
+            invoice = invoice_services.approve_invoice(invoice=invoice, user=request.user)
         return Response(self.get_serializer(invoice).data)
 
     @extend_schema(tags=['Finance - Invoices'], request=ReasonSerializer, responses=SupplierInvoiceSerializer)
@@ -665,9 +763,22 @@ class SupplierInvoiceViewSet(DraftDeletionMixin, CompanyScopedMixin, viewsets.Mo
     def reject(self, request, pk=None):
         payload = ReasonSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
-        invoice = invoice_services.reject_invoice(
-            invoice=self.get_object(), user=request.user, reason=payload.validated_data['reason'],
-        )
+        invoice = self.get_object()
+        with transaction.atomic():
+            task = confirmation_services.pending_confirmation(
+                company=invoice.company,
+                document_type=WorkflowConfirmation.DOCUMENT_SUPPLIER_INVOICE,
+                object_id=invoice.pk,
+                stage=WorkflowConfirmation.STAGE_FINANCE,
+            )
+            if task:
+                confirmation_services.return_confirmation(
+                    task=task, user=request.user, reason=payload.validated_data['reason'],
+                    override_reason=str(request.data.get('override_reason', '')).strip(),
+                )
+            invoice = invoice_services.reject_invoice(
+                invoice=invoice, user=request.user, reason=payload.validated_data['reason'],
+            )
         return Response(self.get_serializer(invoice).data)
 
     @extend_schema(tags=['Finance - Invoices'], request=PostRequestSerializer, responses=JournalEntrySerializer)
@@ -808,6 +919,26 @@ class PaymentViewSet(DraftDeletionMixin, CompanyScopedMixin, viewsets.ModelViewS
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
         payment = payment_services.submit_payment(payment=self.get_object(), user=request.user)
+        confirmation_services.submit_confirmation(
+            company=payment.company,
+            document_type=WorkflowConfirmation.DOCUMENT_PAYMENT,
+            object_id=payment.pk,
+            object_label=payment.number,
+            stage=WorkflowConfirmation.STAGE_FINANCE,
+            required_role=User.ROLE_FINANCE_OFFICER,
+            submitted_by=request.user,
+            action_url=f'/finance/payments?payment={payment.pk}',
+            snapshot={
+                'supplier_id': payment.supplier_id,
+                'supplier': payment.supplier.name if payment.supplier_id else '',
+                'invoice_id': payment.invoice_id,
+                'currency': payment.currency.code,
+                'amount': str(payment.amount),
+                'payment_date': payment.payment_date.isoformat(),
+                'method': payment.method,
+                'reference': payment.reference,
+            },
+        )
         return Response(self.get_serializer(payment).data)
 
     @extend_schema(tags=['Finance - Payments'], request=PaymentApproveRequestSerializer, responses=PaymentSerializer)
@@ -815,9 +946,35 @@ class PaymentViewSet(DraftDeletionMixin, CompanyScopedMixin, viewsets.ModelViewS
     def approve(self, request, pk=None):
         payload = PaymentApproveRequestSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
-        payment = payment_services.approve_payment(
-            payment=self.get_object(), user=request.user, **payload.validated_data,
-        )
+        payment = self.get_object()
+        with transaction.atomic():
+            task = confirmation_services.pending_confirmation(
+                company=payment.company,
+                document_type=WorkflowConfirmation.DOCUMENT_PAYMENT,
+                object_id=payment.pk,
+                stage=WorkflowConfirmation.STAGE_FINANCE,
+            )
+            if task is None:
+                task = confirmation_services.submit_confirmation(
+                    company=payment.company,
+                    document_type=WorkflowConfirmation.DOCUMENT_PAYMENT,
+                    object_id=payment.pk,
+                    object_label=payment.number,
+                    stage=WorkflowConfirmation.STAGE_FINANCE,
+                    required_role=User.ROLE_FINANCE_OFFICER,
+                    submitted_by=payment.created_by,
+                    action_url=f'/finance/payments?payment={payment.pk}',
+                    snapshot={'supplier_id': payment.supplier_id, 'amount': str(payment.amount)},
+                )
+            confirmation_services.confirm_confirmation(
+                task=task, user=request.user,
+                confirmation_data={'decision': 'approved', **payload.validated_data},
+                comments=str(payload.validated_data.get('comments', '')).strip(),
+                override_reason=str(request.data.get('override_reason', '')).strip(),
+            )
+            payment = payment_services.approve_payment(
+                payment=payment, user=request.user, **payload.validated_data,
+            )
         return Response(self.get_serializer(payment).data)
 
     @extend_schema(tags=['Finance - Payments'], request=ReasonSerializer, responses=PaymentSerializer)
@@ -825,9 +982,22 @@ class PaymentViewSet(DraftDeletionMixin, CompanyScopedMixin, viewsets.ModelViewS
     def reject(self, request, pk=None):
         payload = ReasonSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
-        payment = payment_services.reject_payment(
-            payment=self.get_object(), user=request.user, **payload.validated_data,
-        )
+        payment = self.get_object()
+        with transaction.atomic():
+            task = confirmation_services.pending_confirmation(
+                company=payment.company,
+                document_type=WorkflowConfirmation.DOCUMENT_PAYMENT,
+                object_id=payment.pk,
+                stage=WorkflowConfirmation.STAGE_FINANCE,
+            )
+            if task:
+                confirmation_services.return_confirmation(
+                    task=task, user=request.user, reason=payload.validated_data['reason'],
+                    override_reason=str(request.data.get('override_reason', '')).strip(),
+                )
+            payment = payment_services.reject_payment(
+                payment=payment, user=request.user, **payload.validated_data,
+            )
         return Response(self.get_serializer(payment).data)
 
     @extend_schema(tags=['Finance - Payments'], request=PaymentPostRequestSerializer, responses=JournalEntrySerializer)

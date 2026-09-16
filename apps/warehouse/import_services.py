@@ -279,8 +279,28 @@ def confirm_material_import(*, user, upload, opening_date: date, reason):
     errors = [row for row in rows if row['errors']]
     if errors:
         raise ValidationError({'rows': errors, 'detail': 'Correct every row error before confirming the import.'})
+    return post_validated_material_import(
+        user=user,
+        rows=rows,
+        opening_date=opening_date,
+        reason=reason,
+        file_hash=file_hash,
+        filename=upload.name,
+    )
+
+
+@transaction.atomic
+def post_validated_material_import(*, user, rows, opening_date: date, reason, file_hash, filename, approved_by=None):
+    """Post an immutable, previously validated opening-stock snapshot."""
+    user.company.__class__.objects.select_for_update().get(pk=user.company_id)
+    if FinanceAuditEvent.objects.filter(company=user.company, action='inventory.opening_stock.imported', object_id=file_hash).exists():
+        raise ValidationError({'file': ['This workbook has already been imported.']})
+    if not rows:
+        raise ValidationError({'rows': ['The confirmation contains no material rows.']})
     created_materials = created_categories = opening_balances = 0
     for row in rows:
+        if row.get('errors'):
+            raise ValidationError({'rows': [row], 'detail': 'Correct every row error before confirming the import.'})
         category = Category.objects.filter(company=user.company, name__iexact=row['category']).first()
         if category is None:
             category = Category.objects.create(company=user.company, name=row['category'])
@@ -295,6 +315,8 @@ def confirm_material_import(*, user, upload, opening_date: date, reason):
             created_materials += 1
         warehouse = Warehouse.objects.get(company=user.company, code__iexact=row['warehouse_code'], is_active=True)
         if Decimal(row['opening_quantity']) > 0:
+            if StockMovement.objects.filter(company=user.company, material=material, warehouse=warehouse).exists():
+                raise ValidationError({'rows': [f'{material.code} already has ledger activity in {warehouse.code}. Re-preview the workbook.']})
             record_opening_balance(
                 user=user, material=material, warehouse=warehouse, quantity=row['opening_quantity'],
                 unit_cost=row['unit_cost'], date=opening_date, reason=reason,
@@ -302,8 +324,11 @@ def confirm_material_import(*, user, upload, opening_date: date, reason):
             opening_balances += 1
     summary = {'rows': len(rows), 'materials_created': created_materials, 'materials_matched': len(rows) - created_materials, 'categories_created': created_categories, 'opening_balances': opening_balances}
     record_finance_audit_event(
-        company=user.company, actor=user, action='inventory.opening_stock.imported', object_type='InventoryImport',
+        company=user.company, actor=approved_by or user, action='inventory.opening_stock.imported', object_type='InventoryImport',
         object_id=file_hash, message=f'Imported {len(rows)} material rows with {opening_balances} opening balances.',
-        metadata={**summary, 'filename': upload.name, 'opening_date': str(opening_date), 'file_hash': file_hash},
+        metadata={
+            **summary, 'filename': filename, 'opening_date': str(opening_date), 'file_hash': file_hash,
+            'prepared_by': user.pk, 'confirmed_by': approved_by.pk if approved_by else None,
+        },
     )
     return summary

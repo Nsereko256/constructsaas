@@ -16,6 +16,7 @@ export const qk = {
   notifications: (params?: object) => ['notifications', params] as const,
   unreadCount: ['notifications', 'unread-count'] as const,
   workflowBadges: ['workflow-badges'] as const,
+  workflowConfirmations: (params?: object) => ['workflow-confirmations', params] as const,
   chatMessages: (projectId?: string | number) => ['chat', projectId] as const,
   financeDashboard: (params?: object) => ['finance', 'dashboard', params] as const,
   financeBudgets: (params?: object) => ['finance', 'budgets', params] as const,

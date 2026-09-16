@@ -2,8 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ArrowDownToLine, CheckCircle2, Download, FileSpreadsheet, XCircle } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { api } from '@/api/services';
-import type { MaterialOpeningStockImportPreview, MaterialOpeningStockImportResult } from '@/api/types';
-import { qk } from '@/api/queryKeys';
+import type { MaterialOpeningStockImportPreview, MaterialOpeningStockImportSubmission } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -51,12 +50,12 @@ export function OpeningStockImportModal({ open, onClose }: { open: boolean; onCl
   const [openingDate, setOpeningDate] = useState(localDate);
   const [reason, setReason] = useState('Company onboarding opening stock');
   const [preview, setPreview] = useState<MaterialOpeningStockImportPreview | null>(null);
-  const [result, setResult] = useState<MaterialOpeningStockImportResult | null>(null);
+  const [submission, setSubmission] = useState<MaterialOpeningStockImportSubmission | null>(null);
 
   const close = () => {
     setFile(null);
     setPreview(null);
-    setResult(null);
+    setSubmission(null);
     setOpeningDate(localDate());
     setReason('Company onboarding opening stock');
     onClose();
@@ -70,11 +69,9 @@ export function OpeningStockImportModal({ open, onClose }: { open: boolean; onCl
   const confirmMutation = useMutation({
     mutationFn: () => api.confirmOpeningStockImport(file as File, openingDate, reason),
     onSuccess: (data) => {
-      setResult(data);
-      void queryClient.invalidateQueries({ queryKey: ['materials'] });
-      void queryClient.invalidateQueries({ queryKey: ['stock-movements'] });
-      void queryClient.invalidateQueries({ queryKey: qk.dashboard });
-      toast.push({ title: 'Opening stock imported', message: `${data.opening_balances} opening balances were posted.`, tone: 'success' });
+      setSubmission(data);
+      void queryClient.invalidateQueries({ queryKey: ['workflow-confirmations'] });
+      toast.push({ title: 'Opening stock submitted', message: data.message, tone: 'success' });
     },
     onError: (error: Error) => toast.push({ title: 'Import was not posted', message: error.message, tone: 'danger' }),
   });
@@ -90,25 +87,20 @@ export function OpeningStockImportModal({ open, onClose }: { open: boolean; onCl
 
   return (
     <Dialog open={open} onOpenChange={(value) => !value && close()}>
-      <DialogContent title="Import materials with opening stock" description="Create or match materials and post their verified opening balances from Excel." variant="form" className="max-w-6xl">
-        {result ? (
+      <DialogContent title="Import materials with opening stock" description="Prepare opening balances from Excel for Admin approval and posting." variant="form" className="max-w-6xl">
+        {submission ? (
           <div className="grid gap-5">
             <div className="rounded-lg border border-success/30 bg-success/5 p-5">
-              <div className="flex items-center gap-3"><CheckCircle2 className="h-7 w-7 text-success" /><div><h3 className="font-black">Import completed</h3><p className="text-sm text-muted">The workbook was posted as one controlled transaction and recorded in the audit trail.</p></div></div>
+              <div className="flex items-center gap-3"><CheckCircle2 className="h-7 w-7 text-success" /><div><h3 className="font-black">Sent for Admin confirmation</h3><p className="text-sm text-muted">{submission.message}</p></div></div>
             </div>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-              <Summary label="Rows" value={result.rows} />
-              <Summary label="Materials created" value={result.materials_created} />
-              <Summary label="Materials matched" value={result.materials_matched} />
-              <Summary label="Categories created" value={result.categories_created} />
-              <Summary label="Balances posted" value={result.opening_balances} />
-            </div>
+            <div className="grid grid-cols-2 gap-3"><Summary label="Rows awaiting confirmation" value={submission.rows} /><div className="rounded-lg border border-warning/25 bg-warning/10 p-3"><p className="text-xs font-semibold text-muted">Status</p><strong className="mt-1 block text-base">{submission.status_display}</strong></div></div>
+            <p className="rounded-md border border-info/20 bg-info/5 p-3 text-sm text-muted">An Admin must compare the submitted snapshot with the onboarding count before stock is posted. The preparer cannot confirm their own import.</p>
             <div className="flex justify-end"><Button onClick={close}>Done</Button></div>
           </div>
         ) : (
           <div className="grid gap-4">
             <div className="flex flex-col gap-3 rounded-lg border border-warning/35 bg-warning/5 p-4 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" /><div><strong className="block">Use only for company onboarding</strong><p className="text-sm text-muted">Opening stock is blocked where a material and warehouse already have ledger activity. Replace or remove the example row before upload.</p></div></div>
+              <div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" /><div><strong className="block">Use only for company onboarding</strong><p className="text-sm text-muted">Your workbook is submitted as a locked snapshot. Only an Admin can approve and post it; no inventory changes occur at submission. Opening stock is blocked where a material and warehouse already have ledger activity.</p></div></div>
               <Button variant="secondary" className="shrink-0" onClick={() => void downloadTemplate()}><Download className="h-4 w-4" />Download template</Button>
             </div>
 
@@ -180,7 +172,7 @@ export function OpeningStockImportModal({ open, onClose }: { open: boolean; onCl
                 </div>
                 <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs text-muted">Confirmation creates new master records where needed and posts all balances atomically. If one row fails, nothing is saved.</p>
-                  <Button disabled={preview.invalid_rows > 0 || !openingDate || reason.trim().length < 5 || confirmMutation.isPending} onClick={() => confirmMutation.mutate()}><CheckCircle2 className="h-4 w-4" />{confirmMutation.isPending ? 'Posting opening stock…' : `Confirm ${preview.total_rows} rows`}</Button>
+                  <Button disabled={preview.invalid_rows > 0 || !openingDate || reason.trim().length < 5 || confirmMutation.isPending} onClick={() => confirmMutation.mutate()}><CheckCircle2 className="h-4 w-4" />{confirmMutation.isPending ? 'Submitting…' : `Submit ${preview.total_rows} rows for confirmation`}</Button>
                 </div>
               </>
             ) : null}

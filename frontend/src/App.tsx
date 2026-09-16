@@ -17,6 +17,7 @@ const LoginPage = lazy(() => import('@/pages/login').then((module) => ({ default
 const RegisterCompanyPage = lazy(() => import('@/pages/register-company').then((module) => ({ default: module.RegisterCompanyPage })));
 const NotFoundPage = lazy(() => import('@/pages/not-found').then((module) => ({ default: module.NotFoundPage })));
 const NotificationsPage = lazy(() => import('@/pages/notifications').then((module) => ({ default: module.NotificationsPage })));
+const ConfirmationsPage = lazy(() => import('@/pages/confirmations').then((module) => ({ default: module.ConfirmationsPage })));
 const ProcurementRequestsPage = lazy(() => import('@/pages/procurement-requests').then((module) => ({ default: module.ProcurementRequestsPage })));
 const PurchaseRequestDetailPage = lazy(() => import('@/pages/purchase-request-detail').then((module) => ({ default: module.PurchaseRequestDetailPage })));
 const ProcurementPage = lazy(() => import('@/pages/procurement').then((module) => ({ default: module.ProcurementPage })));
@@ -82,6 +83,7 @@ export function App() {
             <Route path="/suppliers" element={<SuppliersPage />} />
             <Route path="/messages" element={<DeferredWorkspacePage kind="messages" />} />
             <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/confirmations" element={<ConfirmationsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/team" element={<TeamPage />} />
             <Route path="/team/project-staffing" element={<ProjectStaffingPage />} />

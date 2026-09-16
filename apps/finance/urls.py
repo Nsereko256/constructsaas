@@ -46,6 +46,7 @@ from .views import (
     SupplierStatementAPIView,
     TaxCodeViewSet,
     ThreeWayMatchViewSet,
+    WorkflowConfirmationViewSet,
 )
 from .report_services import REPORTS
 from .report_views import (
@@ -61,6 +62,7 @@ app_name = 'finance_api'
 router = DefaultRouter()
 router.register('settings', FinanceSettingsViewSet, basename='settings')
 router.register('approval-matrix-rules', ApprovalMatrixRuleViewSet, basename='approval-matrix-rule')
+router.register('workflow-confirmations', WorkflowConfirmationViewSet, basename='workflow-confirmation')
 router.register('currencies', CurrencyViewSet, basename='currency')
 router.register('tax-codes', TaxCodeViewSet, basename='tax-code')
 router.register('cost-centres', CostCentreViewSet, basename='cost-centre')

@@ -73,6 +73,7 @@ from .models import (
     StaffAdvance,
     TaxCode,
     ThreeWayMatch,
+    WorkflowConfirmation,
 )
 
 
@@ -118,6 +119,58 @@ class FinanceSettingsSerializer(CompanyScopedSerializer):
             instance=instance,
             user=self.context['request'].user,
             values=validated_data,
+        )
+
+
+class WorkflowConfirmationSerializer(serializers.ModelSerializer):
+    document_type_display = serializers.CharField(source='get_document_type_display', read_only=True)
+    stage_display = serializers.CharField(source='get_stage_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    required_role_display = serializers.CharField(source='get_required_role_display', read_only=True)
+    submitted_by_name = serializers.SerializerMethodField()
+    assigned_to_name = serializers.SerializerMethodField()
+    confirmed_by_name = serializers.SerializerMethodField()
+    is_my_action = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkflowConfirmation
+        fields = [
+            'id', 'document_type', 'document_type_display', 'object_id', 'object_label',
+            'action_url', 'stage', 'stage_display', 'status', 'status_display',
+            'required_role', 'required_role_display', 'assigned_to', 'assigned_to_name',
+            'submitted_by', 'submitted_by_name', 'confirmed_by', 'confirmed_by_name',
+            'submitted_snapshot', 'confirmation_data', 'comments', 'return_reason',
+            'override_reason', 'version', 'submitted_at', 'decided_at', 'updated_at',
+            'is_my_action',
+        ]
+        read_only_fields = fields
+
+    @staticmethod
+    def _name(user):
+        if user is None:
+            return ''
+        return user.get_full_name() or user.username
+
+    def get_submitted_by_name(self, obj):
+        return self._name(obj.submitted_by)
+
+    def get_assigned_to_name(self, obj):
+        return self._name(obj.assigned_to)
+
+    def get_confirmed_by_name(self, obj):
+        return self._name(obj.confirmed_by)
+
+    def get_is_my_action(self, obj):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if not user or obj.status != WorkflowConfirmation.STATUS_PENDING:
+            return False
+        if obj.assigned_to_id:
+            return obj.assigned_to_id == user.id or user.role == User.ROLE_ADMIN
+        return (
+            obj.required_role == user.role
+            or user.role == User.ROLE_ADMIN
+            or (obj.required_role == User.ROLE_FINANCE_OFFICER and user.role == User.ROLE_FINANCE_MANAGER)
         )
 
 

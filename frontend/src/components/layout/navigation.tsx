@@ -9,6 +9,7 @@ import {
   Settings,
   ShieldCheck,
   Users,
+  ClipboardCheck,
 } from 'lucide-react';
 import type React from 'react';
 import type { Role, WorkflowBadges } from '@/api/types';
@@ -33,6 +34,7 @@ export const navItems: NavItem[] = [
   { label: 'Inventory', href: '/inventory', icon: Boxes, roles: all, badgeKey: 'inventory' },
   { label: 'Suppliers', href: '/suppliers', icon: Users, roles: ['admin', 'procurement_officer'] },
   { label: 'Notifications', href: '/notifications', icon: Bell, roles: all },
+  { label: 'Confirmations', href: '/confirmations', icon: ClipboardCheck, roles: all },
   { label: 'Reports', href: '/reports', icon: FileBarChart, roles: reports },
   { label: 'Finance', href: '/finance', icon: Landmark, roles: financeStakeholders, section: 'Finance' },
   { label: 'Team', href: '/team', icon: ShieldCheck, roles: ['admin', 'project_manager'], section: 'Team & Settings' },

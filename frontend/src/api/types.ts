@@ -145,6 +145,44 @@ export type MaterialOpeningStockImportResult = {
   opening_balances: number;
 };
 
+export type MaterialOpeningStockImportSubmission = {
+  confirmation_id: number;
+  status: 'PENDING';
+  status_display: string;
+  rows: number;
+  message: string;
+};
+
+export type WorkflowConfirmation = {
+  id: number;
+  document_type: string;
+  document_type_display: string;
+  object_id: string;
+  object_label: string;
+  action_url: string;
+  stage: string;
+  stage_display: string;
+  status: 'PENDING' | 'CONFIRMED' | 'RETURNED' | 'CANCELLED';
+  status_display: string;
+  required_role: Role;
+  required_role_display: string;
+  assigned_to: number | null;
+  assigned_to_name: string;
+  submitted_by: number;
+  submitted_by_name: string;
+  confirmed_by: number | null;
+  confirmed_by_name: string;
+  submitted_snapshot: Record<string, unknown>;
+  confirmation_data: Record<string, unknown>;
+  comments: string;
+  return_reason: string;
+  override_reason: string;
+  version: number;
+  submitted_at: string;
+  decided_at: string | null;
+  is_my_action: boolean;
+};
+
 export type Project = {
   id: number;
   name: string;

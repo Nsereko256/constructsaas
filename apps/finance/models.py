@@ -3297,3 +3297,141 @@ class ExpenseApproval(models.Model):
                 raise ValidationError({field: f'{field.replace("_", " ").title()} must belong to the same company.'})
         self.full_clean()
         return super().save(*args, **kwargs)
+
+
+class WorkflowConfirmation(models.Model):
+    """Company-wide maker-checker handoff for operational and finance records."""
+
+    DOCUMENT_PURCHASE_REQUEST = 'PURCHASE_REQUEST'
+    DOCUMENT_STOCK_ISSUE = 'STOCK_ISSUE'
+    DOCUMENT_PURCHASE_ORDER = 'PURCHASE_ORDER'
+    DOCUMENT_PO_DISPATCH = 'PO_DISPATCH'
+    DOCUMENT_WAREHOUSE_RECEIPT = 'WAREHOUSE_RECEIPT'
+    DOCUMENT_SITE_RECEIPT = 'SITE_RECEIPT'
+    DOCUMENT_OPENING_STOCK = 'OPENING_STOCK'
+    DOCUMENT_SUPPLIER_INVOICE = 'SUPPLIER_INVOICE'
+    DOCUMENT_PAYMENT = 'PAYMENT'
+    DOCUMENT_CHOICES = [
+        (DOCUMENT_PURCHASE_REQUEST, 'Purchase request'),
+        (DOCUMENT_STOCK_ISSUE, 'Stock issue'),
+        (DOCUMENT_PURCHASE_ORDER, 'Purchase order'),
+        (DOCUMENT_PO_DISPATCH, 'Purchase order dispatch'),
+        (DOCUMENT_WAREHOUSE_RECEIPT, 'Warehouse receipt'),
+        (DOCUMENT_SITE_RECEIPT, 'Direct-to-site receipt'),
+        (DOCUMENT_OPENING_STOCK, 'Opening stock import'),
+        (DOCUMENT_SUPPLIER_INVOICE, 'Supplier invoice'),
+        (DOCUMENT_PAYMENT, 'Payment'),
+    ]
+
+    STAGE_TECHNICAL = 'TECHNICAL'
+    STAGE_STOCK = 'STOCK'
+    STAGE_FINANCE = 'FINANCE'
+    STAGE_DISPATCH = 'DISPATCH'
+    STAGE_RECEIPT = 'RECEIPT'
+    STAGE_POSTING = 'POSTING'
+    STAGE_CHOICES = [
+        (STAGE_TECHNICAL, 'Technical confirmation'),
+        (STAGE_STOCK, 'Stock confirmation'),
+        (STAGE_FINANCE, 'Finance confirmation'),
+        (STAGE_DISPATCH, 'Dispatch confirmation'),
+        (STAGE_RECEIPT, 'Receipt confirmation'),
+        (STAGE_POSTING, 'Posting confirmation'),
+    ]
+
+    STATUS_PENDING = 'PENDING'
+    STATUS_CONFIRMED = 'CONFIRMED'
+    STATUS_RETURNED = 'RETURNED'
+    STATUS_CANCELLED = 'CANCELLED'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Awaiting confirmation'),
+        (STATUS_CONFIRMED, 'Confirmed'),
+        (STATUS_RETURNED, 'Returned for correction'),
+        (STATUS_CANCELLED, 'Cancelled'),
+    ]
+
+    company = models.ForeignKey(Company, on_delete=models.PROTECT, related_name='workflow_confirmations')
+    document_type = models.CharField(max_length=30, choices=DOCUMENT_CHOICES)
+    object_id = models.CharField(max_length=100)
+    object_label = models.CharField(max_length=200)
+    action_url = models.CharField(max_length=300, blank=True)
+    stage = models.CharField(max_length=20, choices=STAGE_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    required_role = models.CharField(max_length=32, choices=User.ROLE_CHOICES)
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='assigned_workflow_confirmations',
+    )
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='submitted_workflow_confirmations',
+    )
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='confirmed_workflow_confirmations',
+    )
+    submitted_snapshot = models.JSONField(default=dict, blank=True)
+    confirmation_data = models.JSONField(default=dict, blank=True)
+    comments = models.TextField(blank=True)
+    return_reason = models.TextField(blank=True)
+    override_reason = models.TextField(blank=True)
+    version = models.PositiveIntegerField(default=1)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = CompanyScopedManager()
+
+    class Meta:
+        ordering = ['-submitted_at', '-id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['company', 'document_type', 'object_id', 'stage'],
+                condition=Q(status='PENDING'),
+                name='unique_pending_workflow_confirmation',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['company', 'status', 'required_role'], name='workflow_confirm_queue'),
+            models.Index(fields=['company', 'document_type', 'object_id'], name='workflow_confirm_record'),
+        ]
+
+    def clean(self):
+        for field in ('assigned_to', 'submitted_by', 'confirmed_by'):
+            actor = getattr(self, field, None)
+            if actor is not None and actor.company_id != self.company_id:
+                raise ValidationError({field: 'The responsible user must belong to the same company.'})
+        assigned_role_valid = (
+            not self.assigned_to_id
+            or self.assigned_to.role == self.required_role
+            or self.assigned_to.role == User.ROLE_ADMIN
+            or (
+                self.required_role == User.ROLE_FINANCE_OFFICER
+                and self.assigned_to.role == User.ROLE_FINANCE_MANAGER
+            )
+        )
+        if not assigned_role_valid:
+            raise ValidationError({'assigned_to': 'The assigned user must have the required confirmation role.'})
+        if self.status == self.STATUS_CONFIRMED and not self.confirmed_by_id:
+            raise ValidationError({'confirmed_by': 'A confirmed handoff must identify the checker.'})
+        if self.pk:
+            original = type(self).objects.filter(pk=self.pk).values(
+                'company_id', 'document_type', 'object_id', 'stage', 'required_role',
+                'submitted_by_id', 'submitted_snapshot', 'version',
+            ).first()
+            if original:
+                immutable = {
+                    'company_id': self.company_id,
+                    'document_type': self.document_type,
+                    'object_id': self.object_id,
+                    'stage': self.stage,
+                    'required_role': self.required_role,
+                    'submitted_by_id': self.submitted_by_id,
+                    'submitted_snapshot': self.submitted_snapshot,
+                    'version': self.version,
+                }
+                if original != immutable:
+                    raise ValidationError('Submitted confirmation identity and snapshot are immutable.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)

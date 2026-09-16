@@ -8,6 +8,7 @@ import type {
   Material,
   MaterialOpeningStockImportPreview,
   MaterialOpeningStockImportResult,
+  MaterialOpeningStockImportSubmission,
   NotificationItem,
   NotificationSummary,
   Paginated,
@@ -23,6 +24,7 @@ import type {
   Supplier,
   SupplierClaim,
   User,
+  WorkflowConfirmation,
   WorkflowBadges,
   Warehouse,
   BinLocation,
@@ -104,8 +106,13 @@ export const api = {
     body.append('file', file);
     body.append('opening_date', openingDate);
     body.append('reason', reason);
-    return apiRequest<MaterialOpeningStockImportResult>('/api/materials/opening-stock-import-confirm/', { method: 'POST', body });
+    return apiRequest<MaterialOpeningStockImportSubmission>('/api/materials/opening-stock-import-confirm/', { method: 'POST', body });
   },
+  workflowConfirmations: (params = {}) => apiRequest<Paginated<WorkflowConfirmation>>(`/api/v1/finance/workflow-confirmations/${pageParams(params)}`),
+  returnWorkflowConfirmation: (id: number, reason: string, override_reason = '') =>
+    apiRequest<WorkflowConfirmation>(`/api/v1/finance/workflow-confirmations/${id}/return-for-correction/`, { method: 'POST', body: { reason, override_reason } }),
+  approveOpeningStockImport: (confirmation_id: number, comments: string, override_reason = '') =>
+    apiRequest<MaterialOpeningStockImportResult>('/api/materials/opening-stock-import-approve/', { method: 'POST', body: { confirmation_id, comments, override_reason } }),
   movements: (params = {}) => apiRequest<Paginated<StockMovement>>(`/api/stock-movements/${pageParams(params)}`),
   createMovement: (body: Partial<StockMovement>) => apiRequest<StockMovement>('/api/stock-movements/', { method: 'POST', body }),
   downloadMovementsPdf: (params = {}) => apiDownload(`/api/stock-movements/download-pdf/${pageParams(params)}`, 'stock-movements.pdf'),

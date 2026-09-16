@@ -62,7 +62,8 @@ from apps.procurement.selectors import purchase_orders_for_user, purchase_reques
 from apps.finance.services import ensure_budget_clearance
 from apps.finance import budget_services
 from apps.finance.configuration_services import record_finance_audit_event
-from apps.finance.models import BudgetApproval, FinanceAuditEvent, ProjectBudget, SupplierInvoice
+from apps.finance.confirmation_services import confirm_pending, return_pending, submit_confirmation
+from apps.finance.models import BudgetApproval, FinanceAuditEvent, ProjectBudget, SupplierInvoice, WorkflowConfirmation
 from apps.pdf_exports import pdf_table_response
 from apps.finance.report_exports import xlsx_response
 from apps.finance.permissions import FinanceAdminPermission, FinanceCompanyPermission, FinanceReviewPermission, FinanceSubmissionPermission
@@ -78,7 +79,7 @@ from apps.suppliers.models import Supplier
 from apps.warehouse import valuation_services
 from apps.warehouse.import_services import (
     build_material_opening_stock_template,
-    confirm_material_import,
+    post_validated_material_import,
     validate_material_import,
 )
 from apps.warehouse.models import BinLocation, SiteTransfer, StockMovement, Warehouse
@@ -113,6 +114,67 @@ def _operational_export(*, kind, title, filename, columns, rows, totals):
         title=title, filename=filename, columns=columns, rows=rows,
         totals=totals, subtitle='Company-scoped operational export using the active filters.',
     )
+
+
+def _purchase_request_confirmation_snapshot(purchase_request):
+    return {
+        'number': purchase_request.number,
+        'project_id': purchase_request.project_id,
+        'title': purchase_request.title,
+        'priority': purchase_request.priority,
+        'required_date': purchase_request.required_date.isoformat() if purchase_request.required_date else None,
+        'justification': purchase_request.justification,
+        'items': [
+            {
+                'material_id': item.material_id,
+                'material_code': item.material.code,
+                'material_name': item.material.name,
+                'quantity': str(item.quantity),
+                'notes': item.notes,
+            }
+            for item in purchase_request.items.select_related('material').all()
+        ],
+    }
+
+
+def _submit_purchase_request_confirmation(purchase_request, user):
+    return submit_confirmation(
+        company=purchase_request.company,
+        document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_REQUEST,
+        object_id=purchase_request.pk,
+        object_label=purchase_request.number,
+        stage=WorkflowConfirmation.STAGE_TECHNICAL,
+        required_role=User.ROLE_PROJECT_MANAGER,
+        submitted_by=user,
+        snapshot=_purchase_request_confirmation_snapshot(purchase_request),
+        action_url=f'/procurement/requests/{purchase_request.pk}',
+    )
+
+
+def _purchase_order_handoff_submitter(purchase_order, actor):
+    """Resolve a real prior actor for legacy POs that predate explicit handoffs."""
+    candidates = [
+        purchase_order.delivery_follow_up_owner,
+        purchase_order.purchase_request.requested_by if purchase_order.purchase_request_id else None,
+    ]
+    if purchase_order.purchase_request_id:
+        approval = BudgetApproval.objects.filter(
+            company=purchase_order.company,
+            purchase_request_id=purchase_order.purchase_request_id,
+        ).select_related('reviewed_by', 'created_by').first()
+        if approval:
+            candidates.extend([approval.reviewed_by, approval.created_by])
+    candidates.extend(User.objects.filter(
+        company=purchase_order.company,
+        is_active=True,
+    ).exclude(pk=actor.pk).order_by(
+        Case(
+            When(role=User.ROLE_ADMIN, then=Value(0)),
+            default=Value(1),
+        ),
+        'pk',
+    )[:1])
+    return next((candidate for candidate in candidates if candidate and candidate.pk != actor.pk), actor)
 from .serializers import (
     CategorySerializer,
     ChatMessageSerializer,
@@ -528,6 +590,8 @@ class MaterialViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
             permission_classes = [IsAdminOnly]
         elif self.action in {'opening_stock_template', 'opening_stock_import_preview', 'opening_stock_import_confirm'}:
             permission_classes = [IsStorekeeperOrAdmin]
+        elif self.action == 'opening_stock_import_approve':
+            permission_classes = [IsAuthenticatedCompanyUser]
         else:
             permission_classes = self.permission_classes
         return [permission() for permission in permission_classes]
@@ -595,6 +659,15 @@ class MaterialViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
             raise ValidationError({'file': ['Select an Excel workbook to preview.']})
         if not upload.name.lower().endswith('.xlsx'):
             raise ValidationError({'file': ['Only .xlsx workbooks are supported.']})
+        raw = upload.read()
+        file_hash = hashlib.sha256(raw).hexdigest()
+        if FinanceAuditEvent.objects.filter(
+            company=request.user.company,
+            action='inventory.opening_stock.imported',
+            object_id=file_hash,
+        ).exists():
+            raise ValidationError({'file': ['This workbook has already been imported.']})
+        upload.seek(0)
         raw, rows = validate_material_import(user=request.user, upload=upload)
         invalid_rows = sum(bool(row['errors']) for row in rows)
         return Response({
@@ -609,7 +682,7 @@ class MaterialViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
             'rows': rows,
         })
 
-    @extend_schema(tags=['Inventory'], summary='Import materials and post their opening stock atomically')
+    @extend_schema(tags=['Inventory'], summary='Submit validated opening stock for independent Finance confirmation')
     @action(detail=False, methods=['post'], url_path='opening-stock-import-confirm')
     def opening_stock_import_confirm(self, request):
         upload = request.FILES.get('file')
@@ -625,14 +698,85 @@ class MaterialViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
         reason = str(request.data.get('reason', '')).strip()
         if len(reason) < 5:
             raise ValidationError({'reason': ['Explain why this opening stock is being imported.']})
-        summary = confirm_material_import(
-            user=request.user,
-            upload=upload,
-            opening_date=opening_date,
-            reason=reason,
+        raw = upload.read()
+        file_hash = hashlib.sha256(raw).hexdigest()
+        if FinanceAuditEvent.objects.filter(
+            company=request.user.company,
+            action='inventory.opening_stock.imported',
+            object_id=file_hash,
+        ).exists():
+            raise ValidationError({'file': ['This workbook has already been imported.']})
+        upload.seek(0)
+        raw, rows = validate_material_import(user=request.user, upload=upload)
+        errors = [row for row in rows if row['errors']]
+        if errors:
+            raise ValidationError({'rows': errors, 'detail': 'Correct every row error before submitting the import.'})
+        task = submit_confirmation(
+            company=request.user.company,
+            document_type=WorkflowConfirmation.DOCUMENT_OPENING_STOCK,
+            object_id=file_hash,
+            object_label=f'Opening stock · {upload.name}',
+            stage=WorkflowConfirmation.STAGE_POSTING,
+            required_role=User.ROLE_ADMIN,
+            submitted_by=request.user,
+            action_url='/inventory?opening_stock_confirmation=1',
+            snapshot={
+                'rows': rows,
+                'opening_date': opening_date.isoformat(),
+                'reason': reason,
+                'file_hash': file_hash,
+                'filename': upload.name,
+            },
         )
-        transaction.on_commit(lambda: check_low_stock_for_company(request.user.company))
-        transaction.on_commit(lambda: push_dashboard_update(request.user.company))
+        return Response({
+            'confirmation_id': task.pk,
+            'status': task.status,
+            'status_display': task.get_status_display(),
+            'rows': len(rows),
+            'message': 'Opening stock was submitted to Admin. Inventory will change only after independent confirmation.',
+        }, status=status.HTTP_202_ACCEPTED)
+
+    @extend_schema(tags=['Inventory'], summary='Confirm and post a submitted opening-stock import')
+    @action(detail=False, methods=['post'], url_path='opening-stock-import-approve')
+    def opening_stock_import_approve(self, request):
+        if request.user.role != User.ROLE_ADMIN:
+            raise PermissionDenied('Only an Admin can confirm and post opening stock.')
+        confirmation_id = request.data.get('confirmation_id')
+        task = WorkflowConfirmation.objects.filter(
+            pk=confirmation_id,
+            company=request.user.company,
+            document_type=WorkflowConfirmation.DOCUMENT_OPENING_STOCK,
+            stage=WorkflowConfirmation.STAGE_POSTING,
+            status=WorkflowConfirmation.STATUS_PENDING,
+        ).first()
+        if task is None:
+            raise ValidationError({'confirmation_id': ['Select a pending opening-stock confirmation.']})
+        snapshot = task.submitted_snapshot
+        opening_date = parse_date(str(snapshot.get('opening_date', '')))
+        if opening_date is None:
+            raise ValidationError({'confirmation': ['The submitted opening-stock date is invalid.']})
+        with transaction.atomic():
+            confirm_pending(
+                company=request.user.company,
+                document_type=WorkflowConfirmation.DOCUMENT_OPENING_STOCK,
+                object_id=task.object_id,
+                stage=WorkflowConfirmation.STAGE_POSTING,
+                user=request.user,
+                confirmation_data={'decision': 'posted', 'row_count': len(snapshot.get('rows', []))},
+                comments=str(request.data.get('comments', '')).strip(),
+                override_reason=str(request.data.get('override_reason', '')).strip(),
+            )
+            summary = post_validated_material_import(
+                user=task.submitted_by,
+                rows=snapshot.get('rows', []),
+                opening_date=opening_date,
+                reason=str(snapshot.get('reason', 'Opening stock import')),
+                file_hash=task.object_id,
+                filename=str(snapshot.get('filename', 'opening-stock.xlsx')),
+                approved_by=request.user,
+            )
+            transaction.on_commit(lambda: check_low_stock_for_company(request.user.company))
+            transaction.on_commit(lambda: push_dashboard_update(request.user.company))
         return Response(summary, status=status.HTTP_201_CREATED)
 
     @extend_schema(tags=['Inventory'], summary='Download inventory register as PDF', responses={200: bytes})
@@ -1333,6 +1477,7 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
                 metadata={'number': purchase_request.number},
             )
         else:
+            _submit_purchase_request_confirmation(purchase_request, self.request.user)
             transaction.on_commit(lambda: notify_pr_submitted(purchase_request))
         transaction.on_commit(lambda: push_dashboard_update(purchase_request.company))
         record_finance_audit_event(
@@ -1359,7 +1504,22 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
     def approve(self, request, pk=None):
         purchase_request = self.get_object()
         try:
-            purchase_request = approve_purchase_request(purchase_request=purchase_request, approver=request.user)
+            with transaction.atomic():
+                _submit_purchase_request_confirmation(
+                    purchase_request,
+                    purchase_request.requested_by or request.user,
+                )
+                confirm_pending(
+                    company=purchase_request.company,
+                    document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_REQUEST,
+                    object_id=purchase_request.pk,
+                    stage=WorkflowConfirmation.STAGE_TECHNICAL,
+                    user=request.user,
+                    confirmation_data={'decision': 'approved'},
+                    comments=str(request.data.get('comments', '')).strip(),
+                    override_reason=str(request.data.get('override_reason', '')).strip(),
+                )
+                purchase_request = approve_purchase_request(purchase_request=purchase_request, approver=request.user)
         except ValidationError as exc:
             return Response({'detail': str(exc.detail)}, status=status.HTTP_400_BAD_REQUEST)
         record_finance_audit_event(
@@ -1379,10 +1539,32 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
         if request.user.role != User.ROLE_ADMIN:
             return Response({'detail': 'Only an Admin can approve a warehouse stock issue.'}, status=status.HTTP_403_FORBIDDEN)
         try:
-            purchase_request = approve_stock_issue_request(
-                purchase_request=purchase_request,
-                approver=request.user,
-            )
+            with transaction.atomic():
+                task = submit_confirmation(
+                    company=purchase_request.company,
+                    document_type=WorkflowConfirmation.DOCUMENT_STOCK_ISSUE,
+                    object_id=purchase_request.pk,
+                    object_label=purchase_request.number,
+                    stage=WorkflowConfirmation.STAGE_STOCK,
+                    required_role=User.ROLE_ADMIN,
+                    submitted_by=purchase_request.manager_approved_by or purchase_request.requested_by,
+                    action_url=f'/procurement/requests/{purchase_request.pk}',
+                    snapshot=_purchase_request_confirmation_snapshot(purchase_request),
+                )
+                confirm_pending(
+                    company=purchase_request.company,
+                    document_type=WorkflowConfirmation.DOCUMENT_STOCK_ISSUE,
+                    object_id=purchase_request.pk,
+                    stage=WorkflowConfirmation.STAGE_STOCK,
+                    user=request.user,
+                    confirmation_data={'decision': 'stock_issue_authorized'},
+                    comments=str(request.data.get('comments', '')).strip(),
+                    override_reason=str(request.data.get('override_reason', '')).strip(),
+                )
+                purchase_request = approve_stock_issue_request(
+                    purchase_request=purchase_request,
+                    approver=request.user,
+                )
         except ValidationError as exc:
             return Response({'detail': str(exc.detail)}, status=status.HTTP_400_BAD_REQUEST)
         record_finance_audit_event(
@@ -1406,9 +1588,21 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
         purchase_request = self.get_object()
         payload = FinanceSubmissionSerializer(data=request.data, context={'request': request})
         payload.is_valid(raise_exception=True)
-        approval = budget_services.submit_purchase_request_to_finance(
-            purchase_request=purchase_request, user=request.user, **payload.validated_data,
-        )
+        with transaction.atomic():
+            approval = budget_services.submit_purchase_request_to_finance(
+                purchase_request=purchase_request, user=request.user, **payload.validated_data,
+            )
+            submit_confirmation(
+                company=purchase_request.company,
+                document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_REQUEST,
+                object_id=purchase_request.pk,
+                object_label=purchase_request.number,
+                stage=WorkflowConfirmation.STAGE_FINANCE,
+                required_role=User.ROLE_FINANCE_OFFICER,
+                submitted_by=request.user,
+                action_url=f'/procurement/requests/{purchase_request.pk}',
+                snapshot={**_purchase_request_confirmation_snapshot(purchase_request), 'requested_amount': str(approval.requested_amount)},
+            )
         return Response(FinancialApprovalSerializer(approval).data)
 
     @extend_schema(
@@ -1422,20 +1616,94 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
         purchase_request = self.get_object()
         payload = FinanceDecisionSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
-        approval = budget_services.review_purchase_request_finance(
-            purchase_request=purchase_request, user=request.user,
-            decision=BudgetApproval.STATUS_APPROVED, **payload.validated_data,
-        )
+        with transaction.atomic():
+            financial_approval = BudgetApproval.objects.select_related('created_by').get(
+                purchase_request=purchase_request,
+                company=purchase_request.company,
+            )
+            submit_confirmation(
+                company=purchase_request.company,
+                document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_REQUEST,
+                object_id=purchase_request.pk,
+                object_label=purchase_request.number,
+                stage=WorkflowConfirmation.STAGE_FINANCE,
+                required_role=User.ROLE_FINANCE_OFFICER,
+                submitted_by=financial_approval.created_by,
+                action_url=f'/procurement/requests/{purchase_request.pk}',
+                snapshot=_purchase_request_confirmation_snapshot(purchase_request),
+            )
+            confirm_pending(
+                company=purchase_request.company,
+                document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_REQUEST,
+                object_id=purchase_request.pk,
+                stage=WorkflowConfirmation.STAGE_FINANCE,
+                user=request.user,
+                confirmation_data={'decision': 'approved', 'override': payload.validated_data.get('override', False)},
+                comments=payload.validated_data.get('comments', ''),
+                override_reason=str(request.data.get('override_reason', '')).strip(),
+            )
+            approval = budget_services.review_purchase_request_finance(
+                purchase_request=purchase_request, user=request.user,
+                decision=BudgetApproval.STATUS_APPROVED, **payload.validated_data,
+            )
+            for purchase_order in purchase_request.purchase_orders.all():
+                po_task = WorkflowConfirmation.objects.filter(
+                    company=purchase_request.company,
+                    document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_ORDER,
+                    object_id=str(purchase_order.pk),
+                    stage=WorkflowConfirmation.STAGE_FINANCE,
+                    status=WorkflowConfirmation.STATUS_PENDING,
+                ).first()
+                if po_task:
+                    confirm_pending(
+                        company=purchase_request.company,
+                        document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_ORDER,
+                        object_id=purchase_order.pk,
+                        stage=WorkflowConfirmation.STAGE_FINANCE,
+                        user=request.user,
+                        confirmation_data={'decision': 'budget_cleared', 'approval_id': approval.pk},
+                        comments=payload.validated_data.get('comments', ''),
+                        override_reason=str(request.data.get('override_reason', '')).strip(),
+                    )
         return Response(FinancialApprovalSerializer(approval).data)
 
     def _finance_comment_action(self, request, decision):
         purchase_request = self.get_object()
         payload = RequiredCommentsSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
-        approval = budget_services.review_purchase_request_finance(
-            purchase_request=purchase_request, user=request.user,
-            decision=decision, comments=payload.validated_data['comments'],
-        )
+        with transaction.atomic():
+            if decision in {BudgetApproval.STATUS_REJECTED, BudgetApproval.STATUS_RETURNED}:
+                return_pending(
+                    company=purchase_request.company,
+                    document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_REQUEST,
+                    object_id=purchase_request.pk,
+                    stage=WorkflowConfirmation.STAGE_FINANCE,
+                    user=request.user,
+                    reason=payload.validated_data['comments'],
+                    override_reason=str(request.data.get('override_reason', '')).strip(),
+                )
+                for purchase_order in purchase_request.purchase_orders.all():
+                    po_task = WorkflowConfirmation.objects.filter(
+                        company=purchase_request.company,
+                        document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_ORDER,
+                        object_id=str(purchase_order.pk),
+                        stage=WorkflowConfirmation.STAGE_FINANCE,
+                        status=WorkflowConfirmation.STATUS_PENDING,
+                    ).first()
+                    if po_task:
+                        return_pending(
+                            company=purchase_request.company,
+                            document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_ORDER,
+                            object_id=purchase_order.pk,
+                            stage=WorkflowConfirmation.STAGE_FINANCE,
+                            user=request.user,
+                            reason=payload.validated_data['comments'],
+                            override_reason=str(request.data.get('override_reason', '')).strip(),
+                        )
+            approval = budget_services.review_purchase_request_finance(
+                purchase_request=purchase_request, user=request.user,
+                decision=decision, comments=payload.validated_data['comments'],
+            )
         return Response(FinancialApprovalSerializer(approval).data)
 
     @extend_schema(
@@ -1478,6 +1746,8 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
         corrected.technical_approved_by = None
         corrected.manager_approved_by = None
         corrected.save(update_fields=['status', 'technical_return_reason', 'technical_approved_by', 'manager_approved_by', 'updated_at'])
+        if not is_warehouse_replenishment:
+            _submit_purchase_request_confirmation(corrected, request.user)
         record_finance_audit_event(
             company=corrected.company, actor=request.user, action='purchase_request.corrected_after_return',
             object_type='PurchaseRequest', object_id=corrected.pk,
@@ -1498,10 +1768,24 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
         payload = RequiredCommentsSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         try:
-            purchase_request = return_purchase_request_for_correction(
-                purchase_request=purchase_request,
-                comments=payload.validated_data['comments'],
-            )
+            with transaction.atomic():
+                _submit_purchase_request_confirmation(
+                    purchase_request,
+                    purchase_request.requested_by or request.user,
+                )
+                return_pending(
+                    company=purchase_request.company,
+                    document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_REQUEST,
+                    object_id=purchase_request.pk,
+                    stage=WorkflowConfirmation.STAGE_TECHNICAL,
+                    user=request.user,
+                    reason=payload.validated_data['comments'],
+                    override_reason=str(request.data.get('override_reason', '')).strip(),
+                )
+                purchase_request = return_purchase_request_for_correction(
+                    purchase_request=purchase_request,
+                    comments=payload.validated_data['comments'],
+                )
         except ValidationError as exc:
             return Response({'detail': str(exc.detail)}, status=status.HTTP_400_BAD_REQUEST)
         record_finance_audit_event(
@@ -1529,10 +1813,24 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
         serializer.is_valid(raise_exception=True)
 
         try:
-            purchase_request = reject_purchase_request(
-                purchase_request=purchase_request,
-                rejection_reason=serializer.validated_data['rejection_reason'],
-            )
+            with transaction.atomic():
+                _submit_purchase_request_confirmation(
+                    purchase_request,
+                    purchase_request.requested_by or request.user,
+                )
+                return_pending(
+                    company=purchase_request.company,
+                    document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_REQUEST,
+                    object_id=purchase_request.pk,
+                    stage=WorkflowConfirmation.STAGE_TECHNICAL,
+                    user=request.user,
+                    reason=serializer.validated_data['rejection_reason'],
+                    override_reason=str(request.data.get('override_reason', '')).strip(),
+                )
+                purchase_request = reject_purchase_request(
+                    purchase_request=purchase_request,
+                    rejection_reason=serializer.validated_data['rejection_reason'],
+                )
         except ValidationError as exc:
             return Response({'detail': str(exc.detail)}, status=status.HTTP_400_BAD_REQUEST)
         transaction.on_commit(lambda: notify_pr_rejected(purchase_request))
@@ -1569,6 +1867,17 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
             )
         purchase_request.status = PurchaseRequest.STATUS_STOCK_ISSUE_REQUESTED
         purchase_request.save(update_fields=['status', 'updated_at'])
+        submit_confirmation(
+            company=purchase_request.company,
+            document_type=WorkflowConfirmation.DOCUMENT_STOCK_ISSUE,
+            object_id=purchase_request.pk,
+            object_label=purchase_request.number,
+            stage=WorkflowConfirmation.STAGE_RECEIPT,
+            required_role=User.ROLE_STOREKEEPER,
+            submitted_by=request.user,
+            action_url=f'/procurement/requests/{purchase_request.pk}',
+            snapshot=_purchase_request_confirmation_snapshot(purchase_request),
+        )
         transaction.on_commit(lambda: notify_pr_stock_issue_requested(purchase_request, request.user))
         transaction.on_commit(lambda: push_dashboard_update(purchase_request.company))
 
@@ -1672,6 +1981,31 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+
+            submit_confirmation(
+                company=purchase_request.company,
+                document_type=WorkflowConfirmation.DOCUMENT_STOCK_ISSUE,
+                object_id=purchase_request.pk,
+                object_label=purchase_request.number,
+                stage=WorkflowConfirmation.STAGE_RECEIPT,
+                required_role=User.ROLE_STOREKEEPER,
+                submitted_by=purchase_request.technical_approved_by or purchase_request.requested_by,
+                action_url=f'/procurement/requests/{purchase_request.pk}',
+                snapshot=_purchase_request_confirmation_snapshot(purchase_request),
+            )
+            confirm_pending(
+                company=purchase_request.company,
+                document_type=WorkflowConfirmation.DOCUMENT_STOCK_ISSUE,
+                object_id=purchase_request.pk,
+                stage=WorkflowConfirmation.STAGE_RECEIPT,
+                user=request.user,
+                confirmation_data={
+                    'decision': 'stock_issued',
+                    'items': [{'purchase_request_item': key, 'quantity': str(value)} for key, value in issue_by_item.items()],
+                },
+                comments=str(request.data.get('comments', '')).strip(),
+                override_reason=str(request.data.get('override_reason', '')).strip(),
+            )
 
             for item in items:
                 quantity = issue_by_item.get(item.pk)
@@ -1858,9 +2192,35 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
     @extend_schema(tags=['Procurement'], request=None, responses=PurchaseOrderSerializer)
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
-        purchase_order = budget_services.approve_purchase_order(
-            purchase_order=self.get_object(), user=request.user,
-        )
+        purchase_order = self.get_object()
+        with transaction.atomic():
+            purchase_order = budget_services.approve_purchase_order(
+                purchase_order=purchase_order, user=request.user,
+            )
+            if purchase_order.delivery_destination == PurchaseOrder.DELIVERY_SITE:
+                submit_confirmation(
+                    company=purchase_order.company,
+                    document_type=WorkflowConfirmation.DOCUMENT_PO_DISPATCH,
+                    object_id=purchase_order.pk,
+                    object_label=purchase_order.number,
+                    stage=WorkflowConfirmation.STAGE_DISPATCH,
+                    required_role=User.ROLE_PROCUREMENT_OFFICER,
+                    submitted_by=_purchase_order_handoff_submitter(purchase_order, request.user),
+                    action_url=f'/procurement/purchase-orders/{purchase_order.pk}',
+                    snapshot={'status': purchase_order.status, 'destination': purchase_order.delivery_destination},
+                )
+            else:
+                submit_confirmation(
+                    company=purchase_order.company,
+                    document_type=WorkflowConfirmation.DOCUMENT_WAREHOUSE_RECEIPT,
+                    object_id=purchase_order.pk,
+                    object_label=purchase_order.number,
+                    stage=WorkflowConfirmation.STAGE_RECEIPT,
+                    required_role=User.ROLE_STOREKEEPER,
+                    submitted_by=request.user,
+                    action_url=f'/procurement/purchase-orders/{purchase_order.pk}',
+                    snapshot={'status': purchase_order.status, 'destination': purchase_order.delivery_destination},
+                )
         transaction.on_commit(lambda: notify_po_approved(purchase_order))
         transaction.on_commit(lambda: push_dashboard_update(purchase_order.company))
         return Response(self.get_serializer(purchase_order).data)
@@ -1882,11 +2242,28 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
             )
         payload = FinanceSubmissionSerializer(data=request.data, context={'request': request})
         payload.is_valid(raise_exception=True)
-        approval = budget_services.submit_purchase_request_to_finance(
-            purchase_request=purchase_order.purchase_request,
-            user=request.user,
-            **payload.validated_data,
-        )
+        with transaction.atomic():
+            approval = budget_services.submit_purchase_request_to_finance(
+                purchase_request=purchase_order.purchase_request,
+                user=request.user,
+                **payload.validated_data,
+            )
+            submit_confirmation(
+                company=purchase_order.company,
+                document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_ORDER,
+                object_id=purchase_order.pk,
+                object_label=purchase_order.number,
+                stage=WorkflowConfirmation.STAGE_FINANCE,
+                required_role=User.ROLE_FINANCE_OFFICER,
+                submitted_by=request.user,
+                action_url=f'/procurement/purchase-orders/{purchase_order.pk}',
+                snapshot={
+                    'purchase_request_id': purchase_order.purchase_request_id,
+                    'supplier_id': purchase_order.supplier_id,
+                    'destination': purchase_order.delivery_destination,
+                    'requested_amount': str(approval.requested_amount),
+                },
+            )
         comments = payload.validated_data.get('comments', '')
         record_finance_audit_event(
             company=purchase_order.company,
@@ -2038,6 +2415,28 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+            submit_confirmation(
+                company=purchase_order.company,
+                document_type=WorkflowConfirmation.DOCUMENT_PO_DISPATCH,
+                object_id=purchase_order.pk,
+                object_label=purchase_order.number,
+                stage=WorkflowConfirmation.STAGE_DISPATCH,
+                required_role=User.ROLE_PROCUREMENT_OFFICER,
+                submitted_by=_purchase_order_handoff_submitter(purchase_order, request.user),
+                action_url=f'/procurement/purchase-orders/{purchase_order.pk}',
+                snapshot={'status': purchase_order.status, 'destination': purchase_order.delivery_destination},
+            )
+            confirm_pending(
+                company=purchase_order.company,
+                document_type=WorkflowConfirmation.DOCUMENT_PO_DISPATCH,
+                object_id=purchase_order.pk,
+                stage=WorkflowConfirmation.STAGE_DISPATCH,
+                user=request.user,
+                confirmation_data={'decision': 'supplier_dispatch_confirmed'},
+                comments=str(request.data.get('comments', '')).strip(),
+                override_reason=str(request.data.get('override_reason', '')).strip(),
+            )
+
             purchase_order.status = PurchaseOrder.STATUS_DISPATCH_CONFIRMED
             purchase_order.dispatch_confirmed_by = request.user
             purchase_order.dispatch_confirmed_at = timezone.now()
@@ -2048,6 +2447,22 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
                     'dispatch_confirmed_at',
                     'updated_at',
                 ]
+            )
+            assigned_engineers = list(
+                purchase_order.project.site_engineers.filter(is_active=True)[:2]
+            ) if purchase_order.project_id else []
+            assigned_engineer = assigned_engineers[0] if len(assigned_engineers) == 1 else None
+            submit_confirmation(
+                company=purchase_order.company,
+                document_type=WorkflowConfirmation.DOCUMENT_SITE_RECEIPT,
+                object_id=purchase_order.pk,
+                object_label=purchase_order.number,
+                stage=WorkflowConfirmation.STAGE_RECEIPT,
+                required_role=User.ROLE_SITE_ENGINEER if assigned_engineers else User.ROLE_STOREKEEPER,
+                assigned_to=assigned_engineer,
+                submitted_by=request.user,
+                action_url=f'/procurement/purchase-orders/{purchase_order.pk}',
+                snapshot={'status': purchase_order.status, 'destination': purchase_order.delivery_destination},
             )
             transaction.on_commit(lambda: notify_po_dispatch_confirmed(purchase_order))
             transaction.on_commit(lambda: push_dashboard_update(purchase_order.company))
@@ -2331,6 +2746,42 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
                 data=request.data, context={'request': request},
             )
             payload.is_valid(raise_exception=True)
+            receipt_document_type = (
+                WorkflowConfirmation.DOCUMENT_WAREHOUSE_RECEIPT
+                if is_warehouse_delivery else WorkflowConfirmation.DOCUMENT_SITE_RECEIPT
+            )
+            submit_confirmation(
+                company=purchase_order.company,
+                document_type=receipt_document_type,
+                object_id=purchase_order.pk,
+                object_label=purchase_order.number,
+                stage=WorkflowConfirmation.STAGE_RECEIPT,
+                required_role=User.ROLE_STOREKEEPER if is_warehouse_delivery else request.user.role,
+                assigned_to=request.user if is_site_delivery else None,
+                submitted_by=(purchase_order.dispatch_confirmed_by or _purchase_order_handoff_submitter(purchase_order, request.user)),
+                action_url=f'/procurement/purchase-orders/{purchase_order.pk}',
+                snapshot={'status': purchase_order.status, 'destination': purchase_order.delivery_destination},
+            )
+            confirm_pending(
+                company=purchase_order.company,
+                document_type=receipt_document_type,
+                object_id=purchase_order.pk,
+                stage=WorkflowConfirmation.STAGE_RECEIPT,
+                user=request.user,
+                confirmation_data={
+                    'decision': 'receipt_confirmed',
+                    'receipt_date': payload.validated_data['receipt_date'],
+                    'items': [{
+                        'purchase_order_item': line['purchase_order_item'].pk,
+                        'accepted_quantity': str(line['accepted_quantity']),
+                        'rejected_quantity': str(line['rejected_quantity']),
+                        'damaged_quantity': str(line['damaged_quantity']),
+                        'notes': line.get('notes', ''),
+                    } for line in (payload.validated_data.get('items') or [])],
+                },
+                comments=payload.validated_data.get('notes', ''),
+                override_reason=str(request.data.get('override_reason', '')).strip(),
+            )
             purchase_order, grn = record_goods_received_note(
                 purchase_order=purchase_order, user=request.user,
                 receipt_date=payload.validated_data['receipt_date'],

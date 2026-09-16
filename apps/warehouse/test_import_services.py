@@ -25,6 +25,10 @@ class MaterialOpeningStockImportApiTests(TestCase):
             username='opening-stock-procurement', password='pass', company=self.company,
             role=User.ROLE_PROCUREMENT_OFFICER,
         )
+        self.admin = User.objects.create_user(
+            username='opening-stock-admin', password='pass', company=self.company,
+            role=User.ROLE_ADMIN,
+        )
         self.main = Warehouse.objects.create(
             company=self.company, name='Main Warehouse', code='MAIN', is_default=True,
         )
@@ -44,6 +48,26 @@ class MaterialOpeningStockImportApiTests(TestCase):
 
     def row(self, *, code='CEM-001', name='Cement 50kg', category='Cement', unit='bag', warehouse='MAIN', quantity=10, cost=35000, minimum=2):
         return [code, name, category, unit, warehouse, quantity, cost, minimum, 'Verified onboarding count.']
+
+    def submit_and_approve(self, rows, name='opening-stock.xlsx'):
+        submitted = self.client.post(
+            '/api/materials/opening-stock-import-confirm/',
+            {
+                'file': self.workbook(rows, name=name),
+                'opening_date': str(timezone.localdate()),
+                'reason': 'Verified company onboarding stock count.',
+            },
+            format='multipart',
+        )
+        self.assertEqual(submitted.status_code, 202, submitted.data)
+        self.assertEqual(StockMovement.objects.filter(company=self.company).count(), 0)
+        self.client.force_authenticate(self.admin)
+        approved = self.client.post(
+            '/api/materials/opening-stock-import-approve/',
+            {'confirmation_id': submitted.data['confirmation_id'], 'comments': 'Verified against the signed onboarding count.'},
+        )
+        self.client.force_authenticate(self.storekeeper)
+        return approved
 
     def test_template_and_import_actions_are_restricted_to_storekeepers_and_admins(self):
         response = self.client.get('/api/materials/opening-stock-template/')
@@ -78,20 +102,42 @@ class MaterialOpeningStockImportApiTests(TestCase):
         self.assertEqual(Material.objects.filter(company=self.company).count(), 0)
         self.assertEqual(StockMovement.objects.filter(company=self.company).count(), 0)
 
-    def test_confirm_creates_material_once_and_posts_balances_to_each_warehouse(self):
-        rows = [
-            self.row(warehouse='MAIN', quantity=10, cost=35000),
-            self.row(warehouse='SECONDARY', quantity=4, cost=36000),
-        ]
-        response = self.client.post(
+    def test_only_admin_can_approve_and_post_opening_stock(self):
+        submitted = self.client.post(
             '/api/materials/opening-stock-import-confirm/',
             {
-                'file': self.workbook(rows),
+                'file': self.workbook([self.row()]),
                 'opening_date': str(timezone.localdate()),
                 'reason': 'Verified company onboarding stock count.',
             },
             format='multipart',
         )
+        self.assertEqual(submitted.status_code, 202, submitted.data)
+
+        denied = self.client.post(
+            '/api/materials/opening-stock-import-approve/',
+            {'confirmation_id': submitted.data['confirmation_id']},
+        )
+        self.assertEqual(denied.status_code, 403, denied.data)
+        self.assertEqual(StockMovement.objects.filter(company=self.company).count(), 0)
+
+        self.client.force_authenticate(self.admin)
+        approved = self.client.post(
+            '/api/materials/opening-stock-import-approve/',
+            {
+                'confirmation_id': submitted.data['confirmation_id'],
+                'comments': 'Verified against the signed onboarding count.',
+            },
+        )
+        self.assertEqual(approved.status_code, 201, approved.data)
+        self.assertEqual(StockMovement.objects.filter(company=self.company).count(), 1)
+
+    def test_confirm_creates_material_once_and_posts_balances_to_each_warehouse(self):
+        rows = [
+            self.row(warehouse='MAIN', quantity=10, cost=35000),
+            self.row(warehouse='SECONDARY', quantity=4, cost=36000),
+        ]
+        response = self.submit_and_approve(rows)
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data['materials_created'], 1)
         self.assertEqual(response.data['materials_matched'], 1)
@@ -113,11 +159,7 @@ class MaterialOpeningStockImportApiTests(TestCase):
             'opening_date': str(timezone.localdate()),
             'reason': 'Verified company onboarding stock count.',
         }
-        first = self.client.post(
-            '/api/materials/opening-stock-import-confirm/',
-            {**payload, 'file': SimpleUploadedFile('opening.xlsx', workbook_bytes)},
-            format='multipart',
-        )
+        first = self.submit_and_approve([self.row()], name='opening.xlsx')
         self.assertEqual(first.status_code, 201, first.data)
         second = self.client.post(
             '/api/materials/opening-stock-import-confirm/',
@@ -156,15 +198,7 @@ class MaterialOpeningStockImportApiTests(TestCase):
         self.assertEqual(wrong_company.data['invalid_rows'], 1)
         self.assertIn('active company warehouse', ' '.join(wrong_company.data['rows'][0]['errors']))
 
-        confirmed = self.client.post(
-            '/api/materials/opening-stock-import-confirm/',
-            {
-                'file': self.workbook([self.row()]),
-                'opening_date': str(timezone.localdate()),
-                'reason': 'Verified company onboarding stock count.',
-            },
-            format='multipart',
-        )
+        confirmed = self.submit_and_approve([self.row()])
         self.assertEqual(confirmed.status_code, 201, confirmed.data)
         conflict = self.client.post(
             '/api/materials/opening-stock-import-preview/',
