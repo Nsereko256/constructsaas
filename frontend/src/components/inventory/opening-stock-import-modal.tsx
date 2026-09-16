@@ -17,6 +17,18 @@ function localDate() {
   return new Date(now.getTime() - offset).toISOString().slice(0, 10);
 }
 
+const importColumns = [
+  { name: 'Material code', required: true },
+  { name: 'Material name', required: true },
+  { name: 'Category', required: true },
+  { name: 'Unit', required: true },
+  { name: 'Warehouse code', required: true },
+  { name: 'Opening quantity', required: true },
+  { name: 'Unit cost', required: true },
+  { name: 'Minimum stock', required: false },
+  { name: 'Description', required: false },
+] as const;
+
 function downloadErrors(preview: MaterialOpeningStockImportPreview) {
   const quote = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
   const rows = [
@@ -107,9 +119,27 @@ export function OpeningStockImportModal({ open, onClose }: { open: boolean; onCl
               </div>
               <div className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
                 <Requirement title="File"><strong>.xlsx only</strong><span>Maximum 5 MB and 1,000 material rows.</span></Requirement>
-                <Requirement title="Required columns"><strong>Code, name, category and unit</strong><span>Also warehouse code, opening quantity and unit cost.</span></Requirement>
+                <Requirement title="Column order"><strong>9 columns, left to right</strong><span>Keep the names and sequence shown below.</span></Requirement>
                 <Requirement title="Accepted units"><strong>bag · ton · kg · litre</strong><span>piece · metre · sqm · cbm</span></Requirement>
                 <Requirement title="Stock rules"><strong>Use active warehouse codes</strong><span>See the Warehouse reference sheet. Values must be zero or greater.</span></Requirement>
+              </div>
+              <div className="mt-3 rounded-md border border-primary/20 bg-white p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-wide text-foreground">Excel columns in template order</p>
+                    <p className="text-xs text-muted">Name each heading exactly as shown and arrange the columns from 1 to 9.</p>
+                  </div>
+                  <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[11px] font-bold text-muted">Columns 8–9 are optional</span>
+                </div>
+                <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {importColumns.map((column, index) => (
+                    <li key={column.name} className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-surface/60 px-3 py-2">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-black text-white">{index + 1}</span>
+                      <strong className="min-w-0 flex-1 text-sm">{column.name}</strong>
+                      <span className={`text-[10px] font-bold uppercase tracking-wide ${column.required ? 'text-primary' : 'text-muted'}`}>{column.required ? 'Required' : 'Optional'}</span>
+                    </li>
+                  ))}
+                </ol>
               </div>
               <p className="mt-3 border-t border-border pt-3 text-xs text-muted"><strong className="text-foreground">Important:</strong> repeat a material only when loading it into a different warehouse, keep its name/category/unit identical, and do not load opening stock where that material and warehouse already have movement history.</p>
             </section>
