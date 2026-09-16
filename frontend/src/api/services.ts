@@ -6,6 +6,8 @@ import type {
   ChatMessage,
   ChatRoom,
   Material,
+  MaterialOpeningStockImportPreview,
+  MaterialOpeningStockImportResult,
   NotificationItem,
   NotificationSummary,
   Paginated,
@@ -91,6 +93,19 @@ export const api = {
   deleteMaterial: (id: number) => apiRequest<void>(`/api/materials/${id}/`, { method: 'DELETE' }),
   downloadInventoryPdf: (params = {}) => apiDownload(`/api/materials/download-pdf/${pageParams(params)}`, 'inventory-register.pdf'),
   downloadInventoryXlsx: (params = {}) => apiDownload(`/api/materials/download-xlsx/${pageParams(params)}`, 'inventory-register.xlsx'),
+  downloadOpeningStockTemplate: () => apiDownload('/api/materials/opening-stock-template/', 'materials-opening-stock-template.xlsx'),
+  previewOpeningStockImport: (file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+    return apiRequest<MaterialOpeningStockImportPreview>('/api/materials/opening-stock-import-preview/', { method: 'POST', body });
+  },
+  confirmOpeningStockImport: (file: File, openingDate: string, reason: string) => {
+    const body = new FormData();
+    body.append('file', file);
+    body.append('opening_date', openingDate);
+    body.append('reason', reason);
+    return apiRequest<MaterialOpeningStockImportResult>('/api/materials/opening-stock-import-confirm/', { method: 'POST', body });
+  },
   movements: (params = {}) => apiRequest<Paginated<StockMovement>>(`/api/stock-movements/${pageParams(params)}`),
   createMovement: (body: Partial<StockMovement>) => apiRequest<StockMovement>('/api/stock-movements/', { method: 'POST', body }),
   downloadMovementsPdf: (params = {}) => apiDownload(`/api/stock-movements/download-pdf/${pageParams(params)}`, 'stock-movements.pdf'),

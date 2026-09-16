@@ -1,12 +1,15 @@
+import hashlib
 from decimal import Decimal
 
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
+from django.http import HttpResponse
 from django.db.models import Case, DecimalField, ExpressionWrapper, F, Q, Sum, Value, When
 from django.db.models.functions import Coalesce
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import status, viewsets
@@ -73,6 +76,11 @@ from apps.projects.models import ApprovalDelegation, ChatMessage, ChatRoom, Proj
 from apps.projects.services import annotate_project_costs
 from apps.suppliers.models import Supplier
 from apps.warehouse import valuation_services
+from apps.warehouse.import_services import (
+    build_material_opening_stock_template,
+    confirm_material_import,
+    validate_material_import,
+)
 from apps.warehouse.models import BinLocation, SiteTransfer, StockMovement, Warehouse
 
 from .filters import StockMovementFilter
@@ -516,7 +524,12 @@ class MaterialViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
     def get_permissions(self):
         # Deactivation changes the catalogue, so it is intentionally separate
         # from Storekeeper stock operations and Procurement maintenance.
-        permission_classes = [IsAdminOnly] if self.action == 'destroy' else self.permission_classes
+        if self.action == 'destroy':
+            permission_classes = [IsAdminOnly]
+        elif self.action in {'opening_stock_template', 'opening_stock_import_preview', 'opening_stock_import_confirm'}:
+            permission_classes = [IsStorekeeperOrAdmin]
+        else:
+            permission_classes = self.permission_classes
         return [permission() for permission in permission_classes]
 
     def get_queryset(self):
@@ -560,6 +573,67 @@ class MaterialViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
             metadata={'material_code': material.code, 'material_name': material.name},
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(tags=['Inventory'], summary='Download the materials and opening stock import template', responses={200: bytes})
+    @action(detail=False, methods=['get'], url_path='opening-stock-template')
+    def opening_stock_template(self, request):
+        response = HttpResponse(
+            build_material_opening_stock_template(
+                warehouses=Warehouse.objects.filter(company=request.user.company, is_active=True).order_by('-is_default', 'name'),
+            ),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = 'attachment; filename="materials-opening-stock-template.xlsx"'
+        response['Cache-Control'] = 'no-store'
+        return response
+
+    @extend_schema(tags=['Inventory'], summary='Validate and preview a materials opening stock workbook')
+    @action(detail=False, methods=['post'], url_path='opening-stock-import-preview')
+    def opening_stock_import_preview(self, request):
+        upload = request.FILES.get('file')
+        if upload is None:
+            raise ValidationError({'file': ['Select an Excel workbook to preview.']})
+        if not upload.name.lower().endswith('.xlsx'):
+            raise ValidationError({'file': ['Only .xlsx workbooks are supported.']})
+        raw, rows = validate_material_import(user=request.user, upload=upload)
+        invalid_rows = sum(bool(row['errors']) for row in rows)
+        return Response({
+            'file_name': upload.name,
+            'file_hash': hashlib.sha256(raw).hexdigest(),
+            'total_rows': len(rows),
+            'valid_rows': len(rows) - invalid_rows,
+            'invalid_rows': invalid_rows,
+            'new_materials': len({row['material_code'] for row in rows if row['material_status'] == 'New'}),
+            'existing_materials': len({row['material_code'] for row in rows if row['material_status'] == 'Existing'}),
+            'new_categories': len({row['category'].casefold() for row in rows if row['category_status'] == 'New'}),
+            'rows': rows,
+        })
+
+    @extend_schema(tags=['Inventory'], summary='Import materials and post their opening stock atomically')
+    @action(detail=False, methods=['post'], url_path='opening-stock-import-confirm')
+    def opening_stock_import_confirm(self, request):
+        upload = request.FILES.get('file')
+        if upload is None:
+            raise ValidationError({'file': ['Select an Excel workbook to import.']})
+        if not upload.name.lower().endswith('.xlsx'):
+            raise ValidationError({'file': ['Only .xlsx workbooks are supported.']})
+        opening_date = parse_date(str(request.data.get('opening_date', '')))
+        if opening_date is None:
+            raise ValidationError({'opening_date': ['Enter a valid opening stock date.']})
+        if opening_date > timezone.localdate():
+            raise ValidationError({'opening_date': ['Opening stock cannot be dated in the future.']})
+        reason = str(request.data.get('reason', '')).strip()
+        if len(reason) < 5:
+            raise ValidationError({'reason': ['Explain why this opening stock is being imported.']})
+        summary = confirm_material_import(
+            user=request.user,
+            upload=upload,
+            opening_date=opening_date,
+            reason=reason,
+        )
+        transaction.on_commit(lambda: check_low_stock_for_company(request.user.company))
+        transaction.on_commit(lambda: push_dashboard_update(request.user.company))
+        return Response(summary, status=status.HTTP_201_CREATED)
 
     @extend_schema(tags=['Inventory'], summary='Download inventory register as PDF', responses={200: bytes})
     @action(detail=False, methods=['get'], url_path='download-pdf')

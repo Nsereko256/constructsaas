@@ -109,6 +109,42 @@ export type Material = {
   is_active: boolean;
 };
 
+export type MaterialOpeningStockImportRow = {
+  row: number;
+  material_code: string;
+  material_name: string;
+  category: string;
+  unit: string;
+  warehouse_code: string;
+  opening_quantity: string;
+  unit_cost: string;
+  minimum_stock: string;
+  description: string;
+  material_status: 'New' | 'Existing';
+  category_status: 'New' | 'Existing';
+  errors: string[];
+};
+
+export type MaterialOpeningStockImportPreview = {
+  file_name: string;
+  file_hash: string;
+  total_rows: number;
+  valid_rows: number;
+  invalid_rows: number;
+  new_materials: number;
+  existing_materials: number;
+  new_categories: number;
+  rows: MaterialOpeningStockImportRow[];
+};
+
+export type MaterialOpeningStockImportResult = {
+  rows: number;
+  materials_created: number;
+  materials_matched: number;
+  categories_created: number;
+  opening_balances: number;
+};
+
 export type Project = {
   id: number;
   name: string;
