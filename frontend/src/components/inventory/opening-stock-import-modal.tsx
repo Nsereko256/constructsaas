@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Upload, XCircle } from 'lucide-react';
-import { useState } from 'react';
+import { AlertTriangle, ArrowDownToLine, CheckCircle2, Download, FileSpreadsheet, XCircle } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import { api } from '@/api/services';
 import type { MaterialOpeningStockImportPreview, MaterialOpeningStockImportResult } from '@/api/types';
 import { qk } from '@/api/queryKeys';
@@ -100,8 +100,22 @@ export function OpeningStockImportModal({ open, onClose }: { open: boolean; onCl
               <Button variant="secondary" className="shrink-0" onClick={() => void downloadTemplate()}><Download className="h-4 w-4" />Download template</Button>
             </div>
 
+            <section aria-label="Excel import requirements" className="rounded-lg border border-border bg-surface/55 p-4">
+              <div className="mb-3 flex items-start gap-2">
+                <FileSpreadsheet className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <div><h3 className="font-black">Excel file requirements</h3><p className="text-xs text-muted">Use the downloaded template and keep the required headings unchanged.</p></div>
+              </div>
+              <div className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
+                <Requirement title="File"><strong>.xlsx only</strong><span>Maximum 5 MB and 1,000 material rows.</span></Requirement>
+                <Requirement title="Required columns"><strong>Code, name, category and unit</strong><span>Also warehouse code, opening quantity and unit cost.</span></Requirement>
+                <Requirement title="Accepted units"><strong>bag · ton · kg · litre</strong><span>piece · metre · sqm · cbm</span></Requirement>
+                <Requirement title="Stock rules"><strong>Use active warehouse codes</strong><span>See the Warehouse reference sheet. Values must be zero or greater.</span></Requirement>
+              </div>
+              <p className="mt-3 border-t border-border pt-3 text-xs text-muted"><strong className="text-foreground">Important:</strong> repeat a material only when loading it into a different warehouse, keep its name/category/unit identical, and do not load opening stock where that material and warehouse already have movement history.</p>
+            </section>
+
             <div className="grid gap-3 md:grid-cols-[1.3fr_.7fr_1fr]">
-              <Field label="Completed Excel template" required>
+              <Field label="Completed Excel template (.xlsx)" required>
                 <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-border bg-white px-3 text-sm font-semibold hover:border-primary">
                   <FileSpreadsheet className="h-4 w-4 text-primary" />
                   <span className="min-w-0 flex-1 truncate">{file?.name || 'Choose an .xlsx workbook'}</span>
@@ -113,8 +127,8 @@ export function OpeningStockImportModal({ open, onClose }: { open: boolean; onCl
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-muted">Maximum 1,000 data rows and 5 MB. Previewing does not change inventory.</p>
-              <Button disabled={!file || previewMutation.isPending} onClick={() => previewMutation.mutate()}><Upload className="h-4 w-4" />{previewMutation.isPending ? 'Checking workbook…' : preview ? 'Refresh preview' : 'Preview import'}</Button>
+              <p className="text-xs text-muted">Previewing validates the workbook without changing inventory.</p>
+              <Button disabled={!file || previewMutation.isPending} onClick={() => previewMutation.mutate()}><ArrowDownToLine className="h-4 w-4" />{previewMutation.isPending ? 'Checking workbook…' : preview ? 'Refresh preview' : 'Preview import'}</Button>
             </div>
 
             {preview ? (
@@ -149,4 +163,8 @@ export function OpeningStockImportModal({ open, onClose }: { open: boolean; onCl
 
 function Summary({ label, value, tone = '' }: { label: string; value: number; tone?: 'success' | 'danger' | '' }) {
   return <div className={`rounded-lg border p-3 ${tone === 'success' ? 'border-success-border bg-success' : tone === 'danger' ? 'border-critical/30 bg-critical/5' : 'border-border bg-white'}`}><p className="text-xs font-semibold text-muted">{label}</p><strong className="mt-1 block text-xl">{value}</strong></div>;
+}
+
+function Requirement({ title, children }: { title: string; children: ReactNode }) {
+  return <div className="rounded-md border border-border bg-white p-3"><p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-muted">{title}</p><div className="grid gap-0.5"><>{children}</></div></div>;
 }
