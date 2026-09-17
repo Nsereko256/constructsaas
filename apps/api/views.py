@@ -332,9 +332,12 @@ class DashboardAPIView(APIView):
             'current_stock_value',
             'name',
         )
-        pending_purchase_requests = PurchaseRequest.objects.filter(
-            company=company,
-            status=PurchaseRequest.STATUS_PENDING,
+        pending_purchase_requests = accessible_purchase_requests(
+            request.user,
+            PurchaseRequest.objects.filter(
+                company=company,
+                status=PurchaseRequest.STATUS_PENDING,
+            ),
         ).select_related('project', 'requested_by')
 
         stock_in_today = StockMovement.objects.filter(

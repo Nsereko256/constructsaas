@@ -4,6 +4,27 @@ from django.utils import timezone
 from apps.accounts.models import User
 
 
+def _active_project_assignment(user, relation, role):
+    """Build a role-aware filter for a currently active project assignment."""
+    today = timezone.localdate()
+    prefix = f'{relation}__'
+    return (
+        Q(**{
+            f'{prefix}user': user,
+            f'{prefix}role': role,
+            f'{prefix}is_active': True,
+        })
+        & (
+            Q(**{f'{prefix}start_date__isnull': True})
+            | Q(**{f'{prefix}start_date__lte': today})
+        )
+        & (
+            Q(**{f'{prefix}end_date__isnull': True})
+            | Q(**{f'{prefix}end_date__gte': today})
+        )
+    )
+
+
 def accessible_projects(user, queryset):
     queryset = queryset.filter(company_id=user.company_id)
     today = timezone.localdate()
@@ -52,9 +73,16 @@ def accessible_project_sites(user, queryset):
 def accessible_purchase_requests(user, queryset):
     queryset = queryset.filter(company_id=user.company_id)
     if user.role == User.ROLE_PROJECT_MANAGER:
-        return queryset.filter(project__manager=user)
+        return queryset.filter(
+            Q(project__manager=user)
+            | _active_project_assignment(
+                user,
+                'project__staff_assignments',
+                'MANAGER',
+            )
+        ).distinct()
     if user.role == User.ROLE_SITE_ENGINEER:
-        return queryset.filter(Q(project__site_engineers=user) | Q(requested_by=user)).distinct()
+        return queryset.filter(requested_by=user)
     return queryset
 
 
@@ -66,10 +94,20 @@ def accessible_purchase_orders(user, queryset):
         # PO that may arrive for receipt.
         return queryset
     if user.role == User.ROLE_PROJECT_MANAGER:
-        return queryset.filter(project__manager=user)
-    if user.role == User.ROLE_SITE_ENGINEER:
         return queryset.filter(
-            Q(project__site_engineers=user) | Q(purchase_request__requested_by=user),
-            delivery_destination='SITE',
+            Q(project__manager=user)
+            | Q(purchase_request__project__manager=user)
+            | _active_project_assignment(
+                user,
+                'project__staff_assignments',
+                'MANAGER',
+            )
+            | _active_project_assignment(
+                user,
+                'purchase_request__project__staff_assignments',
+                'MANAGER',
+            )
         ).distinct()
+    if user.role == User.ROLE_SITE_ENGINEER:
+        return queryset.filter(purchase_request__requested_by=user).distinct()
     return queryset

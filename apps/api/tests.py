@@ -14,7 +14,7 @@ from apps.finance.models import BudgetApproval, FinanceAuditEvent
 from apps.materials.models import Category, Material
 from apps.notifications.models import Notification
 from apps.procurement.models import GoodsReceivedNote, PurchaseOrder, PurchaseOrderItem, PurchaseRequest, PurchaseRequestItem, SupplierClaim
-from apps.projects.models import Project, ProjectGoal
+from apps.projects.models import Project, ProjectGoal, ProjectStaffAssignment
 from apps.suppliers.models import Supplier
 from apps.warehouse.models import StockMovement
 
@@ -334,7 +334,61 @@ class ApiFoundationTests(TestCase):
         self.assertEqual(suppliers_response.status_code, 200)
         self.assertEqual(create_response.status_code, 403)
 
-    def test_purchase_order_lists_are_destination_and_assignment_scoped(self):
+    def test_engineer_only_sees_own_requests_and_related_purchase_orders(self):
+        other_request = PurchaseRequest.objects.create(
+            company=self.company,
+            project=self.project,
+            number='PR-API-OTHER-ENGINEER',
+            title='Request by another engineer',
+            requested_by=self.second_site_engineer,
+        )
+        other_order = PurchaseOrder.objects.create(
+            company=self.company,
+            purchase_request=other_request,
+            project=self.project,
+            number='PO-API-OTHER-ENGINEER',
+            supplier=self.supplier,
+            supplier_name=self.supplier.name,
+            delivery_destination=PurchaseOrder.DELIVERY_SITE,
+        )
+        unrelated_order = PurchaseOrder.objects.create(
+            company=self.company,
+            project=self.project,
+            number='PO-API-NO-REQUEST',
+            supplier=self.supplier,
+            supplier_name=self.supplier.name,
+            delivery_destination=PurchaseOrder.DELIVERY_SITE,
+        )
+        self.project.site_engineers.add(self.site_engineer, self.second_site_engineer)
+
+        self.client.force_login(self.site_engineer)
+        request_response = self.client.get('/api/purchase-requests/?page_size=100')
+        order_response = self.client.get('/api/purchase-orders/?page_size=100')
+
+        self.assertEqual(request_response.status_code, 200)
+        self.assertEqual(
+            {row['id'] for row in request_response.data['results']},
+            {self.purchase_request.id},
+        )
+        self.assertEqual(order_response.status_code, 200)
+        self.assertEqual(
+            {row['purchase_request'] for row in order_response.data['results']},
+            {self.purchase_request.id},
+        )
+        self.assertEqual(
+            self.client.get(f'/api/purchase-requests/{other_request.pk}/').status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(f'/api/purchase-orders/{other_order.pk}/').status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(f'/api/purchase-orders/{unrelated_order.pk}/').status_code,
+            404,
+        )
+
+    def test_storekeeper_sees_all_company_purchase_orders(self):
         self.client.force_login(self.storekeeper)
         store_response = self.client.get('/api/purchase-orders/')
         self.assertEqual(store_response.status_code, 200)
@@ -344,20 +398,129 @@ class ApiFoundationTests(TestCase):
             PurchaseOrder.DELIVERY_WAREHOUSE,
         )
 
-        self.project.site_engineers.add(self.site_engineer)
-        site_order = PurchaseOrder.objects.create(
+    def test_manager_only_sees_requests_and_orders_for_assigned_projects(self):
+        self.project.manager = self.project_manager
+        self.project.save(update_fields=['manager'])
+        staff_project = Project.objects.create(
             company=self.company,
-            project=self.project,
-            number='PO-SITE-LIST-001',
+            name='Staff-assigned project',
+            code='STAFF-ASSIGNED',
+        )
+        ProjectStaffAssignment.objects.create(
+            project=staff_project,
+            user=self.project_manager,
+            role=ProjectStaffAssignment.ROLE_MANAGER,
+        )
+        staff_request = PurchaseRequest.objects.create(
+            company=self.company,
+            project=staff_project,
+            number='PR-STAFF-ASSIGNED',
+            title='Staff assignment request',
+            requested_by=self.site_engineer,
+        )
+        staff_order = PurchaseOrder.objects.create(
+            company=self.company,
+            purchase_request=staff_request,
+            project=staff_project,
+            number='PO-STAFF-ASSIGNED',
             supplier=self.supplier,
             supplier_name=self.supplier.name,
-            delivery_destination=PurchaseOrder.DELIVERY_SITE,
         )
+        unassigned_project = Project.objects.create(
+            company=self.company,
+            name='Unassigned procurement project',
+            code='PROC-UNASSIGNED',
+        )
+        unassigned_request = PurchaseRequest.objects.create(
+            company=self.company,
+            project=unassigned_project,
+            number='PR-PROC-UNASSIGNED',
+            title='Unassigned request',
+            requested_by=self.site_engineer,
+        )
+        unassigned_order = PurchaseOrder.objects.create(
+            company=self.company,
+            purchase_request=unassigned_request,
+            project=unassigned_project,
+            number='PO-PROC-UNASSIGNED',
+            supplier=self.supplier,
+            supplier_name=self.supplier.name,
+        )
+
+        self.client.force_login(self.project_manager)
+        request_response = self.client.get('/api/purchase-requests/?page_size=100')
+        order_response = self.client.get('/api/purchase-orders/?page_size=100')
+
+        self.assertEqual(request_response.status_code, 200)
+        self.assertEqual(
+            {row['id'] for row in request_response.data['results']},
+            {self.purchase_request.id, staff_request.id},
+        )
+        self.assertEqual(order_response.status_code, 200)
+        self.assertEqual(
+            {row['id'] for row in order_response.data['results']},
+            {
+                PurchaseOrder.objects.get(number='PO-API-001').id,
+                staff_order.id,
+            },
+        )
+        self.assertEqual(
+            self.client.get(f'/api/purchase-requests/{unassigned_request.pk}/').status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(f'/api/purchase-orders/{unassigned_order.pk}/').status_code,
+            404,
+        )
+
+    def test_dashboard_request_queue_uses_the_same_role_scope(self):
+        other_request = PurchaseRequest.objects.create(
+            company=self.company,
+            project=self.project,
+            number='PR-DASHBOARD-OTHER-ENGINEER',
+            title='Hidden dashboard request',
+            requested_by=self.second_site_engineer,
+        )
+        self.project.site_engineers.add(self.site_engineer, self.second_site_engineer)
+
         self.client.force_login(self.site_engineer)
-        engineer_response = self.client.get('/api/purchase-orders/')
+        engineer_response = self.client.get('/api/dashboard/')
+
         self.assertEqual(engineer_response.status_code, 200)
-        self.assertEqual(engineer_response.data['count'], 1)
-        self.assertEqual(engineer_response.data['results'][0]['id'], site_order.id)
+        self.assertEqual(engineer_response.data['pending_purchase_requests'], 1)
+        self.assertEqual(
+            {row['id'] for row in engineer_response.data['pending_purchase_requests_list']},
+            {self.purchase_request.id},
+        )
+
+        self.project.manager = self.project_manager
+        self.project.save(update_fields=['manager'])
+        unassigned_project = Project.objects.create(
+            company=self.company,
+            name='Dashboard unassigned project',
+            code='DASH-UNASSIGNED',
+        )
+        hidden_manager_request = PurchaseRequest.objects.create(
+            company=self.company,
+            project=unassigned_project,
+            number='PR-DASHBOARD-UNASSIGNED',
+            title='Hidden manager dashboard request',
+            requested_by=self.site_engineer,
+        )
+
+        self.client.force_login(self.project_manager)
+        manager_response = self.client.get('/api/dashboard/')
+
+        self.assertEqual(manager_response.status_code, 200)
+        self.assertEqual(manager_response.data['pending_purchase_requests'], 2)
+        self.assertEqual(
+            {row['id'] for row in manager_response.data['pending_purchase_requests_list']},
+            {self.purchase_request.id, other_request.id},
+        )
+        self.assertNotIn(
+            hidden_manager_request.id,
+            {row['id'] for row in manager_response.data['pending_purchase_requests_list']},
+        )
 
     def test_site_engineer_can_view_materials_but_cannot_write_them(self):
         self.client.force_login(self.site_engineer)
@@ -1941,7 +2104,7 @@ class ApiFoundationTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    def test_direct_site_po_requires_procurement_dispatch_then_assigned_engineer_receipt(self):
+    def test_direct_site_po_requires_procurement_dispatch_then_requesting_engineer_receipt(self):
         self.project.site_engineers.add(self.site_engineer, self.second_site_engineer)
         self.purchase_request.status = PurchaseRequest.STATUS_APPROVED
         self.purchase_request.save(update_fields=['status', 'updated_at'])
@@ -1965,7 +2128,7 @@ class ApiFoundationTests(TestCase):
         )
         movement_count = StockMovement.objects.count()
 
-        self.client.force_login(self.second_site_engineer)
+        self.client.force_login(self.site_engineer)
         blocked_response = self.client.post(f'/api/purchase-orders/{purchase_order.pk}/receive/')
 
         self.assertEqual(blocked_response.status_code, 400)
@@ -1981,13 +2144,13 @@ class ApiFoundationTests(TestCase):
         self.assertIsNotNone(purchase_order.dispatch_confirmed_at)
         self.assertEqual(StockMovement.objects.count(), movement_count)
 
-        self.client.force_login(self.second_site_engineer)
+        self.client.force_login(self.site_engineer)
         response = self.client.post(f'/api/purchase-orders/{purchase_order.pk}/receive/')
 
         self.assertEqual(response.status_code, 200, response.data)
         purchase_order.refresh_from_db()
         self.assertEqual(purchase_order.status, PurchaseOrder.STATUS_RECEIVED)
-        self.assertEqual(purchase_order.received_by, self.second_site_engineer)
+        self.assertEqual(purchase_order.received_by, self.site_engineer)
         self.assertIsNotNone(purchase_order.received_at)
         self.assertEqual(StockMovement.objects.count(), movement_count + 1)
         grn = GoodsReceivedNote.objects.get(purchase_order=purchase_order)
