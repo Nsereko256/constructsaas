@@ -1,0 +1,9 @@
+{% if requires_action %}Action required{% else %}ConstructSaaS update{% endif %}
+
+{{ notification.title }}
+
+{{ notification.message }}
+
+Open in ConstructSaaS: {{ action_url }}
+
+This email was sent for {{ company.name }}. You can change email notification preferences in Settings.

@@ -470,6 +470,19 @@ export type NotificationSummary = {
   priority: { label: string; detail: string; count: number; tone: 'urgent' | 'high' | 'medium' | 'neutral' }[];
 };
 
+export type EmailNotificationPreferences = {
+  email: string;
+  has_email: boolean;
+  provider_configured: boolean;
+  enabled: boolean;
+  required_only: boolean;
+  procurement: boolean;
+  inventory: boolean;
+  projects: boolean;
+  finance: boolean;
+  system: boolean;
+};
+
 export type ChatRoom = {
   id: number;
   company: number;

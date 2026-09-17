@@ -25,7 +25,12 @@ from apps.accounts.models import Company, User
 from apps.dashboard.helpers import push_dashboard_update
 from apps.materials.models import Category, Material
 from apps.notifications.helpers import check_low_stock_for_company, get_unread_count, push_unread_count, send_notification
-from apps.notifications.models import Notification, WebPushSubscription
+from apps.notifications.models import EmailDelivery, EmailNotificationPreference, Notification, WebPushSubscription
+from apps.notifications.email_services import (
+    email_delivery_configured,
+    queue_test_email,
+    send_email_delivery,
+)
 from apps.procurement.models import (
     GoodsReceivedNote,
     PurchaseOrder,
@@ -3207,6 +3212,62 @@ class NotificationViewSet(CompanyScopedReadOnlyViewSet):
         from apps.notifications.helpers import send_web_push_notification
         delivered = send_web_push_notification(notification)
         return Response({'delivered': delivered})
+
+    def _email_preference_payload(self, preference):
+        return {
+            'email': self.request.user.email,
+            'has_email': bool(self.request.user.email),
+            'provider_configured': email_delivery_configured(),
+            'enabled': preference.enabled,
+            'required_only': preference.required_only,
+            'procurement': preference.procurement,
+            'inventory': preference.inventory,
+            'projects': preference.projects,
+            'finance': preference.finance,
+            'system': preference.system,
+        }
+
+    @action(detail=False, methods=['get', 'patch'], url_path='email-preferences')
+    def email_preferences(self, request):
+        preference, _ = EmailNotificationPreference.objects.get_or_create(
+            user=request.user, defaults={'company': request.user.company},
+        )
+        if request.method == 'PATCH':
+            allowed = {'enabled', 'required_only', 'procurement', 'inventory', 'projects', 'finance', 'system'}
+            for field in allowed:
+                if field not in request.data:
+                    continue
+                value = request.data[field]
+                if not isinstance(value, bool):
+                    raise ValidationError({field: 'Enter true or false.'})
+                setattr(preference, field, value)
+            preference.company = request.user.company
+            preference.save()
+        return Response(self._email_preference_payload(preference))
+
+    @action(detail=False, methods=['post'], url_path='send-test-email')
+    def send_test_email(self, request):
+        if not email_delivery_configured():
+            raise ValidationError({'email': 'The email provider has not been configured yet.'})
+        try:
+            delivery = queue_test_email(request.user)
+            delivery.status = EmailDelivery.STATUS_PROCESSING
+            delivery.attempts = 1
+            delivery.last_attempt_at = timezone.now()
+            delivery.save(update_fields=['status', 'attempts', 'last_attempt_at', 'updated_at'])
+            send_email_delivery(delivery)
+        except ValueError as error:
+            raise ValidationError({'email': str(error)}) from error
+        except Exception as error:
+            if 'delivery' in locals():
+                delivery.status = EmailDelivery.STATUS_FAILED
+                delivery.last_error = str(error)[:2000]
+                delivery.save(update_fields=['status', 'last_error', 'updated_at'])
+            raise ValidationError({'email': 'The test email could not be sent. Check the provider configuration.'}) from error
+        delivery.status = EmailDelivery.STATUS_SENT
+        delivery.sent_at = timezone.now()
+        delivery.save(update_fields=['status', 'sent_at', 'updated_at'])
+        return Response({'sent': True, 'email': request.user.email})
 
 
 class ChatRoomViewSet(CompanyScopedReadOnlyViewSet):

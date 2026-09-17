@@ -1,0 +1,3 @@
+ConstructSaaS email notifications are working for {{ company.name }}.
+
+Open notifications: {{ action_url }}

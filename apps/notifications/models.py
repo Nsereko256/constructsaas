@@ -145,3 +145,85 @@ class WebPushSubscription(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+class EmailNotificationPreference(models.Model):
+    """Per-user controls for the deliberately selective email channel."""
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='email_notification_preferences')
+    user = models.OneToOneField(
+        'accounts.User', on_delete=models.CASCADE, related_name='email_notification_preference',
+    )
+    enabled = models.BooleanField(default=True)
+    required_only = models.BooleanField(default=True)
+    procurement = models.BooleanField(default=True)
+    inventory = models.BooleanField(default=True)
+    projects = models.BooleanField(default=True)
+    finance = models.BooleanField(default=True)
+    system = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['company', 'enabled'], name='emailpref_company_enabled_idx')]
+
+    def clean(self):
+        if self.company_id and self.user_id and self.user.company_id != self.company_id:
+            raise ValidationError({'user': 'Preference user must belong to the preference company.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class EmailDelivery(models.Model):
+    STATUS_PENDING = 'pending'
+    STATUS_PROCESSING = 'processing'
+    STATUS_SENT = 'sent'
+    STATUS_FAILED = 'failed'
+    STATUS_CANCELLED = 'cancelled'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_PROCESSING, 'Processing'),
+        (STATUS_SENT, 'Sent'),
+        (STATUS_FAILED, 'Failed'),
+        (STATUS_CANCELLED, 'Cancelled'),
+    ]
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='email_deliveries')
+    recipient = models.ForeignKey(
+        'accounts.User', on_delete=models.CASCADE, related_name='email_deliveries',
+    )
+    notification = models.OneToOneField(
+        Notification, on_delete=models.CASCADE, related_name='email_delivery', null=True, blank=True,
+    )
+    recipient_email = models.EmailField()
+    subject = models.CharField(max_length=255)
+    text_body = models.TextField()
+    html_body = models.TextField()
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    scheduled_at = models.DateTimeField()
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+    provider_message_id = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['scheduled_at', 'id']
+        indexes = [
+            models.Index(fields=['status', 'scheduled_at'], name='emaildelivery_status_due_idx'),
+            models.Index(fields=['company', '-created_at'], name='email_company_created_idx'),
+        ]
+
+    def clean(self):
+        if self.company_id and self.recipient_id and self.recipient.company_id != self.company_id:
+            raise ValidationError({'recipient': 'Email recipient must belong to the delivery company.'})
+        if self.notification_id and self.notification.company_id != self.company_id:
+            raise ValidationError({'notification': 'Email and notification must belong to the same company.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)

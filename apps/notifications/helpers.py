@@ -140,8 +140,23 @@ def send_notification(user, notification_type, level, title, message, link=None)
             pass
 
     transaction.on_commit(lambda: send_web_push_notification(notification))
+    # Email uses a persistent outbox and is deliberately queued after commit.
+    # A provider outage must never undo the business action that raised the alert.
+    transaction.on_commit(
+        lambda notification_id=notification.pk: _queue_notification_email(notification_id)
+    )
 
     return notification
+
+
+def _queue_notification_email(notification_id):
+    try:
+        from .email_services import queue_notification_email
+        queue_notification_email(notification_id)
+    except Exception:
+        # In-app notification delivery is the source of truth. Email is an
+        # optional escalation channel and is retried only after it is queued.
+        return None
 
 
 def check_low_stock_for_company(company):

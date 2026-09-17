@@ -11,6 +11,7 @@ import type {
   MaterialOpeningStockImportSubmission,
   NotificationItem,
   NotificationSummary,
+  EmailNotificationPreferences,
   Paginated,
   Project,
   ProjectGoal,
@@ -239,6 +240,10 @@ export const api = {
   savePushSubscription: (subscription: PushSubscriptionJSON) => apiRequest('/api/notifications/push-subscription/', { method: 'POST', body: subscription }),
   removePushSubscription: (endpoint: string) => apiRequest('/api/notifications/push-subscription/', { method: 'DELETE', body: { endpoint } }),
   sendTestPush: () => apiRequest<{ delivered: number }>('/api/notifications/send-test-push/', { method: 'POST' }),
+  emailNotificationPreferences: () => apiRequest<EmailNotificationPreferences>('/api/notifications/email-preferences/'),
+  updateEmailNotificationPreferences: (body: Partial<EmailNotificationPreferences>) =>
+    apiRequest<EmailNotificationPreferences>('/api/notifications/email-preferences/', { method: 'PATCH', body }),
+  sendTestEmail: () => apiRequest<{ sent: boolean; email: string }>('/api/notifications/send-test-email/', { method: 'POST' }),
   chatRooms: (params = {}) => apiRequest<Paginated<ChatRoom>>(`/api/chat-rooms/${pageParams(params)}`),
   chatMessages: (params = {}) => apiRequest<Paginated<ChatMessage>>(`/api/chat-messages/${pageParams(params)}`),
 };

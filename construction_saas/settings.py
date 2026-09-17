@@ -196,6 +196,9 @@ EMAIL_PORT = int(os.environ.get('DJANGO_EMAIL_PORT', '587'))
 EMAIL_HOST_USER = os.environ.get('DJANGO_EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('DJANGO_EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.environ.get('DJANGO_EMAIL_USE_TLS', 'true').lower() in {'1', 'true', 'yes'}
+EMAIL_TIMEOUT = int(os.environ.get('DJANGO_EMAIL_TIMEOUT', '10'))
+EMAIL_NOTIFICATION_MAX_ATTEMPTS = int(os.environ.get('EMAIL_NOTIFICATION_MAX_ATTEMPTS', '5'))
+EMAIL_NOTIFICATION_BATCH_SIZE = int(os.environ.get('EMAIL_NOTIFICATION_BATCH_SIZE', '50'))
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
