@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, ArrowLeft, Box, CalendarDays, Check, CheckCircle2, ChevronRight, CircleDollarSign, ClipboardList, FileText, Paperclip, Users, X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '@/modules/procurement/api';
 import type { RecordActivity } from '@/api/types';
@@ -9,6 +9,7 @@ import { useAuth } from '@/auth/auth-context';
 import { can } from '@/api/roles';
 import { Badge, statusTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ControlledApprovalModal } from '@/components/common/controlled-approval-modal';
 import { useToast } from '@/components/ui/toast';
 import { formatDate, formatNumber, formatUGX } from '@/lib/utils';
 import './purchase-request-detail.css';
@@ -45,11 +46,12 @@ export function PurchaseRequestDetailPage() {
   const { role, user } = useAuth();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const [approvalOverrideOpen, setApprovalOverrideOpen] = useState(false);
   const id = Number(requestId);
   const request = useQuery({ queryKey: ['purchase-request-detail', id], queryFn: () => api.purchaseRequest(id), enabled: Number.isFinite(id) && id > 0 });
   const activity = useQuery({ queryKey: ['purchase-request-activity', id], queryFn: () => api.purchaseRequestActivity(id), enabled: !!request.data });
   const orders = useQuery({ queryKey: ['purchase-request-orders', id], queryFn: () => api.purchaseOrders({ purchase_request: id, page_size: 50 }), enabled: !!request.data });
-  const approve = useMutation({ mutationFn: api.approvePurchaseRequest, onSuccess: () => { toast.push({ title: 'Purchase request approved', tone: 'success' }); void queryClient.invalidateQueries({ queryKey: ['purchase-request-detail', id] }); }, onError: (error: Error) => toast.push({ title: 'Approval failed', message: error.message, tone: 'danger' }) });
+  const approve = useMutation({ mutationFn: ({ id: requestId, overrideReason = '' }: { id: number; overrideReason?: string }) => api.approvePurchaseRequest(requestId, { override_reason: overrideReason }), onSuccess: () => { toast.push({ title: 'Purchase request approved', tone: 'success' }); setApprovalOverrideOpen(false); void queryClient.invalidateQueries({ queryKey: ['purchase-request-detail', id] }); }, onError: (error: Error) => toast.push({ title: 'Approval failed', message: error.message, tone: 'danger' }) });
   const reject = useMutation({ mutationFn: ({ id: requestId, reason }: { id: number; reason: string }) => api.rejectPurchaseRequest(requestId, reason), onSuccess: () => { toast.push({ title: 'Purchase request rejected', tone: 'warning' }); void queryClient.invalidateQueries({ queryKey: ['purchase-request-detail', id] }); }, onError: (error: Error) => toast.push({ title: 'Rejection failed', message: error.message, tone: 'danger' }) });
   const returnRequest = useMutation({ mutationFn: ({ id: requestId, comments }: { id: number; comments: string }) => api.returnPurchaseRequestForCorrection(requestId, comments), onSuccess: () => { toast.push({ title: 'Purchase request returned for correction', tone: 'warning' }); void queryClient.invalidateQueries({ queryKey: ['purchase-request-detail', id] }); }, onError: (error: Error) => toast.push({ title: 'Return failed', message: error.message, tone: 'danger' }) });
   if (request.isLoading) return <main className="pr-detail-page"><p className="pr-detail-loading">Loading purchase request…</p></main>;
@@ -78,8 +80,9 @@ export function PurchaseRequestDetailPage() {
             ? <Button asChild><Link to={`/procurement/requests?action_queue=my_requests&search=${encodeURIComponent(record.number)}`}><CircleDollarSign size={15} />Review finance request</Link></Button>
             : null;
   return <main className="pr-detail-page">
+    <ControlledApprovalModal open={approvalOverrideOpen} recordNumber={record.number} pending={approve.isPending} onClose={() => setApprovalOverrideOpen(false)} onApprove={(overrideReason) => approve.mutate({ id, overrideReason })} />
     <div className="pr-detail-breadcrumb"><Button variant="ghost" aria-label="Back to purchase requests" onClick={() => navigate(-1)}><ArrowLeft size={16} />Purchase requests</Button><span>Procurement / Purchase requests / {record.number}</span></div>
-    <section className="pr-detail-hero"><div className="pr-detail-identity"><span>PROCUREMENT / PURCHASE REQUESTS</span><h1>{record.number}</h1><p>{record.project_name || 'Warehouse'} <span>·</span> {record.title}</p></div><div className="pr-detail-hero-status"><Badge tone={statusTone(record.status)}>{record.status_display}</Badge><Badge tone={statusTone(record.priority)}>{record.priority_display}</Badge></div><div className="pr-detail-actions">{canReview ? <><Button variant="secondary" onClick={returnWithPrompt}><ArrowLeft size={15} />Return</Button><Button variant="destructive" onClick={rejectWithPrompt}><X size={15} />Reject</Button><Button onClick={() => approve.mutate(record.id)} loading={approve.isPending}><Check size={15} />Approve</Button></> : primaryAction}<details><summary aria-label="More purchase request actions">⋮</summary><div><Link to={`/procurement/requests?search=${encodeURIComponent(record.number)}`}>Open in register</Link></div></details></div></section>
+    <section className="pr-detail-hero"><div className="pr-detail-identity"><span>PROCUREMENT / PURCHASE REQUESTS</span><h1>{record.number}</h1><p>{record.project_name || 'Warehouse'} <span>·</span> {record.title}</p></div><div className="pr-detail-hero-status"><Badge tone={statusTone(record.status)}>{record.status_display}</Badge><Badge tone={statusTone(record.priority)}>{record.priority_display}</Badge></div><div className="pr-detail-actions">{canReview ? <><Button variant="secondary" onClick={returnWithPrompt}><ArrowLeft size={15} />Return</Button><Button variant="destructive" onClick={rejectWithPrompt}><X size={15} />Reject</Button><Button onClick={() => record.technical_approval_requires_override_reason ? setApprovalOverrideOpen(true) : approve.mutate({ id })} loading={approve.isPending}><Check size={15} />Approve</Button></> : primaryAction}<details><summary aria-label="More purchase request actions">⋮</summary><div><Link to={`/procurement/requests?search=${encodeURIComponent(record.number)}`}>Open in register</Link></div></details></div></section>
     <section className="pr-detail-meta-row"><PrMeta icon={Users} label="Requested by" value={record.requested_by_username} /><PrMeta icon={CalendarDays} label="Created" value={formatDate(record.created_at)} /><PrMeta icon={CalendarDays} label="Required" value={record.required_date ? formatDate(record.required_date) : 'Not specified'} /><PrMeta icon={Box} label="Destination" value={record.delivery_destination === 'SITE' ? 'Direct to site' : 'Main warehouse'} /><PrMeta icon={Users} label="Assigned to" value={record.manager_approved_by_name || 'Unassigned'} /></section>
     <div className="pr-detail-layout"><div className="pr-detail-main">
       <PrCard title="Reason & justification"><div className="pr-detail-fields"><div><label>Reason</label><p>{record.title}</p></div><div><label>Justification</label><p>{record.justification || 'No justification provided.'}</p></div><div><label>Intended use</label><p>{record.title}</p></div><div><label>Urgency</label><p>{record.priority_display}</p></div><div><label>Requester notes</label><p>{record.items.map((item) => item.notes).filter(Boolean).join(' ') || 'No requester notes.'}</p></div></div>{record.rejection_reason || record.technical_return_reason ? <div className="pr-detail-warning"><AlertCircle size={16} /><span>{record.rejection_reason || record.technical_return_reason}</span></div> : null}</PrCard>

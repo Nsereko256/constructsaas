@@ -1526,7 +1526,7 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
                 )
                 purchase_request = approve_purchase_request(purchase_request=purchase_request, approver=request.user)
         except ValidationError as exc:
-            return Response({'detail': str(exc.detail)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
         record_finance_audit_event(
             company=purchase_request.company,
             actor=request.user,

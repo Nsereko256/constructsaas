@@ -862,6 +862,7 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
     can_submit_finance = serializers.SerializerMethodField()
     can_correct_finance_return = serializers.SerializerMethodField()
     lifecycle_status_display = serializers.SerializerMethodField()
+    technical_approval_requires_override_reason = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseRequest
@@ -905,6 +906,7 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
             'can_submit_finance',
             'can_correct_finance_return',
             'can_correct_return',
+            'technical_approval_requires_override_reason',
             'items',
             'created_at',
             'updated_at',
@@ -937,6 +939,7 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
             'can_submit_finance',
             'can_correct_finance_return',
             'can_correct_return',
+            'technical_approval_requires_override_reason',
             'created_at',
             'updated_at',
         ]
@@ -965,6 +968,25 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
 
     def get_total_estimated_cost(self, obj) -> Decimal:
         return sum(item.quantity * item.material.unit_price for item in obj.items.all())
+
+    def get_technical_approval_requires_override_reason(self, obj) -> bool:
+        request_user = getattr(self.context.get('request'), 'user', None)
+        if not request_user or obj.status != PurchaseRequest.STATUS_PENDING:
+            return False
+        from apps.finance.configuration_services import ensure_finance_settings
+        from apps.finance.models import WorkflowConfirmation
+
+        if not ensure_finance_settings(obj.company).maker_checker_enforced:
+            return False
+        task = WorkflowConfirmation.objects.filter(
+            company=obj.company,
+            document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_REQUEST,
+            object_id=str(obj.pk),
+            stage=WorkflowConfirmation.STAGE_TECHNICAL,
+            status=WorkflowConfirmation.STATUS_PENDING,
+        ).only('submitted_by_id').first()
+        submitted_by_id = task.submitted_by_id if task else obj.requested_by_id
+        return submitted_by_id == request_user.id
 
     def get_technical_approved_by_name(self, obj) -> str:
         approver = obj.technical_approved_by

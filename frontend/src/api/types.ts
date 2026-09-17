@@ -319,6 +319,7 @@ export type PurchaseRequest = {
   can_submit_finance: boolean;
   can_correct_finance_return: boolean;
   can_correct_return: boolean;
+  technical_approval_requires_override_reason: boolean;
   items: PurchaseRequestItem[];
   created_at: string;
   updated_at?: string;

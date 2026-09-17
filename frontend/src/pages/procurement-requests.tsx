@@ -11,6 +11,7 @@ import { qk } from '@/api/queryKeys';
 import { can, hasRole } from '@/api/roles';
 import { useAuth } from '@/auth/auth-context';
 import { FormModal } from '@/components/common/form-modal';
+import { ControlledApprovalModal } from '@/components/common/controlled-approval-modal';
 import { MaterialLookup } from '@/components/common/material-lookup';
 import { Badge, statusTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,7 @@ export function ProcurementRequestsPage() {
   const [editingDraft, setEditingDraft] = useState<PurchaseRequest | null>(null);
   const [stockIssueReview, setStockIssueReview] = useState<PurchaseRequest | null>(null);
   const [issuingStock, setIssuingStock] = useState<PurchaseRequest | null>(null);
+  const [approvalOverride, setApprovalOverride] = useState<PurchaseRequest | null>(null);
   const requestQuery = { ...list.query, page_size: 5 };
   const requests = useQuery({ queryKey: list.filters.action_queue ? qk.purchaseRequestActionQueue(requestQuery) : qk.purchaseRequests(requestQuery), queryFn: () => api.purchaseRequests(requestQuery) });
   const allRequests = useQuery({ queryKey: qk.purchaseRequests({ page_size: 100 }), queryFn: () => api.purchaseRequests({ page_size: 100 }) });
@@ -61,8 +63,8 @@ export function ProcurementRequestsPage() {
     void queryClient.invalidateQueries({ queryKey: ['finance'] });
   };
   const approve = useMutation({
-    mutationFn: api.approvePurchaseRequest,
-    onSuccess: () => { toast.push({ title: 'Purchase request approved', tone: 'success' }); refresh(); },
+    mutationFn: ({ id, overrideReason = '' }: { id: number; overrideReason?: string }) => api.approvePurchaseRequest(id, { override_reason: overrideReason }),
+    onSuccess: () => { toast.push({ title: 'Purchase request approved', tone: 'success' }); setApprovalOverride(null); refresh(); },
     onError: (error: Error) => toast.push({ title: 'Could not approve PR', message: error.message, tone: 'danger' }),
   });
   const approveStockIssue = useMutation({
@@ -185,7 +187,7 @@ export function ProcurementRequestsPage() {
   };
   const primaryAction = (request: PurchaseRequest) => {
     const canEdit = hasRole(role, ['admin', 'site_engineer', 'procurement_officer']) && request.status === 'PENDING' && (role === 'admin' || request.requested_by === user?.id);
-    if (can.approvePr(role) && request.status === 'PENDING') return <div className="pr-row-actions"><Button size="sm" className="pr-next-action" onClick={() => approve.mutate(request.id)}>Approve</Button><Button size="sm" variant="secondary" className="pr-next-action" onClick={() => setReturning(request)}><CornerUpLeft size={13} />Return</Button>{canEdit ? <Button size="sm" variant="ghost" className="pr-next-action" onClick={() => setEditingDraft(request)}><Pencil size={13} />Edit</Button> : null}</div>;
+    if (can.approvePr(role) && request.status === 'PENDING') return <div className="pr-row-actions"><Button size="sm" className="pr-next-action" onClick={() => request.technical_approval_requires_override_reason ? setApprovalOverride(request) : approve.mutate({ id: request.id })}>Approve</Button><Button size="sm" variant="secondary" className="pr-next-action" onClick={() => setReturning(request)}><CornerUpLeft size={13} />Return</Button>{canEdit ? <Button size="sm" variant="ghost" className="pr-next-action" onClick={() => setEditingDraft(request)}><Pencil size={13} />Edit</Button> : null}</div>;
     if (request.can_approve_stock_issue) return <div className="pr-row-actions"><Button size="sm" className="pr-next-action" onClick={() => approveStockIssue.mutate(request.id)} disabled={approveStockIssue.isPending}>Approve stock</Button>{canEdit ? <Button size="sm" variant="ghost" className="pr-next-action" onClick={() => setEditingDraft(request)}><Pencil size={13} />Edit</Button> : null}</div>;
     if (hasRole(role, ['procurement_officer', 'admin']) && request.can_request_stock_issue) return <div className="pr-row-actions"><Button size="sm" className="pr-next-action" onClick={() => setStockIssueReview(request)}>Request issue</Button>{request.can_create_purchase_order ? <Button size="sm" variant="secondary" className="pr-next-action" onClick={() => navigate('/procurement/purchase-orders', { state: { purchaseRequestId: request.id } })}>Create PO</Button> : null}{canEdit ? <Button size="sm" variant="ghost" className="pr-next-action" onClick={() => setEditingDraft(request)}><Pencil size={13} />Edit</Button> : null}</div>;
     if (hasRole(role, ['storekeeper', 'admin']) && request.can_fulfill_from_stock) return <Button size="sm" className="pr-next-action" onClick={() => setIssuingStock(request)}>Issue stock</Button>;
@@ -244,6 +246,7 @@ export function ProcurementRequestsPage() {
         </aside>
       </section>
       <RequestModal open={open} onClose={() => setOpen(false)} />
+      <ControlledApprovalModal open={!!approvalOverride} recordNumber={approvalOverride?.number || ''} pending={approve.isPending} onClose={() => setApprovalOverride(null)} onApprove={(overrideReason) => approvalOverride && approve.mutate({ id: approvalOverride.id, overrideReason })} />
       <StockIssueReviewModal request={stockIssueReview} pending={issue.isPending} onClose={() => setStockIssueReview(null)} onSubmit={() => stockIssueReview && issue.mutate(stockIssueReview.id)} />
       <PartialStockIssueModal request={issuingStock} pending={fulfill.isPending} onClose={() => setIssuingStock(null)} onSubmit={(items) => issuingStock && fulfill.mutate({ id: issuingStock.id, body: { items } })} />
       <RejectModal request={rejecting} onClose={() => setRejecting(null)} onReject={(reason) => rejecting && reject.mutate({ id: rejecting.id, reason })} />

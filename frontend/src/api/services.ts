@@ -163,7 +163,8 @@ export const api = {
   createPurchaseRequest: (body: unknown) => apiRequest<PurchaseRequest>('/api/purchase-requests/', { method: 'POST', body }),
   updatePurchaseRequest: (id: number, body: unknown) => apiRequest<PurchaseRequest>(`/api/purchase-requests/${id}/`, { method: 'PATCH', body }),
   deletePurchaseRequest: (id: number) => apiRequest<void>(`/api/purchase-requests/${id}/`, { method: 'DELETE' }),
-  approvePurchaseRequest: (id: number) => apiRequest<PurchaseRequest>(`/api/purchase-requests/${id}/approve/`, { method: 'POST' }),
+  approvePurchaseRequest: (id: number, body: { comments?: string; override_reason?: string } = {}) =>
+    apiRequest<PurchaseRequest>(`/api/purchase-requests/${id}/approve/`, { method: 'POST', body }),
   approvePurchaseRequestStockIssue: (id: number) => apiRequest<PurchaseRequest>(`/api/purchase-requests/${id}/approve-stock-issue/`, { method: 'POST' }),
   rejectPurchaseRequest: (id: number, rejection_reason: string) =>
     apiRequest<PurchaseRequest>(`/api/purchase-requests/${id}/reject/`, { method: 'POST', body: { rejection_reason } }),

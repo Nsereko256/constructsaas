@@ -1212,6 +1212,35 @@ class ApiFoundationTests(TestCase):
         self.assertEqual(response.data['status'], PurchaseRequest.STATUS_APPROVED)
         self.assertEqual(response.data['total_estimated_cost'], 70000)
 
+    def test_admin_self_approval_exposes_and_accepts_controlled_override_reason(self):
+        purchase_request = PurchaseRequest.objects.create(
+            company=self.company,
+            project=self.project,
+            number='PR-API-ADMIN-OVERRIDE',
+            title='Administrator-created request',
+            requested_by=self.user,
+        )
+        PurchaseRequestItem.objects.create(
+            purchase_request=purchase_request,
+            material=self.material,
+            quantity='1.00',
+        )
+        self.client.force_login(self.user)
+
+        detail = self.client.get(f'/api/purchase-requests/{purchase_request.pk}/')
+        blocked = self.client.post(f'/api/purchase-requests/{purchase_request.pk}/approve/', {}, format='json')
+        approved = self.client.post(
+            f'/api/purchase-requests/{purchase_request.pk}/approve/',
+            {'override_reason': 'Urgent continuity approval while the assigned checker is unavailable.'},
+            format='json',
+        )
+
+        self.assertEqual(detail.status_code, 200)
+        self.assertTrue(detail.data['technical_approval_requires_override_reason'])
+        self.assertEqual(blocked.status_code, 400)
+        self.assertIn('override_reason', blocked.data)
+        self.assertEqual(approved.status_code, 200, approved.data)
+
     def test_procurement_can_request_stock_issue_without_creating_stock_movement(self):
         PurchaseOrder.objects.filter(purchase_request=self.purchase_request).delete()
         self.purchase_request.status = PurchaseRequest.STATUS_APPROVED
