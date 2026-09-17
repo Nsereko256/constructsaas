@@ -151,8 +151,11 @@ def send_notification(user, notification_type, level, title, message, link=None)
 
 def _queue_notification_email(notification_id):
     try:
-        from .email_services import queue_notification_email
-        queue_notification_email(notification_id)
+        from django.conf import settings
+        from .email_services import attempt_email_delivery, queue_notification_email
+        delivery = queue_notification_email(notification_id)
+        if delivery and settings.EMAIL_NOTIFICATION_SEND_INLINE:
+            attempt_email_delivery(delivery)
     except Exception:
         # In-app notification delivery is the source of truth. Email is an
         # optional escalation channel and is retried only after it is queued.

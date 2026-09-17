@@ -244,7 +244,7 @@ export const api = {
   emailNotificationPreferences: () => apiRequest<EmailNotificationPreferences>('/api/notifications/email-preferences/'),
   updateEmailNotificationPreferences: (body: Partial<EmailNotificationPreferences>) =>
     apiRequest<EmailNotificationPreferences>('/api/notifications/email-preferences/', { method: 'PATCH', body }),
-  sendTestEmail: () => apiRequest<{ sent: boolean; email: string }>('/api/notifications/send-test-email/', { method: 'POST' }),
+  sendTestEmail: () => apiRequest<{ sent: boolean; previewed: boolean; delivery_mode: string; message: string; email: string }>('/api/notifications/send-test-email/', { method: 'POST' }),
   chatRooms: (params = {}) => apiRequest<Paginated<ChatRoom>>(`/api/chat-rooms/${pageParams(params)}`),
   chatMessages: (params = {}) => apiRequest<Paginated<ChatMessage>>(`/api/chat-messages/${pageParams(params)}`),
 };

@@ -41,6 +41,8 @@ services:
         sync: false
       - key: DJANGO_EMAIL_USE_TLS
         value: "true"
+      - key: EMAIL_NOTIFICATION_SEND_INLINE
+        value: "true"
 
   - type: cron
     name: constructsaas-email-outbox

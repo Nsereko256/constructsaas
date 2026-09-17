@@ -7,7 +7,7 @@ from rest_framework.test import APIClient
 
 from apps.accounts.models import Company, User
 
-from .email_services import queue_notification_email
+from .email_services import email_delivery_status, queue_notification_email
 from .helpers import send_notification
 from .models import EmailDelivery, EmailNotificationPreference, Notification
 
@@ -98,6 +98,9 @@ class EmailNotificationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data['required_only'])
         self.assertFalse(response.data['system'])
+        self.assertEqual(response.data['delivery_mode'], 'test')
+        self.assertFalse(response.data['real_delivery'])
+        self.assertEqual(response.data['pending_count'], 0)
 
         response = self.client.patch(
             '/api/notifications/email-preferences/',
@@ -108,3 +111,42 @@ class EmailNotificationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.data['finance'])
         self.assertTrue(response.data['required_only'])
+
+    def test_test_transport_is_reported_as_preview_instead_of_real_delivery(self):
+        response = self.client.post('/api/notifications/send-test-email/', {}, format='json')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertFalse(response.data['sent'])
+        self.assertTrue(response.data['previewed'])
+        self.assertEqual(response.data['delivery_mode'], 'test')
+        self.assertEqual(len(mail.outbox), 1)
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend',
+        EMAIL_HOST='',
+        EMAIL_HOST_USER='',
+        EMAIL_HOST_PASSWORD='',
+    )
+    def test_incomplete_smtp_configuration_is_not_reported_ready(self):
+        status = email_delivery_status()
+
+        self.assertEqual(status['mode'], 'unconfigured')
+        self.assertFalse(status['configured'])
+        self.assertFalse(status['real_delivery'])
+
+    @override_settings(EMAIL_NOTIFICATION_SEND_INLINE=True)
+    def test_inline_delivery_sends_new_action_email_and_keeps_outbox_record(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            notification = send_notification(
+                self.user,
+                Notification.TYPE_PR_SUBMITTED,
+                Notification.LEVEL_WARNING,
+                'Approval needed now',
+                'Please review this request.',
+                '/procurement/requests/18/',
+            )
+
+        delivery = EmailDelivery.objects.get(notification=notification)
+        self.assertEqual(delivery.status, EmailDelivery.STATUS_SENT)
+        self.assertEqual(delivery.attempts, 1)
+        self.assertEqual(len(mail.outbox), 1)

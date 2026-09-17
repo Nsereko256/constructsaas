@@ -475,6 +475,11 @@ export type EmailNotificationPreferences = {
   email: string;
   has_email: boolean;
   provider_configured: boolean;
+  delivery_mode: 'smtp' | 'custom' | 'preview' | 'test' | 'unconfigured';
+  real_delivery: boolean;
+  delivery_message: string;
+  pending_count: number;
+  failed_count: number;
   enabled: boolean;
   required_only: boolean;
   procurement: boolean;

@@ -31,7 +31,11 @@ export function SettingsPage() {
   });
   const test = useMutation({
     mutationFn: api.sendTestEmail,
-    onSuccess: (data) => toast.push({ title: 'Test email sent', message: `Check ${data.email}.`, tone: 'success' }),
+    onSuccess: (data) => toast.push({
+      title: data.sent ? 'Test email sent' : 'Email preview generated',
+      message: data.sent ? `Check ${data.email}.` : data.message,
+      tone: data.sent ? 'success' : 'info',
+    }),
     onError: (error: Error) => toast.push({ title: 'Test email failed', message: error.message, tone: 'danger' }),
   });
   const value = preferences.data;
@@ -49,7 +53,7 @@ export function SettingsPage() {
           <CardHeader className="border-b border-border">
             <div className="flex items-start justify-between gap-4">
               <div><CardTitle className="flex items-center gap-2"><Mail className="h-5 w-5 text-primary" />Email notifications</CardTitle><p className="mt-1 text-sm text-muted">Email is reserved for records that need attention by default.</p></div>
-              {value ? <StatusPill active={value.enabled && value.has_email && value.provider_configured} /> : null}
+              {value ? <StatusPill mode={value.delivery_mode} active={value.enabled && value.has_email && value.real_delivery} /> : null}
             </div>
           </CardHeader>
           <CardContent className="grid gap-4 pt-5">
@@ -69,8 +73,8 @@ export function SettingsPage() {
                 </div>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-slate-50 p-4">
-                <div><strong className="text-sm">Delivery check</strong><p className="text-xs text-muted">{value.provider_configured ? 'The email service is configured.' : 'An administrator must add the Amazon SES credentials.'}</p></div>
-                <Button variant="secondary" onClick={() => test.mutate()} loading={test.isPending} loadingLabel="Sending…" disabled={!value.has_email || !value.provider_configured}><Mail className="h-4 w-4" />Send test email</Button>
+                <div><strong className="text-sm">Delivery check</strong><p className="max-w-2xl text-xs text-muted">{value.delivery_message}</p>{value.pending_count || value.failed_count ? <p className="mt-1 text-xs font-semibold text-warning">Outbox: {value.pending_count} pending · {value.failed_count} failed</p> : null}</div>
+                <Button variant="secondary" onClick={() => test.mutate()} loading={test.isPending} loadingLabel="Sending…" disabled={!value.has_email || !value.provider_configured}><Mail className="h-4 w-4" />{value.real_delivery ? 'Send test email' : 'Generate preview'}</Button>
               </div>
             </> : null}
           </CardContent>
@@ -89,8 +93,9 @@ function PreferenceRow({ title, detail, checked, disabled, onChange, compact = f
   return <label className={`flex cursor-pointer items-center justify-between gap-4 ${compact ? 'px-4 py-3' : 'rounded-xl border border-border p-4'}`}><span><strong className="block text-sm">{title}</strong><small className="mt-0.5 block text-muted">{detail}</small></span><input className="h-4 w-4 accent-primary" type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} /></label>;
 }
 
-function StatusPill({ active }: { active: boolean }) {
-  return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${active ? 'bg-success/10 text-success' : 'bg-slate-100 text-muted'}`}><CheckCircle2 className="h-3.5 w-3.5" />{active ? 'Ready' : 'Setup needed'}</span>;
+function StatusPill({ active, mode }: { active: boolean; mode: EmailNotificationPreferences['delivery_mode'] }) {
+  const preview = mode === 'preview' || mode === 'test';
+  return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${active ? 'bg-success/10 text-success' : preview ? 'bg-info/10 text-info' : 'bg-slate-100 text-muted'}`}><CheckCircle2 className="h-3.5 w-3.5" />{active ? 'Ready' : preview ? 'Preview mode' : 'Setup needed'}</span>;
 }
 
 function InfoLine({ label, value, icon }: { label: string; value: string; icon?: ReactNode }) {

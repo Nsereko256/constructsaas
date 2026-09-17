@@ -5,7 +5,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from apps.notifications.email_services import send_email_delivery
+from apps.notifications.email_services import attempt_email_delivery
 from apps.notifications.models import EmailDelivery
 
 
@@ -33,27 +33,12 @@ class Command(BaseCommand):
                 )
                 if delivery is None:
                     break
-                delivery.status = EmailDelivery.STATUS_PROCESSING
-                delivery.attempts += 1
-                delivery.last_attempt_at = timezone.now()
-                delivery.save(update_fields=['status', 'attempts', 'last_attempt_at', 'updated_at'])
+                delivery_id = delivery.pk
 
-            try:
-                send_email_delivery(delivery)
-            except Exception as error:
-                failed += 1
-                delivery.last_error = str(error)[:2000]
-                if delivery.attempts >= settings.EMAIL_NOTIFICATION_MAX_ATTEMPTS:
-                    delivery.status = EmailDelivery.STATUS_FAILED
-                else:
-                    delivery.status = EmailDelivery.STATUS_PENDING
-                    delivery.scheduled_at = timezone.now() + timedelta(minutes=2 ** delivery.attempts)
-                delivery.save(update_fields=['status', 'scheduled_at', 'last_error', 'updated_at'])
-            else:
+            delivery = attempt_email_delivery(delivery_id)
+            if delivery.status == EmailDelivery.STATUS_SENT:
                 sent += 1
-                delivery.status = EmailDelivery.STATUS_SENT
-                delivery.sent_at = timezone.now()
-                delivery.last_error = ''
-                delivery.save(update_fields=['status', 'sent_at', 'last_error', 'updated_at'])
+            else:
+                failed += 1
 
         self.stdout.write(self.style.SUCCESS(f'Email outbox processed: {sent} sent, {failed} failed.'))

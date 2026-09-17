@@ -6,7 +6,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse
-from django.db.models import Case, DecimalField, ExpressionWrapper, F, Q, Sum, Value, When
+from django.db.models import Case, Count, DecimalField, ExpressionWrapper, F, Q, Sum, Value, When
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -27,9 +27,10 @@ from apps.materials.models import Category, Material
 from apps.notifications.helpers import check_low_stock_for_company, get_unread_count, push_unread_count, send_notification
 from apps.notifications.models import EmailDelivery, EmailNotificationPreference, Notification, WebPushSubscription
 from apps.notifications.email_services import (
+    attempt_email_delivery,
     email_delivery_configured,
+    email_delivery_status,
     queue_test_email,
-    send_email_delivery,
 )
 from apps.procurement.models import (
     GoodsReceivedNote,
@@ -3214,10 +3215,20 @@ class NotificationViewSet(CompanyScopedReadOnlyViewSet):
         return Response({'delivered': delivered})
 
     def _email_preference_payload(self, preference):
+        delivery_status = email_delivery_status()
+        delivery_counts = EmailDelivery.objects.filter(company=self.request.user.company).aggregate(
+            pending=Count('id', filter=Q(status=EmailDelivery.STATUS_PENDING)),
+            failed=Count('id', filter=Q(status=EmailDelivery.STATUS_FAILED)),
+        )
         return {
             'email': self.request.user.email,
             'has_email': bool(self.request.user.email),
             'provider_configured': email_delivery_configured(),
+            'delivery_mode': delivery_status['mode'],
+            'real_delivery': delivery_status['real_delivery'],
+            'delivery_message': delivery_status['message'],
+            'pending_count': delivery_counts['pending'],
+            'failed_count': delivery_counts['failed'],
             'enabled': preference.enabled,
             'required_only': preference.required_only,
             'procurement': preference.procurement,
@@ -3251,11 +3262,7 @@ class NotificationViewSet(CompanyScopedReadOnlyViewSet):
             raise ValidationError({'email': 'The email provider has not been configured yet.'})
         try:
             delivery = queue_test_email(request.user)
-            delivery.status = EmailDelivery.STATUS_PROCESSING
-            delivery.attempts = 1
-            delivery.last_attempt_at = timezone.now()
-            delivery.save(update_fields=['status', 'attempts', 'last_attempt_at', 'updated_at'])
-            send_email_delivery(delivery)
+            delivery = attempt_email_delivery(delivery)
         except ValueError as error:
             raise ValidationError({'email': str(error)}) from error
         except Exception as error:
@@ -3264,10 +3271,16 @@ class NotificationViewSet(CompanyScopedReadOnlyViewSet):
                 delivery.last_error = str(error)[:2000]
                 delivery.save(update_fields=['status', 'last_error', 'updated_at'])
             raise ValidationError({'email': 'The test email could not be sent. Check the provider configuration.'}) from error
-        delivery.status = EmailDelivery.STATUS_SENT
-        delivery.sent_at = timezone.now()
-        delivery.save(update_fields=['status', 'sent_at', 'updated_at'])
-        return Response({'sent': True, 'email': request.user.email})
+        if delivery.status != EmailDelivery.STATUS_SENT:
+            raise ValidationError({'email': 'The test email could not be sent. Check the provider configuration.'})
+        status_payload = email_delivery_status()
+        return Response({
+            'sent': status_payload['real_delivery'],
+            'previewed': status_payload['mode'] in {'preview', 'test'},
+            'delivery_mode': status_payload['mode'],
+            'message': status_payload['message'],
+            'email': request.user.email,
+        })
 
 
 class ChatRoomViewSet(CompanyScopedReadOnlyViewSet):

@@ -1,8 +1,10 @@
 import re
+from datetime import timedelta
 from urllib.parse import urljoin
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.db import transaction
 from django.template.loader import render_to_string
 from django.utils import timezone
 
@@ -53,11 +55,41 @@ def notification_requires_action(notification):
     )
 
 
-def email_delivery_configured():
+def email_delivery_mode():
     backend = settings.EMAIL_BACKEND
-    if backend.endswith(('console.EmailBackend', 'locmem.EmailBackend', 'dummy.EmailBackend')):
-        return True
-    return bool(settings.EMAIL_HOST and settings.DEFAULT_FROM_EMAIL)
+    if backend.endswith('console.EmailBackend'):
+        return 'preview'
+    if backend.endswith(('locmem.EmailBackend', 'dummy.EmailBackend')):
+        return 'test'
+    if backend.endswith('smtp.EmailBackend'):
+        return 'smtp' if all((
+            settings.EMAIL_HOST,
+            settings.EMAIL_HOST_USER,
+            settings.EMAIL_HOST_PASSWORD,
+            settings.DEFAULT_FROM_EMAIL,
+        )) else 'unconfigured'
+    return 'custom'
+
+
+def email_delivery_configured():
+    return email_delivery_mode() != 'unconfigured'
+
+
+def email_delivery_status():
+    mode = email_delivery_mode()
+    messages = {
+        'smtp': 'SMTP delivery is configured.',
+        'custom': 'A custom email delivery backend is configured.',
+        'preview': 'Local preview mode prints emails to the server console; it does not deliver to inboxes.',
+        'test': 'Test delivery mode does not send email outside the application test environment.',
+        'unconfigured': 'SMTP credentials and a verified sender must be configured before email can be delivered.',
+    }
+    return {
+        'mode': mode,
+        'configured': mode != 'unconfigured',
+        'real_delivery': mode in {'smtp', 'custom'},
+        'message': messages[mode],
+    }
 
 
 def _frontend_action_path(notification):
@@ -158,3 +190,42 @@ def send_email_delivery(delivery):
     if delivery.html_body:
         message.attach_alternative(delivery.html_body, 'text/html')
     return message.send(fail_silently=False)
+
+
+def attempt_email_delivery(delivery_or_id):
+    """Claim and send one outbox record without allowing provider failures to escape."""
+    delivery_id = getattr(delivery_or_id, 'pk', delivery_or_id)
+    now = timezone.now()
+    with transaction.atomic():
+        delivery = EmailDelivery.objects.select_for_update().get(pk=delivery_id)
+        if delivery.status in {EmailDelivery.STATUS_SENT, EmailDelivery.STATUS_CANCELLED}:
+            return delivery
+        if (
+            delivery.status == EmailDelivery.STATUS_PROCESSING
+            and delivery.last_attempt_at
+            and delivery.last_attempt_at >= now - timedelta(minutes=15)
+        ):
+            return delivery
+        delivery.status = EmailDelivery.STATUS_PROCESSING
+        delivery.attempts += 1
+        delivery.last_attempt_at = now
+        delivery.save(update_fields=['status', 'attempts', 'last_attempt_at', 'updated_at'])
+
+    try:
+        sent_count = send_email_delivery(delivery)
+        if sent_count != 1:
+            raise RuntimeError('The email backend did not confirm delivery.')
+    except Exception as error:
+        delivery.last_error = str(error)[:2000]
+        if delivery.attempts >= settings.EMAIL_NOTIFICATION_MAX_ATTEMPTS:
+            delivery.status = EmailDelivery.STATUS_FAILED
+        else:
+            delivery.status = EmailDelivery.STATUS_PENDING
+            delivery.scheduled_at = timezone.now() + timedelta(minutes=2 ** delivery.attempts)
+        delivery.save(update_fields=['status', 'scheduled_at', 'last_error', 'updated_at'])
+    else:
+        delivery.status = EmailDelivery.STATUS_SENT
+        delivery.sent_at = timezone.now()
+        delivery.last_error = ''
+        delivery.save(update_fields=['status', 'sent_at', 'last_error', 'updated_at'])
+    return delivery

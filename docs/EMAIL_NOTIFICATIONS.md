@@ -16,6 +16,8 @@ ConstructSaaS uses the existing in-app notification stream as the source of trut
 
 The Blueprint supplies the SMTP backend, port 587, and TLS settings. Its cron job processes the outbox every two minutes. Render charges a minimum monthly amount for each cron service; the command can instead be run by another scheduler if desired.
 
+The web service also sets `EMAIL_NOTIFICATION_SEND_INLINE=true`, so newly-created action alerts are attempted immediately. The database outbox and cron service remain the retry safety net when SES is temporarily unavailable. In local development, the default console backend is preview-only and never delivers to an inbox.
+
 ## Operational checks
 
 - Open **Settings → Email notifications** and confirm the status is **Ready**.
