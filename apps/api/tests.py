@@ -2391,3 +2391,149 @@ class DraftLifecycleActionTests(TestCase):
         self.assertEqual(delete.status_code, 204)
         self.assertFalse(PurchaseOrder.objects.filter(pk=order.pk).exists())
         self.assertTrue(FinanceAuditEvent.objects.filter(action='purchase_order.deleted', object_id=str(order.pk)).exists())
+
+
+class PurchaseOrderAdjustedPriceFlowTests(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name='Adjusted PO Demo')
+        self.procurement = User.objects.create_user(
+            username='adjusted_procurement', password='password', company=self.company,
+            role=User.ROLE_PROCUREMENT_OFFICER,
+        )
+        self.finance_manager = User.objects.create_user(
+            username='adjusted_finance_manager', password='password', company=self.company,
+            role=User.ROLE_FINANCE_MANAGER,
+        )
+        self.storekeeper = User.objects.create_user(
+            username='adjusted_storekeeper', password='password', company=self.company,
+            role=User.ROLE_STOREKEEPER,
+        )
+        self.engineer = User.objects.create_user(
+            username='adjusted_engineer', password='password', company=self.company,
+            role=User.ROLE_SITE_ENGINEER,
+        )
+        category = Category.objects.create(company=self.company, name='Adjusted materials')
+        self.material = Material.objects.create(
+            company=self.company, category=category, name='Adjusted cement', code='ADJ-CEM',
+            unit=Material.UNIT_BAG, unit_price=Decimal('35000.00'), min_stock_level=1,
+        )
+        project = Project.objects.create(company=self.company, name='Adjusted project', code='ADJ-001')
+        self.purchase_request = PurchaseRequest.objects.create(
+            company=self.company, project=project, number='PR-ADJUSTED-001',
+            title='Adjusted price request', requested_by=self.engineer,
+            status=PurchaseRequest.STATUS_PO_CREATED,
+        )
+        PurchaseRequestItem.objects.create(
+            purchase_request=self.purchase_request, material=self.material, quantity=Decimal('2.00'),
+        )
+        supplier = Supplier.objects.create(company=self.company, name='Adjusted supplier')
+        self.purchase_order = PurchaseOrder.objects.create(
+            company=self.company, purchase_request=self.purchase_request, project=project,
+            number='PO-ADJUSTED-001', supplier=supplier, supplier_name=supplier.name,
+            status=PurchaseOrder.STATUS_PENDING,
+        )
+        self.purchase_order_item = PurchaseOrderItem.objects.create(
+            purchase_order=self.purchase_order, material=self.material,
+            quantity=Decimal('2.00'), unit_price=Decimal('35000.00'),
+        )
+        BudgetApproval.objects.create(
+            company=self.company, purchase_request=self.purchase_request,
+            requested_amount=Decimal('70000.00'), status=BudgetApproval.STATUS_APPROVED,
+            created_by=self.procurement, reviewed_by=self.finance_manager,
+            submitted_at=timezone.now(), reviewed_at=timezone.now(),
+        )
+        self.client = APIClient()
+
+    def test_adjusted_price_requires_finance_reapproval_and_flows_to_receipt_value(self):
+        self.client.force_authenticate(self.procurement)
+        edited = self.client.post(
+            f'/api/purchase-orders/{self.purchase_order.pk}/edit-before-approval/',
+            {'price_lines': [{
+                'purchase_order_item': self.purchase_order_item.pk,
+                'unit_price': '42000.00',
+            }]},
+            format='json',
+        )
+        self.assertEqual(edited.status_code, 200, edited.data)
+        self.purchase_order_item.refresh_from_db()
+        self.assertEqual(self.purchase_order_item.unit_price, Decimal('35000.00'))
+        amendment = self.purchase_order.amendments.get(status='SUBMITTED')
+        self.assertEqual(
+            amendment.proposed_values['snapshot']['items'][0]['unit_price'],
+            '42000.00',
+        )
+
+        self.client.force_authenticate(self.finance_manager)
+        confirmed = self.client.post(
+            f'/api/purchase-orders/{self.purchase_order.pk}/confirm-preapproval-edit/',
+            {'comments': 'Adjusted supplier price checked; reopen the budget review.'},
+            format='json',
+        )
+        self.assertEqual(confirmed.status_code, 200, confirmed.data)
+        self.purchase_order_item.refresh_from_db()
+        approval = BudgetApproval.objects.get(purchase_request=self.purchase_request)
+        self.assertEqual(self.purchase_order_item.unit_price, Decimal('42000.00'))
+        self.assertEqual(approval.requested_amount, Decimal('84000.00'))
+        self.assertEqual(approval.status, BudgetApproval.STATUS_APPROVED)
+
+        self.client.force_authenticate(self.procurement)
+        approved = self.client.post(f'/api/purchase-orders/{self.purchase_order.pk}/approve/')
+        self.assertEqual(approved.status_code, 200, approved.data)
+
+        self.client.force_authenticate(self.storekeeper)
+        received = self.client.post(
+            f'/api/purchase-orders/{self.purchase_order.pk}/receive/',
+            {
+                'items': [{
+                    'purchase_order_item': self.purchase_order_item.pk,
+                    'accepted_quantity': '2.00',
+                    'rejected_quantity': '0.00',
+                    'damaged_quantity': '0.00',
+                    'notes': '',
+                }],
+            },
+            format='json',
+        )
+        self.assertEqual(received.status_code, 200, received.data)
+        movement = StockMovement.objects.get(purchase_order=self.purchase_order)
+        self.assertEqual(movement.unit_price, Decimal('42000.00'))
+        grn = self.purchase_order.goods_received_notes.get()
+        grn_response = self.client.get(f'/api/goods-received-notes/{grn.pk}/')
+        self.assertEqual(grn_response.status_code, 200)
+        self.assertEqual(Decimal(grn_response.data['items'][0]['unit_price']), Decimal('42000.00'))
+        self.assertEqual(Decimal(grn_response.data['items'][0]['accepted_value']), Decimal('84000.00'))
+
+    def test_rejected_adjustment_keeps_existing_po_price_and_budget_amount(self):
+        self.client.force_authenticate(self.procurement)
+        edited = self.client.post(
+            f'/api/purchase-orders/{self.purchase_order.pk}/edit-before-approval/',
+            {'price_lines': [{
+                'purchase_order_item': self.purchase_order_item.pk,
+                'unit_price': '42000.00',
+            }]},
+            format='json',
+        )
+        self.assertEqual(edited.status_code, 200, edited.data)
+        amendment = self.purchase_order.amendments.get(status='SUBMITTED')
+
+        self.client.force_authenticate(self.finance_manager)
+        rejected = self.client.post(
+            f'/api/purchase-orders/{self.purchase_order.pk}/amendments/{amendment.pk}/reject/',
+            {'comments': 'The adjusted amount is not approved.'},
+            format='json',
+        )
+        self.assertEqual(rejected.status_code, 200, rejected.data)
+        self.purchase_order_item.refresh_from_db()
+        approval = BudgetApproval.objects.get(purchase_request=self.purchase_request)
+        self.assertEqual(self.purchase_order_item.unit_price, Decimal('35000.00'))
+        self.assertEqual(approval.requested_amount, Decimal('70000.00'))
+
+    def test_po_issue_is_blocked_when_total_no_longer_matches_finance_approval(self):
+        self.purchase_order_item.unit_price = Decimal('42000.00')
+        self.purchase_order_item.save(update_fields=['unit_price'])
+        self.client.force_authenticate(self.procurement)
+
+        blocked = self.client.post(f'/api/purchase-orders/{self.purchase_order.pk}/approve/')
+
+        self.assertEqual(blocked.status_code, 400)
+        self.assertIn('Finance must approve the adjusted amount', str(blocked.data))

@@ -424,6 +424,8 @@ export type GoodsReceivedNote = {
     accepted_quantity: string;
     rejected_quantity: string;
     damaged_quantity: string;
+    unit_price: string;
+    accepted_value: string;
     notes: string;
   }>;
 };

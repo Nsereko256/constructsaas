@@ -60,6 +60,7 @@ from apps.procurement.services import (
     return_purchase_request_for_correction,
     create_purchase_order_amendment,
     purchase_order_amendment_snapshot,
+    apply_purchase_order_preapproval_snapshot,
     approve_purchase_order_amendment,
     confirm_purchase_order_preapproval_edit,
     reject_purchase_order_amendment,
@@ -67,7 +68,7 @@ from apps.procurement.services import (
 from apps.procurement.selectors import purchase_orders_for_user, purchase_requests_for_user
 from apps.finance.services import ensure_budget_clearance
 from apps.finance import budget_services
-from apps.finance.configuration_services import record_finance_audit_event
+from apps.finance.configuration_services import ensure_finance_settings, record_finance_audit_event
 from apps.finance.confirmation_services import confirm_pending, return_pending, submit_confirmation
 from apps.finance.models import BudgetApproval, FinanceAuditEvent, ProjectBudget, SupplierInvoice, WorkflowConfirmation
 from apps.pdf_exports import pdf_table_response
@@ -2575,7 +2576,7 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='edit-before-approval')
     def edit_before_approval(self, request, pk=None):
-        """Let Procurement correct commercial data before the first Finance decision."""
+        """Submit pending commercial corrections for Finance approval."""
         po = self.get_object()
         if po.status not in {PurchaseOrder.STATUS_DRAFT, PurchaseOrder.STATUS_PENDING}:
             return Response({'detail': 'Use the controlled amendment workflow after a purchase order has been approved.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -2586,15 +2587,23 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
         if po.amendments.filter(amendment_type=PurchaseOrderAmendment.TYPE_PRE_APPROVAL_EDIT, status=PurchaseOrderAmendment.STATUS_SUBMITTED).exists():
             return Response({'detail': 'Finance must confirm the existing PO edit before another edit can be submitted.'}, status=status.HTTP_400_BAD_REQUEST)
         before_values = purchase_order_amendment_snapshot(po)
+        after_values = {
+            **before_values,
+            'items': [dict(item) for item in before_values['items']],
+        }
         changed_fields = []
+        edit = None
+        direct_update = False
         with transaction.atomic():
             po = PurchaseOrder.objects.select_for_update().get(pk=po.pk)
             if 'expected_delivery_date' in values and values['expected_delivery_date'] != po.expected_delivery_date:
-                po.expected_delivery_date = values['expected_delivery_date']; changed_fields.append('expected delivery date')
+                after_values['expected_delivery_date'] = values['expected_delivery_date'].isoformat() if values['expected_delivery_date'] else None
+                changed_fields.append('expected delivery date')
             if 'notes' in values and values['notes'] != po.notes:
-                po.notes = values['notes']; changed_fields.append('PO notes')
+                after_values['notes'] = values['notes']; changed_fields.append('PO notes')
             if 'price_lines' in values:
                 locked_items = {item.pk: item for item in po.items.select_for_update().select_related('material')}
+                snapshot_items = {int(item['id']): item for item in after_values['items']}
                 seen_line_ids = set()
                 for index, line in enumerate(values['price_lines'], start=1):
                     try:
@@ -2608,23 +2617,29 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
                     if proposed_price < 0 or proposed_price == po_item.unit_price:
                         raise ValidationError({'price_lines': [f'Line {index} must have a different non-negative price.']})
                     seen_line_ids.add(line_id)
-                    po_item.unit_price = proposed_price
-                    po_item.save(update_fields=['unit_price'])
+                    snapshot_items[line_id]['unit_price'] = str(proposed_price)
                 changed_fields.append('line prices')
             if not changed_fields:
                 raise ValidationError({'detail': 'Provide at least one value that differs from the current PO.'})
-            po.save()
-            after_values = purchase_order_amendment_snapshot(po)
-            version = (po.amendments.select_for_update().order_by('-version').values_list('version', flat=True).first() or 0) + 1
-            edit = PurchaseOrderAmendment.objects.create(
-                purchase_order=po, company=po.company,
-                amendment_type=PurchaseOrderAmendment.TYPE_PRE_APPROVAL_EDIT,
-                version=version,
-                reason='Pre-approval PO edit submitted for Finance confirmation.',
-                original_values=before_values,
-                proposed_values={'snapshot': after_values, 'changed_fields': changed_fields},
-                submitted_by=request.user,
-            )
+            finance_settings = ensure_finance_settings(po.company)
+            direct_update = not finance_settings.soft_finance_enabled or finance_settings.budget_control_mode == 'off'
+            if direct_update:
+                apply_purchase_order_preapproval_snapshot(po, after_values)
+            else:
+                version = (po.amendments.select_for_update().order_by('-version').values_list('version', flat=True).first() or 0) + 1
+                edit = PurchaseOrderAmendment.objects.create(
+                    purchase_order=po, company=po.company,
+                    amendment_type=PurchaseOrderAmendment.TYPE_PRE_APPROVAL_EDIT,
+                    version=version,
+                    reason='Pre-approval PO edit submitted for Finance confirmation.',
+                    original_values=before_values,
+                    proposed_values={'snapshot': after_values, 'changed_fields': changed_fields},
+                    submitted_by=request.user,
+                )
+        if direct_update:
+            record_finance_audit_event(company=po.company, actor=request.user, action='purchase_order.preapproval_edited', object_type='PurchaseOrder', object_id=po.pk, metadata={'changed_fields': changed_fields, 'before': before_values, 'after': after_values, 'finance_review_required': False})
+            transaction.on_commit(lambda: push_dashboard_update(po.company))
+            return Response(self.get_serializer(po).data)
         record_finance_audit_event(company=po.company, actor=request.user, action='purchase_order.preapproval_edited', object_type='PurchaseOrder', object_id=po.pk, metadata={'amendment_id': edit.pk, 'changed_fields': changed_fields, 'before': before_values, 'after': after_values})
         for recipient in User.objects.filter(company=po.company, role__in=[User.ROLE_FINANCE_OFFICER, User.ROLE_FINANCE_MANAGER, User.ROLE_ADMIN], is_active=True):
             send_notification(recipient, Notification.TYPE_SYSTEM, Notification.LEVEL_WARNING, f'PO edit requires Finance confirmation: {po.number}', f'Procurement changed {", ".join(changed_fields)}. Review the before/after values before PO approval.', f'/procurement/purchase-orders?action_queue=po_progress')

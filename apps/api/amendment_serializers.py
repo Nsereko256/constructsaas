@@ -35,6 +35,11 @@ class PurchaseOrderAmendmentSerializer(serializers.Serializer):
                 Decimal(str(item.get('quantity', 0))) * Decimal(str(item.get('unit_price', 0)))
                 for item in proposed['items']
             ), Decimal('0')))
+        elif isinstance(proposed.get('snapshot'), dict) and 'items' in proposed['snapshot']:
+            projected_total = money(sum((
+                Decimal(str(item.get('quantity', 0))) * Decimal(str(item.get('unit_price', 0)))
+                for item in proposed['snapshot']['items']
+            ), Decimal('0')))
         else:
             price_delta = sum((
                 Decimal(str(item.get('proposed_line_total', 0))) - Decimal(str(item.get('original_line_total', 0)))

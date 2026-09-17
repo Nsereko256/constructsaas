@@ -1605,12 +1605,19 @@ class PurchaseOrderDetailSerializer(PurchaseOrderSerializer):
 
 class GoodsReceivedNoteItemSerializer(serializers.ModelSerializer):
     material_name = serializers.CharField(source='purchase_order_item.material.name', read_only=True)
+    unit_price = serializers.DecimalField(
+        source='purchase_order_item.unit_price', max_digits=12, decimal_places=2, read_only=True,
+    )
+    accepted_value = serializers.SerializerMethodField()
+
+    def get_accepted_value(self, obj):
+        return obj.accepted_quantity * obj.purchase_order_item.unit_price
 
     class Meta:
         model = GoodsReceivedNoteItem
         fields = [
             'id', 'purchase_order_item', 'material_name', 'accepted_quantity',
-            'rejected_quantity', 'damaged_quantity', 'notes',
+            'rejected_quantity', 'damaged_quantity', 'unit_price', 'accepted_value', 'notes',
         ]
         read_only_fields = fields
 

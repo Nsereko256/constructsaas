@@ -50,11 +50,10 @@ export function GoodsReceivedNotesPage() {
   const ordersById = useMemo(() => new Map(allOrders.map((order) => [order.id, order])), [allOrders]);
   const rows = useMemo<ReceiptSummary[]>(() => allNotes.map((note) => {
     const order = ordersById.get(note.purchase_order);
-    const linePrices = new Map(order?.items.map((item) => [item.id, Number(item.unit_price || 0)]) || []);
     const accepted = note.items.reduce((sum, item) => sum + Number(item.accepted_quantity || 0), 0);
     const rejected = note.items.reduce((sum, item) => sum + Number(item.rejected_quantity || 0), 0);
     const damaged = note.items.reduce((sum, item) => sum + Number(item.damaged_quantity || 0), 0);
-    const value = note.items.reduce((sum, item) => sum + Number(item.accepted_quantity || 0) * (linePrices.get(item.purchase_order_item) || 0), 0);
+    const value = note.items.reduce((sum, item) => sum + Number(item.accepted_value || 0), 0);
     return { note, order, accepted, rejected, damaged, value, hasException: rejected > 0 || damaged > 0 };
   }), [allNotes, ordersById]);
 
@@ -128,10 +127,11 @@ function QualityRow({ label, tone, value, quantity }: { label: string; tone: str
 
 function GrnDetail({ note, onClose }: { note: GoodsReceivedNote | null; onClose: () => void }) {
   return <FormModal open={!!note} title={note ? `GRN ${note.number}` : 'Goods received note'} onClose={onClose}>
-    {note ? <div className="grid gap-4"><RecordContext items={[{ label: 'Purchase order', value: note.purchase_order_number }, { label: 'Receipt date', value: formatDate(note.receipt_date) }, { label: 'Received by', value: note.received_by_name || note.received_by_username || 'Recorded receiver' }, { label: 'Status', value: note.status, tone: statusTone(note.status) }]} />{note.notes ? <Field label="Receipt notes"><p className="rounded-lg border border-border bg-background p-3 text-sm">{note.notes}</p></Field> : null}<div className="grid gap-2"><h3 className="flex items-center gap-2 font-bold"><FileText className="h-4 w-4" />Received material lines</h3>{note.items.map((item) => <div key={item.id} className="grid gap-2 rounded-lg border border-border p-3 text-sm sm:grid-cols-[1fr_repeat(3,auto)] sm:items-center sm:gap-5"><div><strong>{item.material_name}</strong>{item.notes ? <p className="mt-1 text-xs text-muted">{item.notes}</p> : null}</div><Quantity label="Accepted" value={item.accepted_quantity} /><Quantity label="Rejected" value={item.rejected_quantity} warning={Number(item.rejected_quantity) > 0} /><Quantity label="Damaged" value={item.damaged_quantity} warning={Number(item.damaged_quantity) > 0} /></div>)}</div></div> : null}
+    {note ? <div className="grid gap-4"><RecordContext items={[{ label: 'Purchase order', value: note.purchase_order_number }, { label: 'Receipt date', value: formatDate(note.receipt_date) }, { label: 'Received by', value: note.received_by_name || note.received_by_username || 'Recorded receiver' }, { label: 'Status', value: note.status, tone: statusTone(note.status) }]} />{note.notes ? <Field label="Receipt notes"><p className="rounded-lg border border-border bg-background p-3 text-sm">{note.notes}</p></Field> : null}<div className="grid gap-2"><h3 className="flex items-center gap-2 font-bold"><FileText className="h-4 w-4" />Received material lines</h3>{note.items.map((item) => <div key={item.id} className="grid gap-2 rounded-lg border border-border p-3 text-sm sm:grid-cols-[minmax(160px,1fr)_repeat(5,auto)] sm:items-center sm:gap-5"><div><strong>{item.material_name}</strong>{item.notes ? <p className="mt-1 text-xs text-muted">{item.notes}</p> : null}</div><Quantity label="Approved price" value={formatUGX(item.unit_price)} /><Quantity label="Accepted" value={item.accepted_quantity} /><Quantity label="Accepted value" value={formatUGX(item.accepted_value)} /><Quantity label="Rejected" value={item.rejected_quantity} warning={Number(item.rejected_quantity) > 0} /><Quantity label="Damaged" value={item.damaged_quantity} warning={Number(item.damaged_quantity) > 0} /></div>)}</div></div> : null}
   </FormModal>;
 }
 
 function Quantity({ label, value, warning = false }: { label: string; value: string; warning?: boolean }) {
-  return <div className={warning ? 'text-warning' : ''}><span className="text-xs text-muted">{label}</span><strong className="block">{formatNumber(value)}</strong></div>;
+  const displayValue = value.startsWith('UGX') ? value : formatNumber(value);
+  return <div className={warning ? 'text-warning' : ''}><span className="text-xs text-muted">{label}</span><strong className="block">{displayValue}</strong></div>;
 }

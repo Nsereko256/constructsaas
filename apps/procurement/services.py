@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.utils import timezone
@@ -178,6 +178,31 @@ def purchase_order_amendment_snapshot(purchase_order):
     }
 
 
+def apply_purchase_order_preapproval_snapshot(purchase_order, snapshot):
+    """Apply a Finance-approved pending-PO snapshot without changing line identity."""
+    expected_date = snapshot.get('expected_delivery_date')
+    purchase_order.expected_delivery_date = (
+        date.fromisoformat(expected_date) if isinstance(expected_date, str) and expected_date else expected_date
+    )
+    purchase_order.notes = snapshot.get('notes', purchase_order.notes)
+    purchase_order.save(update_fields=['expected_delivery_date', 'notes', 'updated_at'])
+
+    current_items = {item.pk: item for item in purchase_order.items.select_for_update()}
+    snapshot_items = snapshot.get('items', [])
+    if {int(item['id']) for item in snapshot_items} != set(current_items):
+        raise ValidationError({'items': ['Purchase order lines changed while Finance was reviewing the edit.']})
+    for item_snapshot in snapshot_items:
+        po_item = current_items[int(item_snapshot['id'])]
+        if (
+            po_item.material_id != int(item_snapshot['material'])
+            or po_item.quantity != Decimal(str(item_snapshot['quantity']))
+        ):
+            raise ValidationError({'items': ['Material and quantity cannot change in a price-only PO edit.']})
+        po_item.unit_price = Decimal(str(item_snapshot['unit_price']))
+        po_item.save(update_fields=['unit_price'])
+    return purchase_order
+
+
 @transaction.atomic
 def create_purchase_order_amendment(*, purchase_order, user, reason, proposed_values):
     """Create the next immutable submitted amendment version."""
@@ -253,7 +278,10 @@ def approve_purchase_order_amendment(*, purchase_order, amendment_id, user, comm
 
 @transaction.atomic
 def confirm_purchase_order_preapproval_edit(*, purchase_order, user, comments):
-    """Confirm the pending pre-approval edit without changing PO values again."""
+    """Finance-approve a pending PO edit and synchronize its reviewed amount."""
+    from apps.finance.models import BudgetApproval
+    from apps.finance.budget_services import budget_line_summary, money
+
     po = PurchaseOrder.objects.select_for_update().get(pk=purchase_order.pk)
     edit = po.amendments.select_for_update().filter(
         amendment_type=PurchaseOrderAmendment.TYPE_PRE_APPROVAL_EDIT,
@@ -261,6 +289,51 @@ def confirm_purchase_order_preapproval_edit(*, purchase_order, user, comments):
     ).first()
     if not edit:
         raise ValidationError('There is no pending pre-approval PO edit.')
+    if po.status not in {PurchaseOrder.STATUS_DRAFT, PurchaseOrder.STATUS_PENDING}:
+        raise ValidationError('Only a draft or pending purchase order can accept this edit.')
+    if po.goods_received_notes.exists() or po.supplier_invoices.exists():
+        raise ValidationError('A purchase order with receipts or invoices cannot accept this edit.')
+    snapshot = edit.proposed_values.get('snapshot')
+    if not isinstance(snapshot, dict):
+        raise ValidationError('The proposed PO snapshot is unavailable.')
+    revised_amount = sum(
+        (
+            Decimal(str(item['quantity'])) * Decimal(str(item['unit_price']))
+            for item in snapshot.get('items', [])
+        ),
+        Decimal('0.00'),
+    )
+    approval = BudgetApproval.objects.select_for_update().filter(
+        company=po.company,
+        purchase_request_id=po.purchase_request_id,
+    ).first()
+    if approval:
+        if approval.budget_line_id:
+            available = money(budget_line_summary(approval.budget_line)['available_balance'])
+            if money(revised_amount) > available and approval.status != BudgetApproval.STATUS_OVERRIDDEN:
+                raise ValidationError({
+                    'items': ['The adjusted purchase order exceeds the available budget balance.'],
+                })
+        decision_note = comments.strip()
+        if approval.status in {
+            BudgetApproval.STATUS_APPROVED,
+            BudgetApproval.STATUS_REJECTED,
+            BudgetApproval.STATUS_OVERRIDDEN,
+        }:
+            # Preserve the immutable decision. This Finance Manager amendment
+            # approval is the audit authority for its adjusted supplier amount.
+            BudgetApproval.objects.filter(pk=approval.pk).update(
+                requested_amount=revised_amount,
+                review_reason=decision_note,
+                reviewed_by=user,
+                reviewed_at=timezone.now(),
+                updated_at=timezone.now(),
+            )
+        else:
+            approval.requested_amount = revised_amount
+            approval.review_reason = decision_note
+            approval.save(update_fields=['requested_amount', 'review_reason', 'updated_at'])
+    apply_purchase_order_preapproval_snapshot(po, snapshot)
     edit.status = PurchaseOrderAmendment.STATUS_APPROVED
     edit.decided_by = user
     edit.decision_reason = comments
@@ -278,6 +351,10 @@ def reject_purchase_order_amendment(*, purchase_order, amendment_id, user, comme
     ).first()
     if not amendment:
         raise ValidationError('Amendment is unavailable.')
+    if amendment.amendment_type == PurchaseOrderAmendment.TYPE_PRE_APPROVAL_EDIT:
+        # Older pending edits were applied before Finance decided them. Restore
+        # their immutable original snapshot; for newer edits this is a no-op.
+        apply_purchase_order_preapproval_snapshot(po, amendment.original_values)
     amendment.status = PurchaseOrderAmendment.STATUS_REJECTED
     amendment.decided_by = user
     amendment.decision_reason = comments

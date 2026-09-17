@@ -664,12 +664,19 @@ def approve_purchase_order(*, purchase_order, user):
         purchase_request_id=po.purchase_request_id,
         company=user.company,
     ).first()
+    amount = _po_total(po)
+    if approval and money(approval.requested_amount) != amount:
+        raise ValidationError({
+            'amount': [
+                'The purchase order total changed after Finance review. '
+                'Finance must approve the adjusted amount before this PO can be issued.'
+            ],
+        })
     if approval and approval.project_budget_id:
         if approval.status not in {BudgetApproval.STATUS_APPROVED, BudgetApproval.STATUS_OVERRIDDEN}:
             raise ValidationError({'purchase_request': ['The linked request has not passed finance approval.']})
         budget = ProjectBudget.objects.select_for_update().get(pk=approval.project_budget_id, company=user.company)
         line = BudgetLine.objects.select_for_update().get(pk=approval.budget_line_id, company=user.company)
-        amount = _po_total(po)
         if amount > budget_line_summary(line)['available_balance'] and approval.status != BudgetApproval.STATUS_OVERRIDDEN:
             raise ValidationError({'amount': ['The purchase order exceeds the available budget balance.']})
         _transaction(

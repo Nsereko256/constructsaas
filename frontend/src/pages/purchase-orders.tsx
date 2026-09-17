@@ -445,7 +445,7 @@ function PurchaseOrderAmendmentModal({ order, onClose, onDone }: { order: Purcha
       const fields = new FormData(event.currentTarget);
       const quotes = priceLines.map((line) => ({
         purchase_order_item: line.purchase_order_item,
-        unit_price: String(fields.get(`quote_${line.purchase_order_item}`) || ''),
+        unit_price: String(fields.get(`price_${line.purchase_order_item}`) || ''),
       })).filter((line) => line.unit_price.trim() !== '' && Number.isFinite(parseQuotedPrice(line.unit_price)) && parseQuotedPrice(line.unit_price) !== Number(priceLines.find((item) => item.purchase_order_item === line.purchase_order_item)?.original_unit_price));
       const body: Record<string, unknown> = isPreApproval ? {} : { reason };
       if (expectedDate && expectedDate !== order.expected_delivery_date) body.expected_delivery_date = expectedDate;
@@ -454,12 +454,12 @@ function PurchaseOrderAmendmentModal({ order, onClose, onDone }: { order: Purcha
       if (!quotes.length && !hasOtherChange) { toast.push({ title: 'No change selected', message: 'Enter a different unit price, delivery date, or PO note.', tone: 'warning' }); return; }
       mutation.mutate(body);
     }}>
-      <p className="rounded-lg border border-warning/25 bg-warning/5 p-3 text-sm text-foreground">{isPreApproval ? <><strong>Before first approval:</strong> Procurement may correct prices, delivery date, or notes directly. Finance will review the final PO once.</> : <><strong>Controlled change:</strong> Finance must approve this amendment. Unit-price changes retain the approved quantity and are only allowed before supplier dispatch, receipt, or invoice capture starts.</>}</p>
+      <p className="rounded-lg border border-warning/25 bg-warning/5 p-3 text-sm text-foreground">{isPreApproval ? <><strong>Before first approval:</strong> Price, delivery-date, and note changes stay pending until Finance confirms them. A changed total must pass Finance budget approval again before the PO can be issued.</> : <><strong>Controlled change:</strong> Finance must approve this amendment. Unit-price changes retain the approved quantity and are only allowed before supplier dispatch, receipt, or invoice capture starts.</>}</p>
       {!isPreApproval ? <Field label="Reason for amendment" required><textarea className={inputClass} rows={3} value={reason} onChange={(event) => setReason(event.target.value)} /></Field> : null}
       <div className="grid gap-2 rounded-lg border border-border p-3"><div><strong className="text-sm">Line price comparison</strong><p className="text-xs text-muted">Current PO prices are shown for reference. Enter an updated agreed price only for lines that changed; values such as 48,100 are accepted.</p></div>{priceLines.map((line, index) => <div key={line.purchase_order_item} className="grid gap-2 border-t border-border pt-2 sm:grid-cols-[1fr_90px_130px_130px]"><div><strong className="text-sm">{line.material_name}</strong><p className="text-xs text-muted">Approved quantity: {line.quantity}</p></div><div className="text-sm"><span className="block text-xs text-muted">Current price</span>{Number(line.original_unit_price).toLocaleString()}</div><Field label="Updated agreed price"><input className={inputClass} name={`price_${line.purchase_order_item}`} type="text" inputMode="decimal" placeholder="e.g. 48,100" value={line.unit_price} onChange={(event) => setPriceLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, unit_price: event.target.value } : item))} /></Field><div className="text-sm"><span className="block text-xs text-muted">Line variance</span>{line.unit_price.trim() && Number.isFinite(parseQuotedPrice(line.unit_price)) ? <strong className={parseQuotedPrice(line.unit_price) > Number(line.original_unit_price) ? 'text-warning' : parseQuotedPrice(line.unit_price) < Number(line.original_unit_price) ? 'text-primary' : ''}>{((parseQuotedPrice(line.unit_price) - Number(line.original_unit_price)) * Number(line.quantity)).toLocaleString()}</strong> : <span className="text-muted">—</span>}</div></div>)}<p className={changedPrices.length ? 'text-xs font-semibold text-primary' : 'text-xs font-semibold text-warning'}>{changedPrices.length ? `${changedPrices.length} price change${changedPrices.length === 1 ? '' : 's'} will be sent to Finance.` : 'Enter a genuinely new price, delivery date, or PO note before submitting.'}</p></div>
       <Field label="Revised expected delivery"><input className={inputClass} type="date" value={expectedDate} onChange={(event) => setExpectedDate(event.target.value)} /></Field>
       <Field label="Updated PO notes"><textarea className={inputClass} rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></Field>
-      <Button disabled={(!isPreApproval && !reason.trim()) || mutation.isPending} loading={mutation.isPending} loadingLabel={isPreApproval ? 'Saving PO' : 'Sending to Finance'}>{isPreApproval ? 'Save PO changes' : 'Send amendment to Finance'}</Button>
+      <Button disabled={(!isPreApproval && !reason.trim()) || mutation.isPending} loading={mutation.isPending} loadingLabel={isPreApproval ? 'Sending adjustment' : 'Sending to Finance'}>{isPreApproval ? 'Send adjusted PO to Finance' : 'Send amendment to Finance'}</Button>
     </form>
   </FormModal>;
 }
@@ -467,24 +467,31 @@ function PurchaseOrderAmendmentModal({ order, onClose, onDone }: { order: Purcha
 function PreApprovalEditReviewModal({ state, onClose, onDone }: { state: { order: PurchaseOrder; amendment: PurchaseOrderAmendment; canConfirm: boolean } | null; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
   const [comments, setComments] = useState('');
-  const mutation = useMutation({
-    mutationFn: () => state ? api.confirmPreApprovalEdit(state.order.id, comments) : Promise.reject(new Error('Select an edited PO.')),
-    onSuccess: () => { toast.push({ title: 'Edited PO confirmed for approval', tone: 'success' }); onDone(); onClose(); },
-    onError: (error: Error) => toast.push({ title: 'PO edit confirmation failed', message: error.message, tone: 'danger' }),
+  const [approve, setApprove] = useState(true);
+  const mutation = useMutation<PurchaseOrder | PurchaseOrderAmendment>({
+    mutationFn: () => state
+      ? approve
+        ? api.confirmPreApprovalEdit(state.order.id, comments)
+        : api.rejectPurchaseOrderAmendment(state.order.id, state.amendment.id, comments)
+      : Promise.reject(new Error('Select an edited PO.')),
+    onSuccess: () => { toast.push({ title: approve ? 'Adjusted PO approved by Finance' : 'PO adjustment rejected', tone: approve ? 'success' : 'warning' }); onDone(); onClose(); },
+    onError: (error: Error) => toast.push({ title: 'PO adjustment decision failed', message: error.message, tone: 'danger' }),
   });
-  useEffect(() => { if (state) setComments(''); }, [state]);
+  useEffect(() => { if (state) { setComments(''); setApprove(true); } }, [state]);
   const proposed = (state?.amendment.proposed_values || {}) as Record<string, unknown>;
   const original = (state?.amendment.original_values || {}) as Record<string, unknown>;
   const after = (proposed.snapshot || {}) as Record<string, unknown>;
   const beforeItems = Array.isArray(original.items) ? original.items as Array<Record<string, unknown>> : [];
   const afterItems = Array.isArray(after.items) ? after.items as Array<Record<string, unknown>> : [];
+  const impact = state?.amendment.budget_impact;
   return <FormModal open={!!state} title={`Review edited ${state?.order.number || 'purchase order'}`} onClose={onClose}>
     <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }}>
       <p className="rounded-lg border border-warning/25 bg-warning/5 p-3 text-sm">Procurement changed this PO before first approval. Confirm the before/after values before the PO can be approved.</p>
       <div className="rounded-lg border border-border p-3 text-sm"><strong>Changed fields</strong><p className="mt-1 text-muted">{((proposed.changed_fields as string[]) || []).join(', ')}</p></div>
       {after.expected_delivery_date !== original.expected_delivery_date || after.notes !== original.notes ? <div className="grid gap-2 rounded-lg border border-border p-3 text-sm"><strong>PO details</strong>{after.expected_delivery_date !== original.expected_delivery_date ? <p>Delivery: {String(original.expected_delivery_date || 'Not set')} → {String(after.expected_delivery_date || 'Not set')}</p> : null}{after.notes !== original.notes ? <p>Notes: {String(original.notes || 'None')} → {String(after.notes || 'None')}</p> : null}</div> : null}
       {afterItems.length ? <div className="rounded-lg border border-border p-3 text-sm"><strong>Price changes</strong><div className="mt-2 grid gap-2">{afterItems.map((item) => { const old = beforeItems.find((candidate) => candidate.id === item.id); return old && old.unit_price !== item.unit_price ? <div key={String(item.id)} className="flex justify-between gap-2 border-t border-border pt-2"><span>{String(item.material_name)} × {String(item.quantity)}</span><strong>{formatUGX(String(old.unit_price))} → {formatUGX(String(item.unit_price))}</strong></div> : null; })}</div></div> : null}
-      {state?.canConfirm ? <><Field label="Finance confirmation comments" required><textarea className={inputClass} rows={3} value={comments} onChange={(event) => setComments(event.target.value)} /></Field><Button disabled={!comments.trim() || mutation.isPending} loading={mutation.isPending}>Confirm edit and allow PO approval</Button></> : <p className="rounded-lg border border-info/25 bg-info/5 p-3 text-sm">Read-only review. Finance Manager confirmation is required before this PO can be approved.</p>}
+      {impact ? <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 text-sm"><strong>Adjusted budget amount</strong><div className="mt-2 grid gap-2 sm:grid-cols-3"><div><span className="block text-xs text-muted">Previous PO total</span><strong>{formatUGX(impact.current_po_total)}</strong></div><div><span className="block text-xs text-muted">Adjusted PO total</span><strong>{formatUGX(impact.proposed_po_total)}</strong></div><div><span className="block text-xs text-muted">Difference</span><strong className={Number(impact.change_amount) > 0 ? 'text-warning' : 'text-primary'}>{Number(impact.change_amount) > 0 ? '+' : ''}{formatUGX(impact.change_amount)}</strong></div></div><p className="mt-2 text-xs text-muted">Finance confirmation applies these prices and records the adjusted amount against the financial review. Unaffordable increases are blocked.</p></div> : null}
+      {state?.canConfirm ? <><Field label="Finance decision"><select className={inputClass} value={approve ? 'approve' : 'reject'} onChange={(event) => setApprove(event.target.value === 'approve')}><option value="approve">Approve adjusted PO and amount</option><option value="reject">Reject and keep the current PO</option></select></Field><Field label="Finance decision comments" required><textarea className={inputClass} rows={3} value={comments} onChange={(event) => setComments(event.target.value)} /></Field><Button variant={approve ? 'default' : 'warning'} disabled={!comments.trim() || mutation.isPending} loading={mutation.isPending}>{approve ? 'Approve adjustment and update budget amount' : 'Reject PO adjustment'}</Button></> : <p className="rounded-lg border border-info/25 bg-info/5 p-3 text-sm">Read-only review. Finance Manager confirmation is required before this PO can be approved.</p>}
     </form>
   </FormModal>;
 }
