@@ -281,6 +281,29 @@ export type PurchaseRequestItem = {
 
 export type RecordActivity = { id: number; action: string; message: string; actor: string; created_at: string };
 
+export type RequestStageTiming = {
+  key: string;
+  label: string;
+  owner: string;
+  status: 'CURRENT' | 'COMPLETED' | 'RETURNED' | 'CANCELLED' | string;
+  version: number | null;
+  started_at: string;
+  ended_at: string | null;
+  duration_seconds: number;
+  duration_display: string;
+  target_hours: number;
+  is_current: boolean;
+  is_stalled: boolean;
+  exceeded_target: boolean;
+};
+
+export type RequestStageTracking = {
+  current_stage: RequestStageTiming | null;
+  history: RequestStageTiming[];
+  total_age_seconds: number;
+  total_age_display: string;
+};
+
 export type PurchaseRequest = {
   id: number;
   project: number | null;
@@ -320,6 +343,7 @@ export type PurchaseRequest = {
   can_correct_finance_return: boolean;
   can_correct_return: boolean;
   technical_approval_requires_override_reason: boolean;
+  stage_tracking: RequestStageTracking;
   items: PurchaseRequestItem[];
   created_at: string;
   updated_at?: string;

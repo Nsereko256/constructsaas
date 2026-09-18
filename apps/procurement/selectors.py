@@ -18,7 +18,7 @@ def purchase_requests_for_user(user):
             'work_order', 'work_order_site', 'budget_approval__budget_line',
             'budget_approval__reviewed_by',
         )
-        .prefetch_related('items__material', 'purchase_orders')
+        .prefetch_related('items__material', 'purchase_orders__supplier_invoices')
     )
 
 

@@ -18,6 +18,7 @@ from apps.procurement.models import (
     PurchaseRequestItem,
     SupplierClaim,
 )
+from apps.procurement.stage_tracking import material_request_stage_tracking
 from apps.projects.access import accessible_projects
 from apps.projects.models import ApprovalDelegation, ChatMessage, ChatRoom, Project, ProjectGoal, ProjectSite, ProjectStaffAssignment
 from apps.suppliers.models import Supplier
@@ -863,6 +864,7 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
     can_correct_finance_return = serializers.SerializerMethodField()
     lifecycle_status_display = serializers.SerializerMethodField()
     technical_approval_requires_override_reason = serializers.SerializerMethodField()
+    stage_tracking = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseRequest
@@ -907,6 +909,7 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
             'can_correct_finance_return',
             'can_correct_return',
             'technical_approval_requires_override_reason',
+            'stage_tracking',
             'items',
             'created_at',
             'updated_at',
@@ -940,6 +943,7 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
             'can_correct_finance_return',
             'can_correct_return',
             'technical_approval_requires_override_reason',
+            'stage_tracking',
             'created_at',
             'updated_at',
         ]
@@ -968,6 +972,9 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
 
     def get_total_estimated_cost(self, obj) -> Decimal:
         return sum(item.quantity * item.material.unit_price for item in obj.items.all())
+
+    def get_stage_tracking(self, obj) -> dict:
+        return material_request_stage_tracking(obj)
 
     def get_technical_approval_requires_override_reason(self, obj) -> bool:
         request_user = getattr(self.context.get('request'), 'user', None)

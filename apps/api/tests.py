@@ -10,7 +10,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.accounts.models import Company, User
-from apps.finance.models import BudgetApproval, FinanceAuditEvent
+from apps.finance.models import BudgetApproval, FinanceAuditEvent, WorkflowConfirmation
 from apps.materials.models import Category, Material
 from apps.notifications.models import Notification
 from apps.procurement.models import GoodsReceivedNote, PurchaseOrder, PurchaseOrderItem, PurchaseRequest, PurchaseRequestItem, SupplierClaim
@@ -1375,6 +1375,41 @@ class ApiFoundationTests(TestCase):
         self.assertEqual(self.purchase_request.status, PurchaseRequest.STATUS_APPROVED)
         self.assertEqual(response.data['status'], PurchaseRequest.STATUS_APPROVED)
         self.assertEqual(response.data['total_estimated_cost'], 70000)
+        self.assertEqual(response.data['stage_tracking']['history'][0]['key'], 'manager_review')
+        self.assertEqual(response.data['stage_tracking']['history'][0]['status'], 'COMPLETED')
+        self.assertEqual(response.data['stage_tracking']['current_stage']['key'], 'procurement_decision')
+
+    def test_material_request_exposes_current_stage_age_and_handoff_history(self):
+        old_time = timezone.now() - timedelta(hours=26)
+        PurchaseRequest.objects.filter(pk=self.purchase_request.pk).update(
+            created_at=old_time,
+            updated_at=old_time,
+        )
+        WorkflowConfirmation.objects.create(
+            company=self.company,
+            document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_REQUEST,
+            object_id=str(self.purchase_request.pk),
+            object_label=self.purchase_request.number,
+            stage=WorkflowConfirmation.STAGE_TECHNICAL,
+            required_role=User.ROLE_PROJECT_MANAGER,
+            submitted_by=self.site_engineer,
+        )
+        WorkflowConfirmation.objects.filter(
+            company=self.company,
+            document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_REQUEST,
+            object_id=str(self.purchase_request.pk),
+        ).update(submitted_at=old_time)
+        self.client.force_login(self.user)
+
+        response = self.client.get(f'/api/purchase-requests/{self.purchase_request.pk}/')
+
+        self.assertEqual(response.status_code, 200)
+        tracking = response.data['stage_tracking']
+        self.assertEqual(tracking['current_stage']['key'], 'manager_review')
+        self.assertEqual(tracking['current_stage']['owner'], 'Project Manager')
+        self.assertTrue(tracking['current_stage']['is_stalled'])
+        self.assertGreaterEqual(tracking['current_stage']['duration_seconds'], 26 * 60 * 60)
+        self.assertEqual(tracking['history'][0]['status'], 'CURRENT')
 
     def test_admin_self_approval_exposes_and_accepts_controlled_override_reason(self):
         purchase_request = PurchaseRequest.objects.create(

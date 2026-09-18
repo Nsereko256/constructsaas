@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, ArrowLeft, Box, CalendarDays, Check, CheckCircle2, ChevronRight, CircleDollarSign, ClipboardList, FileText, Paperclip, Users, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Box, CalendarDays, Check, CheckCircle2, ChevronRight, CircleDollarSign, ClipboardList, Clock3, FileText, Paperclip, Users, X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '@/modules/procurement/api';
@@ -27,17 +27,12 @@ function Activity({ events }: { events: RecordActivity[] }) {
 }
 
 function ApprovalWorkflow({ request }: { request: PurchaseRequest }) {
-  const softFinance = ['APPROVED', 'OVERRIDDEN'].includes(request.finance_status);
-  const steps = [
-    ['Created', true, request.requested_by_username],
-    ['Submitted', true, request.requested_by_username],
-    ['Project Manager review', !!request.manager_approved_by_name, request.manager_approved_by_name || 'Waiting for manager'],
-    ['Admin stock approval', !!request.technical_approved_by_name, request.technical_approved_by_name || 'Pending'],
-    ...(request.finance_status !== 'NOT_SUBMITTED' ? [['Finance review', softFinance, request.finance_status_display]] : []),
-    ['Storekeeper issue', ['STOCK_ISSUED', 'PARTIAL_STOCK_ISSUED'].includes(request.status), 'Pending'],
-  ] as Array<[string, boolean, string]>;
-  const currentStep = steps.findIndex(([, complete]) => !complete);
-  return <ol className="pr-detail-workflow">{steps.map(([label, complete, detail], index) => <li key={label} className={complete ? 'complete' : index === currentStep ? 'current' : ''}><span>{complete ? <Check size={13} /> : <i />}</span><div><strong>{label}</strong><small>{detail}</small></div></li>)}</ol>;
+  const stages = request.stage_tracking.history;
+  return <ol className="pr-detail-workflow">
+    <li className="complete"><span><Check size={13} /></span><div><strong>Material request created</strong><small>{request.requested_by_username} · {formatDate(request.created_at)}</small></div></li>
+    {stages.map((stage, index) => <li key={`${stage.key}-${stage.version || 0}-${index}`} className={`${stage.status === 'COMPLETED' ? 'complete' : stage.is_current ? 'current' : ''} ${stage.is_stalled ? 'stalled' : ''}`}><span>{stage.status === 'COMPLETED' ? <Check size={13} /> : stage.is_stalled ? <AlertCircle size={12} /> : <i />}</span><div><strong>{stage.label}</strong><small>{stage.owner} · {stage.duration_display}{stage.target_hours ? ` / ${stage.target_hours}h target` : ''}</small>{stage.is_stalled ? <em>Follow-up overdue</em> : stage.exceeded_target ? <em>Target exceeded</em> : null}</div></li>)}
+    {!stages.length ? <li><span><i /></span><div><strong>No handoff recorded</strong><small>Workflow timing will begin at the next stage.</small></div></li> : null}
+  </ol>;
 }
 
 export function PurchaseRequestDetailPage() {
@@ -83,7 +78,8 @@ export function PurchaseRequestDetailPage() {
     <ControlledApprovalModal open={approvalOverrideOpen} recordNumber={record.number} pending={approve.isPending} onClose={() => setApprovalOverrideOpen(false)} onApprove={(overrideReason) => approve.mutate({ id, overrideReason })} />
     <div className="pr-detail-breadcrumb"><Button variant="ghost" aria-label="Back to material requests" onClick={() => navigate(-1)}><ArrowLeft size={16} />Material requests</Button><span>Procurement / Material requests / {record.number}</span></div>
     <section className="pr-detail-hero"><div className="pr-detail-identity"><span>PROCUREMENT / MATERIAL REQUESTS</span><h1>{record.number}</h1><p>{record.project_name || 'Warehouse'} <span>·</span> {record.title}</p></div><div className="pr-detail-hero-status"><Badge tone={statusTone(record.status)}>{record.status_display}</Badge><Badge tone={statusTone(record.priority)}>{record.priority_display}</Badge></div><div className="pr-detail-actions">{canReview ? <><Button variant="secondary" onClick={returnWithPrompt}><ArrowLeft size={15} />Return</Button><Button variant="destructive" onClick={rejectWithPrompt}><X size={15} />Reject</Button><Button onClick={() => record.technical_approval_requires_override_reason ? setApprovalOverrideOpen(true) : approve.mutate({ id })} loading={approve.isPending}><Check size={15} />Approve</Button></> : primaryAction}<details><summary aria-label="More material request actions">⋮</summary><div><Link to={`/procurement/requests?search=${encodeURIComponent(record.number)}`}>Open in register</Link></div></details></div></section>
-    <section className="pr-detail-meta-row"><PrMeta icon={Users} label="Requested by" value={record.requested_by_username} /><PrMeta icon={CalendarDays} label="Created" value={formatDate(record.created_at)} /><PrMeta icon={CalendarDays} label="Required" value={record.required_date ? formatDate(record.required_date) : 'Not specified'} /><PrMeta icon={Box} label="Destination" value={record.delivery_destination === 'SITE' ? 'Direct to site' : 'Main warehouse'} /><PrMeta icon={Users} label="Assigned to" value={record.manager_approved_by_name || 'Unassigned'} /></section>
+    <section className="pr-detail-meta-row"><PrMeta icon={Users} label="Requested by" value={record.requested_by_username} /><PrMeta icon={CalendarDays} label="Created" value={formatDate(record.created_at)} /><PrMeta icon={CalendarDays} label="Required" value={record.required_date ? formatDate(record.required_date) : 'Not specified'} /><PrMeta icon={Box} label="Destination" value={record.delivery_destination === 'SITE' ? 'Direct to site' : 'Main warehouse'} /><PrMeta icon={Users} label="Assigned to" value={record.stage_tracking.current_stage?.owner || record.manager_approved_by_name || 'Completed'} /></section>
+    <StageFollowUp request={record} />
     <div className="pr-detail-layout"><div className="pr-detail-main">
       <PrCard title="Reason & justification"><div className="pr-detail-fields"><div><label>Reason</label><p>{record.title}</p></div><div><label>Justification</label><p>{record.justification || 'No justification provided.'}</p></div><div><label>Intended use</label><p>{record.title}</p></div><div><label>Urgency</label><p>{record.priority_display}</p></div><div><label>Requester notes</label><p>{record.items.map((item) => item.notes).filter(Boolean).join(' ') || 'No requester notes.'}</p></div></div>{record.rejection_reason || record.technical_return_reason ? <div className="pr-detail-warning"><AlertCircle size={16} /><span>{record.rejection_reason || record.technical_return_reason}</span></div> : null}</PrCard>
       <PrCard title="Requested materials"><div className="pr-detail-table-wrap"><table><thead><tr><th>Material</th><th>Specification</th><th>Requested</th><th>Approved</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Unit cost</th><th>Estimate</th><th>Fulfilment</th></tr></thead><tbody>{record.items.map((item) => { const available = Number(item.warehouse_available); const outstanding = Number(item.outstanding_quantity); return <tr key={item.id}><td><strong>{item.material_name}</strong><small>{item.material_code}</small></td><td>{item.notes || 'No specification'}</td><td>{formatNumber(item.quantity)} {item.unit}</td><td>{approvedQuantitiesVisible ? formatNumber(item.quantity) : <span className="pr-detail-pending">—<small>Approval pending</small></span>}</td><td>{formatNumber(item.current_stock)}</td><td>{formatNumber(item.issued_quantity)}</td><td>{formatNumber(item.warehouse_available)}</td><td>{formatUGX(item.unit_price)}</td><td>{formatUGX(item.estimated_cost)}</td><td><Badge tone={available >= outstanding ? 'success' : available > 0 ? 'warning' : 'info'}><span className="pr-detail-dot" />{available >= outstanding ? 'Stock available' : available > 0 ? 'Partial stock' : 'Purchase required'}</Badge></td></tr>; })}</tbody><tfoot><tr><td colSpan={8}>Total estimate</td><td>{formatUGX(record.total_estimated_cost)}</td><td /></tr></tfoot></table></div></PrCard>
@@ -96,4 +92,10 @@ export function PurchaseRequestDetailPage() {
       <PrCard title="Documents"><div className="pr-detail-documents"><FileText size={19} /><span>No supporting files<small>Upload specifications, quotations or approvals.</small></span><Button variant="secondary" disabled>Upload document</Button></div></PrCard>
     </aside></div>
   </main>;
+}
+
+function StageFollowUp({ request }: { request: PurchaseRequest }) {
+  const stage = request.stage_tracking.current_stage;
+  if (!stage) return <section className="pr-detail-followup complete"><CheckCircle2 size={18} /><div><small>Workflow timing</small><strong>No pending operational stage</strong></div><span>Total elapsed<strong>{request.stage_tracking.total_age_display}</strong></span></section>;
+  return <section className={`pr-detail-followup ${stage.is_stalled ? 'stalled' : ''}`}><Clock3 size={18} /><div><small>Current stage</small><strong>{stage.label}</strong></div><span>Responsible<strong>{stage.owner}</strong></span><span>Time at stage<strong>{stage.duration_display}</strong></span><span>Follow-up target<strong>{stage.target_hours}h</strong></span>{stage.is_stalled ? <Badge tone="warning">Follow up now</Badge> : <Badge tone="info">Within target</Badge>}</section>;
 }
