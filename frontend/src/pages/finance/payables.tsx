@@ -10,6 +10,7 @@ import { can } from '@/api/roles';
 import { api } from '@/api/services';
 import { useAuth } from '@/auth/auth-context';
 import { FormModal } from '@/components/common/form-modal';
+import { ControlledApprovalModal } from '@/components/common/controlled-approval-modal';
 import { Pagination } from '@/components/common/pagination';
 import { RecordContext } from '@/components/common/record-context';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,7 @@ export function FinancePayablesPage() {
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<SupplierInvoice | null>(null);
   const [reasonAction, setReasonAction] = useState<ReasonAction>(null);
+  const [approvalOverride, setApprovalOverride] = useState<SupplierInvoice | null>(null);
   const client = useQueryClient();
   const toast = useToast();
   const invoices = useQuery({ queryKey: qk.financeInvoices(list.query), queryFn: () => financeApi.invoices(list.query) });
@@ -43,7 +45,7 @@ export function FinancePayablesPage() {
   ]);
   const command = useMutation({
     mutationFn: ({ id, action, body }: { id: number; action: string; body?: unknown }) => financeApi.invoiceCommand(id, action, body),
-    onSuccess: async (_, variables) => { toast.push({ title: `Invoice action completed: ${variables.action.replace(/-/g, ' ')}`, tone: 'success' }); await refresh(); setReasonAction(null); },
+    onSuccess: async (_, variables) => { toast.push({ title: `Invoice action completed: ${variables.action.replace(/-/g, ' ')}`, tone: 'success' }); await refresh(); setReasonAction(null); setApprovalOverride(null); },
     onError: (error: Error) => toast.push({ title: 'Invoice action failed', message: error.message, tone: 'danger' }),
   });
   const deleteDraft = useMutation({
@@ -53,7 +55,7 @@ export function FinancePayablesPage() {
   });
   const columns: ColumnDef<SupplierInvoice>[] = [
     { header: 'Invoice', cell: ({ row }) => <div><strong>{row.original.internal_number}</strong><p className="mt-0.5 text-xs font-semibold text-foreground">{row.original.supplier_name}</p><p className="text-xs text-muted">Supplier ref: {row.original.invoice_number}</p></div> },
-    { id: 'actions', header: 'Next action', cell: ({ row }) => <InvoiceActions invoice={row.original} role={role} pendingAction={command.isPending && command.variables?.id === row.original.id ? command.variables.action : null} view={() => setSelected(row.original)} run={(action, body) => command.mutate({ id: row.original.id, action, body })} reason={(action) => setReasonAction({ invoice: row.original, action })} deleteDraft={() => { if (window.confirm(`Delete ${row.original.internal_number}? This draft will be removed and audited.`)) deleteDraft.mutate(row.original.id); }} /> },
+    { id: 'actions', header: 'Next action', cell: ({ row }) => <InvoiceActions invoice={row.original} role={role} pendingAction={command.isPending && command.variables?.id === row.original.id ? command.variables.action : null} view={() => setSelected(row.original)} run={(action, body) => command.mutate({ id: row.original.id, action, body })} requestApprovalOverride={() => setApprovalOverride(row.original)} reason={(action) => setReasonAction({ invoice: row.original, action })} deleteDraft={() => { if (window.confirm(`Delete ${row.original.internal_number}? This draft will be removed and audited.`)) deleteDraft.mutate(row.original.id); }} /> },
     { header: 'Status', cell: ({ row }) => <Status value={row.original.status} /> },
     { header: 'Supplier / PO', cell: ({ row }) => <div><strong>{row.original.supplier_name}</strong><p className="text-xs text-muted">{row.original.purchase_order_number} / {row.original.project_name || 'Overhead'}</p></div> },
     { header: 'Dates', cell: ({ row }) => <div>{formatDate(row.original.invoice_date)}<p className="text-xs text-muted">Due {formatDate(row.original.due_date)}</p></div> },
@@ -76,10 +78,11 @@ export function FinancePayablesPage() {
     <InvoiceModal open={creating} onClose={() => setCreating(false)} />
     <InvoiceDetail invoice={selected} onClose={() => setSelected(null)} />
     <ReasonModal state={reasonAction} pending={command.isPending && command.variables?.id === reasonAction?.invoice.id} onClose={() => setReasonAction(null)} onConfirm={(reason) => reasonAction && command.mutate({ id: reasonAction.invoice.id, action: reasonAction.action, body: reasonAction.action === 'reverse' ? { reason, idempotency_key: idempotencyKey('invoice-reverse') } : { reason } })} />
+    <ControlledApprovalModal open={!!approvalOverride} recordNumber={approvalOverride?.internal_number || ''} recordType="supplier invoice" pending={command.isPending && command.variables?.id === approvalOverride?.id} onClose={() => setApprovalOverride(null)} onApprove={(overrideReason) => approvalOverride && command.mutate({ id: approvalOverride.id, action: 'approve', body: { override_reason: overrideReason } })} />
   </FinancePage>;
 }
 
-function InvoiceActions({ invoice, role, pendingAction, view, run, reason, deleteDraft }: { invoice: SupplierInvoice; role: ReturnType<typeof useAuth>['role']; pendingAction: string | null; view: () => void; run: (action: string, body?: unknown) => void; reason: (action: NonNullable<ReasonAction>['action']) => void; deleteDraft: () => void }) {
+function InvoiceActions({ invoice, role, pendingAction, view, run, requestApprovalOverride, reason, deleteDraft }: { invoice: SupplierInvoice; role: ReturnType<typeof useAuth>['role']; pendingAction: string | null; view: () => void; run: (action: string, body?: unknown) => void; requestApprovalOverride: () => void; reason: (action: NonNullable<ReasonAction>['action']) => void; deleteDraft: () => void }) {
   const pending = pendingAction !== null;
   return <div className="flex flex-wrap justify-end gap-1.5"><Button size="sm" variant="ghost" onClick={view}><Eye className="h-3.5 w-3.5" />View</Button>
     {can.prepareFinance(role) && ['POSTED', 'PARTIALLY_PAID'].includes(invoice.status) && Number(invoice.balance) > 0 ? <Button size="sm" variant="secondary" asChild><Link to={`/finance/payments?invoice=${invoice.id}`}>Prepare payment</Link></Button> : null}
@@ -87,7 +90,7 @@ function InvoiceActions({ invoice, role, pendingAction, view, run, reason, delet
     {(can.prepareFinance(role) || role === 'admin') && invoice.status === 'DRAFT' ? <Button size="sm" variant="ghost" onClick={deleteDraft} disabled={pending}><Trash2 className="h-3.5 w-3.5" />Delete draft</Button> : null}
     {(can.prepareFinance(role) || role === 'admin') && invoice.purchase_order && ['SUBMITTED', 'MATCH_EXCEPTION'].includes(invoice.status) ? <Button size="sm" loading={pendingAction === 'run-match'} loadingLabel="Matching" onClick={() => run('run-match', { idempotency_key: idempotencyKey('match') })} disabled={pending}><Scale className="h-3.5 w-3.5" />{invoice.status === 'MATCH_EXCEPTION' ? 'Run match again' : 'Run match'}</Button> : null}
     {role === 'finance_manager' && invoice.status === 'MATCH_EXCEPTION' ? <><Button size="sm" disabled={pending} onClick={() => reason('approve-exception')}><Check className="h-3.5 w-3.5" />Override</Button><Button size="sm" variant="secondary" disabled={pending} onClick={() => reason('reject-exception')}><X className="h-3.5 w-3.5" />Reject exception</Button></> : null}
-    {can.manageFinance(role) && ['MATCHED','VERIFIED'].includes(invoice.status) ? <Button size="sm" loading={pendingAction === 'approve'} loadingLabel="Approving" disabled={pending} onClick={() => run('approve')}><Check className="h-3.5 w-3.5" />Approve</Button> : null}
+    {can.manageFinance(role) && ['MATCHED','VERIFIED'].includes(invoice.status) ? <Button size="sm" loading={pendingAction === 'approve'} loadingLabel="Approving" disabled={pending} onClick={() => invoice.approval_requires_override_reason ? requestApprovalOverride() : run('approve')}><Check className="h-3.5 w-3.5" />Approve</Button> : null}
     {can.manageFinance(role) && invoice.status === 'APPROVED' ? <Button size="sm" loading={pendingAction === 'post'} loadingLabel="Posting" disabled={pending} onClick={() => run('post', { idempotency_key: idempotencyKey('invoice-post') })}><Upload className="h-3.5 w-3.5" />Post</Button> : null}
     {can.manageFinance(role) && ['SUBMITTED','MATCH_EXCEPTION','MATCHED','VERIFIED'].includes(invoice.status) ? <Button size="sm" variant="ghost" disabled={pending} onClick={() => reason('reject')}><X className="h-3.5 w-3.5" />Reject</Button> : null}
   </div>;

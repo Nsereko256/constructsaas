@@ -103,6 +103,34 @@ class SupplierPayablesApiTests(TestCase):
         self.assertEqual(response.data['total_amount'], '407000.00')
         self.assertEqual(len(response.data['items'][0]['taxes']), 2)
 
+    def test_admin_self_approval_exposes_and_accepts_controlled_override(self):
+        self.client.force_authenticate(self.fixture.admin)
+        created = self.client.post(
+            '/api/v1/finance/supplier-invoices/', self.payload(key='admin-self-approval'), format='json',
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        invoice_id = created.data['id']
+        self.assertEqual(
+            self.client.post(f'/api/v1/finance/supplier-invoices/{invoice_id}/submit/').status_code,
+            200,
+        )
+        verified = self.client.post(
+            f'/api/v1/finance/supplier-invoices/{invoice_id}/verify/',
+            {'idempotency_key': f'admin-verify-{invoice_id}'}, format='json',
+        )
+        self.assertEqual(verified.status_code, 201, verified.data)
+        detail = self.client.get(f'/api/v1/finance/supplier-invoices/{invoice_id}/')
+        self.assertTrue(detail.data['approval_requires_override_reason'])
+        blocked = self.client.post(f'/api/v1/finance/supplier-invoices/{invoice_id}/approve/', {}, format='json')
+        self.assertEqual(blocked.status_code, 400, blocked.data)
+        approved = self.client.post(
+            f'/api/v1/finance/supplier-invoices/{invoice_id}/approve/',
+            {'override_reason': 'Urgent supplier settlement while the checker is unavailable.'},
+            format='json',
+        )
+        self.assertEqual(approved.status_code, 200, approved.data)
+        self.assertFalse(approved.data['approval_requires_override_reason'])
+
     def test_supplier_invoice_preparation_is_reserved_for_finance_officer(self):
         procurement_officer = User.objects.create_user(
             username='ap-procurement', password='password', company=self.fixture.company,

@@ -612,6 +612,7 @@ class SupplierInvoiceSerializer(CompanyScopedSerializer):
     paid_amount = serializers.DecimalField(source='amount_paid', max_digits=16, decimal_places=2, read_only=True)
     outstanding_amount = serializers.DecimalField(source='balance', max_digits=16, decimal_places=2, read_only=True)
     is_reversed = serializers.SerializerMethodField()
+    approval_requires_override_reason = serializers.SerializerMethodField()
 
     class Meta:
         model = SupplierInvoice
@@ -624,7 +625,8 @@ class SupplierInvoiceSerializer(CompanyScopedSerializer):
             'subtotal', 'discount_amount', 'freight_amount', 'other_charges_amount',
             'tax_amount', 'withholding_amount', 'total_amount',
             'amount_paid', 'credit_amount', 'balance', 'status', 'notes', 'rejection_reason',
-            'idempotency_key', 'items', 'paid_amount', 'outstanding_amount', 'is_reversed', 'created_by', 'submitted_at',
+            'idempotency_key', 'items', 'paid_amount', 'outstanding_amount', 'is_reversed',
+            'approval_requires_override_reason', 'created_by', 'submitted_at',
             'approved_by', 'approved_at', 'posted_by', 'posted_at', 'created_at', 'updated_at',
         ]
         read_only_fields = [
@@ -659,6 +661,31 @@ class SupplierInvoiceSerializer(CompanyScopedSerializer):
 
     def get_is_reversed(self, obj) -> bool:
         return hasattr(obj, 'reversal')
+
+    def get_approval_requires_override_reason(self, obj) -> bool:
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if (
+            not user
+            or user.role != User.ROLE_ADMIN
+            or obj.status not in {SupplierInvoice.STATUS_MATCHED, SupplierInvoice.STATUS_VERIFIED}
+        ):
+            return False
+        settings = getattr(self, '_approval_finance_settings', None)
+        if settings is None:
+            settings = configuration_services.ensure_finance_settings(obj.company)
+            self._approval_finance_settings = settings
+        if not settings.maker_checker_enforced:
+            return False
+        pending = WorkflowConfirmation.objects.filter(
+            company=obj.company,
+            document_type=WorkflowConfirmation.DOCUMENT_SUPPLIER_INVOICE,
+            object_id=str(obj.pk),
+            stage=WorkflowConfirmation.STAGE_FINANCE,
+            status=WorkflowConfirmation.STATUS_PENDING,
+        ).only('submitted_by_id').first()
+        submitted_by_id = pending.submitted_by_id if pending else obj.created_by_id
+        return submitted_by_id == user.id
 
     def validate(self, attrs):
         if 'status' in getattr(self, 'initial_data', {}):

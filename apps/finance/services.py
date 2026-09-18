@@ -7,6 +7,7 @@ from django.db.models import Sum
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
+from apps.accounts.models import User
 from apps.procurement.models import PurchaseOrder, PurchaseRequest
 from apps.warehouse.models import StockMovement
 from apps.api.upload_validation import validate_image_upload
@@ -698,14 +699,15 @@ def verify_invoice(*, invoice, user, idempotency_key=''):
 
 
 @transaction.atomic
-def approve_invoice(*, invoice, user):
+def approve_invoice(*, invoice, user, allow_admin_override=False):
     locked = SupplierInvoice.objects.select_for_update().get(
         pk=invoice.pk, company=user.company,
     )
     if locked.status not in {SupplierInvoice.STATUS_MATCHED, SupplierInvoice.STATUS_VERIFIED}:
         raise ValidationError({'status': ['Only successfully verified invoices can be approved.']})
     settings = FinanceSettings.objects.get(company=user.company)
-    if settings.maker_checker_enforced and locked.created_by_id == user.id:
+    admin_override = allow_admin_override and user.role == User.ROLE_ADMIN
+    if settings.maker_checker_enforced and locked.created_by_id == user.id and not admin_override:
         raise ValidationError({'non_field_errors': ['Maker-checker policy prevents the preparer approving this invoice.']})
     from .approval_routing_services import require_approver
     require_approver(

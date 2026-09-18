@@ -278,7 +278,17 @@ function RequestKpi({ icon: Icon, tone, label, value, note }: { icon: typeof Fil
 function StageAge({ request }: { request: PurchaseRequest }) {
   const stage = request.stage_tracking.current_stage;
   if (!stage) return <span className="pr-stage-age complete"><Check size={12} />Complete</span>;
-  return <span className={`pr-stage-age ${stage.is_stalled ? 'stalled' : ''}`} title={`${stage.label} · owner: ${stage.owner} · target: ${stage.target_hours} hours`}><Clock3 size={12} /><span><strong>{stage.duration_display}</strong><small>{stage.is_stalled ? 'Stalled' : stage.label}</small></span></span>;
+  const compactLabels: Record<string, string> = {
+    manager_review: 'Manager review',
+    admin_review: 'Admin review',
+    stock_decision: 'Stock decision',
+    procurement_decision: 'Procurement',
+    purchase_order: 'Purchase order',
+    delivery: 'Delivery',
+    invoice_payment: 'Finance follow-up',
+  };
+  const label = compactLabels[stage.key] || stage.label;
+  return <span className={`pr-stage-age ${stage.is_stalled ? 'stalled' : ''}`} title={`${stage.label} · owner: ${stage.owner} · target: ${stage.target_hours} hours`}><Clock3 size={12} aria-hidden="true" /><span><strong>{stage.duration_display}</strong><small>{stage.is_stalled ? `${label} · stalled` : label}</small></span></span>;
 }
 
 function StockIssueReviewModal({ request, pending, onClose, onSubmit }: { request: PurchaseRequest | null; pending: boolean; onClose: () => void; onSubmit: () => void }) {

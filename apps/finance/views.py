@@ -749,13 +749,17 @@ class SupplierInvoiceViewSet(DraftDeletionMixin, CompanyScopedMixin, viewsets.Mo
                     action_url=f'/finance/payables?invoice={invoice.pk}',
                     snapshot={'supplier_id': invoice.supplier_id, 'total_amount': str(invoice.total_amount)},
                 )
-            confirmation_services.confirm_confirmation(
+            confirmation = confirmation_services.confirm_confirmation(
                 task=task, user=request.user,
                 confirmation_data={'decision': 'approved', 'matched_status': invoice.status},
                 comments=str(request.data.get('comments', '')).strip(),
                 override_reason=str(request.data.get('override_reason', '')).strip(),
             )
-            invoice = invoice_services.approve_invoice(invoice=invoice, user=request.user)
+            invoice = invoice_services.approve_invoice(
+                invoice=invoice,
+                user=request.user,
+                allow_admin_override=bool(confirmation.override_reason),
+            )
         return Response(self.get_serializer(invoice).data)
 
     @extend_schema(tags=['Finance - Invoices'], request=ReasonSerializer, responses=SupplierInvoiceSerializer)

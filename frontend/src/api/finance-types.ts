@@ -180,6 +180,7 @@ export type SupplierInvoice = {
   notes: string;
   rejection_reason: string;
   is_reversed: boolean;
+  approval_requires_override_reason: boolean;
   items: InvoiceItem[];
 };
 
