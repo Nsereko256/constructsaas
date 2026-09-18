@@ -12,7 +12,7 @@
 4. [Module 2 — Stock Movements & Warehouse](#4-module-2--stock-movements--warehouse)
 5. [Module 3 — Projects](#5-module-3--projects)
 6. [Module 4 — Suppliers](#6-module-4--suppliers)
-7. [Module 5 — Procurement (PR → PO Workflow)](#7-module-5--procurement-pr--po-workflow)
+7. [Module 5 — Procurement (MR → PO Workflow)](#7-module-5--procurement-pr--po-workflow)
 8. [Module 6 — Messaging & Team Chat](#8-module-6--messaging--team-chat)
 9. [Module 7 — Notifications](#9-module-7--notifications)
 10. [Module 8 — Dashboard](#10-module-8--dashboard)
@@ -38,7 +38,7 @@ ConstructSaaS is a web-based construction management platform that gives Ugandan
 | Before ConstructSaaS | After ConstructSaaS |
 |---|---|
 | Stock levels tracked on WhatsApp | Live stock levels visible to everyone at all times |
-| Purchase requests lost in group chats | Structured PR workflow with approval chain and audit trail |
+| Material requests lost in group chats | Structured MR workflow with approval chain and audit trail |
 | Nobody knows how much cement is left | Automatic low-stock alerts the moment minimums are hit |
 | Project material costs are a mystery | Per-project material usage and cost tracked automatically |
 | Team communication scattered across apps | Built-in project chat linked to each project |
@@ -53,7 +53,7 @@ ConstructSaaS is a web-based construction management platform that gives Ugandan
 | 2 | Stock Movements & Warehouse | Record every IN and OUT with full audit trail |
 | 3 | Projects | Manage construction sites, budgets, and material usage |
 | 4 | Suppliers | Supplier directory with ratings and contact management |
-| 5 | Procurement | Full PR → Approval → PO → Received workflow |
+| 5 | Procurement | Full MR → Approval → PO → Received workflow |
 | 6 | Messaging & Team Chat | Per-project team chat via WebSockets |
 | 7 | Notifications | Live alerts for every important event |
 | 8 | Dashboard | Real-time KPI overview for the whole company |
@@ -72,13 +72,13 @@ Every user belongs to exactly one company and has exactly one role. The role is 
 **Who they are:** Field-based engineer working on the construction site.
 
 **Their daily job in the app:**
-- Submit purchase requests when materials are running low or needed
+- Submit material requests when materials are running low or needed
 - View stock levels for materials linked to their project
-- Track the status of their own purchase requests
+- Track the status of their own material requests
 - Participate in project team chat
 
 **What they cannot do:**
-- Approve or reject any purchase request
+- Approve or reject any material request
 - Create or manage purchase orders
 - Add, edit, or delete materials
 - See procurement financials or supplier details
@@ -97,7 +97,7 @@ Every user belongs to exactly one company and has exactly one role. The role is 
 - See low-stock alerts and escalate to procurement
 
 **What they cannot do:**
-- Approve purchase requests
+- Approve material requests
 - Create purchase orders
 - Manage suppliers
 - Access financial reports
@@ -108,7 +108,7 @@ Every user belongs to exactly one company and has exactly one role. The role is 
 **Who they are:** The person overseeing one or more construction projects.
 
 **Their daily job in the app:**
-- Review and approve or reject purchase requests from site engineers
+- Review and approve or reject material requests from site engineers
 - Monitor material usage and costs per project
 - Track project status and budget vs actual spend
 - Participate in project team chat
@@ -126,14 +126,14 @@ Every user belongs to exactly one company and has exactly one role. The role is 
 **Who they are:** The person responsible for purchasing materials from suppliers.
 
 **Their daily job in the app:**
-- Create purchase orders from approved purchase requests
+- Create purchase orders from approved material requests
 - Manage the supplier directory
 - Track all open purchase orders and their delivery status
 - Mark purchase orders as received (triggers automatic stock update)
 - Generate procurement reports
 
 **What they cannot do:**
-- Approve or reject purchase requests (that is the Project Manager's job)
+- Approve or reject material requests (that is the Project Manager's job)
 - Record manual stock movements
 - Manage company users
 - Access audit logs
@@ -163,9 +163,9 @@ Every user belongs to exactly one company and has exactly one role. The role is 
 | Add / edit materials | — | ✓ | — | — | ✓ |
 | Record stock IN / OUT | — | ✓ | — | — | ✓ |
 | Manual stock adjustment | — | ✓ | — | — | ✓ |
-| Submit purchase request | ✓ | — | — | — | ✓ |
-| Approve purchase request | — | — | ✓ | — | ✓ |
-| Reject purchase request | — | — | ✓ | — | ✓ |
+| Submit material request | ✓ | — | — | — | ✓ |
+| Approve material request | — | — | ✓ | — | ✓ |
+| Reject material request | — | — | ✓ | — | ✓ |
 | Create purchase order | — | — | — | ✓ | ✓ |
 | Receive purchase order | — | ✓ | — | ✓ | ✓ |
 | Manage suppliers | — | — | — | ✓ | ✓ |
@@ -385,8 +385,8 @@ The system shows:
 - Remaining budget
 - Cost per material category
 
-**Purchase Request History:**
-Every PR raised for a project is listed on the project detail page, including status and who raised it.
+**Material Request History:**
+Every MR raised for a project is listed on the project detail page, including status and who raised it.
 
 **Stock Movement History:**
 Every material that moved for this project — IN or OUT — is listed chronologically.
@@ -432,7 +432,7 @@ When a Procurement Officer creates a Purchase Order, they select the supplier fr
 
 ---
 
-## 7. Module 5 — Procurement (PR → PO Workflow)
+## 7. Module 5 — Procurement (MR → PO Workflow)
 
 ### Overview
 
@@ -457,12 +457,12 @@ Stage 4: GOODS RECEIVED
 
 ---
 
-### Stage 1 — Purchase Request (PR)
+### Stage 1 — Material Request (MR)
 
 **Who creates it:** Site Engineer or Storekeeper  
 **When:** When materials are needed or running low on site
 
-**What a PR contains:**
+**What a MR contains:**
 
 | Field | Description |
 |---|---|
@@ -473,7 +473,7 @@ Stage 4: GOODS RECEIVED
 | Notes | Any additional context for the approver |
 | Items | One or more materials with quantity required |
 
-**PR Statuses:**
+**MR Statuses:**
 
 | Status | Meaning |
 |---|---|
@@ -482,15 +482,15 @@ Stage 4: GOODS RECEIVED
 | Rejected | Manager rejected with reason |
 | PO Created | Procurement Officer has created a Purchase Order |
 
-**What happens automatically when a PR is submitted:**
-- PR is saved with status `PENDING`
+**What happens automatically when a MR is submitted:**
+- MR is saved with status `PENDING`
 - Live notification sent to all Project Managers and Admins instantly (WebSocket)
 - Dashboard pending count increments for all users watching
 - Audit log entry created
 
-**PR Items:**
+**MR Items:**
 
-Each PR can have multiple line items:
+Each MR can have multiple line items:
 
 | Field | Description |
 |---|---|
@@ -506,7 +506,7 @@ Each PR can have multiple line items:
 **Who acts:** Project Manager or Admin
 
 **What the manager sees:**
-- PR reference number
+- MR reference number
 - Who submitted it and when
 - Which project it is for
 - Priority level and required-by date
@@ -517,15 +517,15 @@ Each PR can have multiple line items:
 **Actions available:**
 
 **Approve:**
-- PR status changes to `APPROVED`
+- MR status changes to `APPROVED`
 - Requester notified live (WebSocket notification)
-- All Procurement Officers notified live: "PR ready for PO creation"
+- All Procurement Officers notified live: "MR ready for PO creation"
 - Dashboard updates for all users
 - Audit log entry created
 
 **Reject:**
 - Manager must write a rejection reason
-- PR status changes to `REJECTED`
+- MR status changes to `REJECTED`
 - Requester notified live with the rejection reason
 - Dashboard updates
 - Audit log entry created
@@ -535,12 +535,12 @@ Each PR can have multiple line items:
 ### Stage 3 — Purchase Order (PO)
 
 **Who creates it:** Procurement Officer  
-**When:** After a PR is approved
+**When:** After a MR is approved
 
-**Creating a PO from an Approved PR:**
-- Procurement Officer opens the approved PR
+**Creating a PO from an Approved MR:**
+- Procurement Officer opens the approved MR
 - Clicks "Create Purchase Order"
-- PR items are pre-filled into the PO automatically
+- MR items are pre-filled into the PO automatically
 - Officer selects the supplier
 - Officer confirms quantities and unit prices
 - Sets expected delivery date
@@ -551,7 +551,7 @@ Each PR can have multiple line items:
 | Field | Description |
 |---|---|
 | Reference | Auto-generated — e.g. PO-0012 |
-| Linked PR | The approved PR this PO was created from |
+| Linked MR | The approved MR this PO was created from |
 | Supplier | Who the materials are being ordered from |
 | Project | Which project the materials are for |
 | Created By | Which Procurement Officer created it |
@@ -605,17 +605,17 @@ Every PO can be exported as a professional PDF document showing the company name
 
 | Document | Format | Example |
 |---|---|---|
-| Purchase Request | PR-XXXX | PR-0042 |
+| Material Request | MR-XXXX | MR-0042 |
 | Purchase Order | PO-XXXX | PO-0017 |
 
 ---
 
-### Complete PR → PO Example
+### Complete MR → PO Example
 
 ```
 Monday 8:00 AM
   Site Engineer (John) notices cement is low on site.
-  John opens app → New Purchase Request
+  John opens app → New Material Request
   Title: "Cement for Block A Foundation"
   Project: Ntinda Apartments
   Priority: High
@@ -625,22 +625,22 @@ Monday 8:00 AM
 
 Monday 8:01 AM
   Project Manager (Sarah) gets live notification on her screen.
-  "New PR from John — 150 bags cement, High priority"
+  "New MR from John — 150 bags cement, High priority"
 
 Monday 8:30 AM
-  Sarah opens the PR. Checks current stock: 23 bags.
+  Sarah opens the MR. Checks current stock: 23 bags.
   Checks project budget: UGX 12M remaining. Cost: UGX 4.8M.
   Sarah clicks Approve.
-  John gets notification: "PR-0042 Approved ✓"
-  Procurement Officer (David) gets notification: "PR-0042 ready for PO"
+  John gets notification: "MR-0042 Approved ✓"
+  Procurement Officer (David) gets notification: "MR-0042 ready for PO"
 
 Monday 9:00 AM
-  David opens PR-0042. Clicks "Create Purchase Order"
+  David opens MR-0042. Clicks "Create Purchase Order"
   Selects supplier: Roofings Uganda (★★★★★)
   Confirms: 150 bags × UGX 32,000 = UGX 4,800,000
   Expected delivery: Wednesday
   Saves PO-0017.
-  PR status updates to "PO Created"
+  MR status updates to "PO Created"
 
 Wednesday 10:00 AM
   Roofings Uganda truck arrives at site.
@@ -739,9 +739,9 @@ Delivers real-time alerts to users the moment something relevant happens. No ema
 | Type | Who Gets It | When It Fires |
 |---|---|---|
 | Low Stock Alert | Storekeepers, Project Managers, Admins | Any material falls at or below its minimum level |
-| PR Submitted | Project Managers, Admins | Site Engineer submits a purchase request |
-| PR Approved | Requester, Procurement Officers | Manager approves a purchase request |
-| PR Rejected | Requester | Manager rejects a purchase request (with reason) |
+| MR Submitted | Project Managers, Admins | Site Engineer submits a material request |
+| MR Approved | Requester, Procurement Officers | Manager approves a material request |
+| MR Rejected | Requester | Manager rejects a material request (with reason) |
 | PO Created | Procurement Officer (confirmation) | A new purchase order is created |
 | PO Received | Relevant team | A purchase order is marked as received |
 | System | Any user | Admin broadcasts a system-wide message |
@@ -750,10 +750,10 @@ Delivers real-time alerts to users the moment something relevant happens. No ema
 
 | Level | Colour | When Used |
 |---|---|---|
-| Info | Blue | Informational — e.g. PR submitted |
-| Success | Green | Positive outcome — e.g. PR approved |
+| Info | Blue | Informational — e.g. MR submitted |
+| Success | Green | Positive outcome — e.g. MR approved |
 | Warning | Orange | Needs attention — e.g. low stock |
-| Danger | Red | Urgent — e.g. PR rejected, critical stock |
+| Danger | Red | Urgent — e.g. MR rejected, critical stock |
 
 ### How Notifications Work
 
@@ -803,7 +803,7 @@ The first thing every user sees when they log in. Shows the most important numbe
 | Total Materials | Count of active materials | Material added or deactivated |
 | Active Projects | Projects with status = Active | Project status changes |
 | Low Stock Alerts | Materials at or below minimum | Any stock movement |
-| Pending Requests | PRs awaiting manager approval | PR submitted or decided |
+| Pending Requests | MRs awaiting manager approval | MR submitted or decided |
 | Stock In Today | Total quantity received today | Any IN movement today |
 | Inventory Value | Total value of all stock at current prices | Any movement or price change |
 
@@ -821,7 +821,7 @@ Shows all materials currently below minimum level with:
 - Material name
 - Current stock
 - Minimum level
-- Quick "Request" button that opens a pre-filled PR form
+- Quick "Request" button that opens a pre-filled MR form
 
 ### Recent Movements Table
 
@@ -835,7 +835,7 @@ This table updates live via WebSocket when new movements are recorded.
 
 ### Real-Time Behaviour
 
-The dashboard is connected to a live WebSocket channel for the company. When any user records a stock movement, approves a PR, or receives a PO — every other user who has the dashboard open sees the numbers change immediately. No refresh needed.
+The dashboard is connected to a live WebSocket channel for the company. When any user records a stock movement, approves a MR, or receives a PO — every other user who has the dashboard open sees the numbers change immediately. No refresh needed.
 
 ---
 
@@ -938,7 +938,7 @@ Side-by-side comparison of total material spend across all active projects. Help
 ```
 7:00 AM  Storekeeper opens dashboard
          → Sees: 3 materials highlighted red (low stock)
-         → Sees: 2 pending purchase requests from yesterday
+         → Sees: 2 pending material requests from yesterday
 
 7:15 AM  Cement delivery arrives from supplier
          Storekeeper opens Warehouse → Record Movement
@@ -964,12 +964,12 @@ Side-by-side comparison of total material spend across all active projects. Help
 
 ---
 
-### Workflow B — Purchase Request Approval Chain
+### Workflow B — Material Request Approval Chain
 
 ```
 Site Engineer (John) — 8:00 AM
   Opens app on site. Dashboard shows cement is red (43 bags, min 50).
-  New Purchase Request:
+  New Material Request:
     Title: "Cement for Block B Foundation"
     Project: Ntinda Apartments Phase 2
     Priority: High
@@ -979,13 +979,13 @@ Site Engineer (John) — 8:00 AM
   Submits.
 
 System — 8:00 AM (automatic)
-  Creates PR-0051 with status PENDING
+  Creates MR-0051 with status PENDING
   Sends live WebSocket notification to all Project Managers
   Increments "Pending Requests" on dashboard for all users
 
 Project Manager (Sarah) — 8:05 AM
-  Receives notification popup: "New PR from John — High priority"
-  Opens PR-0051
+  Receives notification popup: "New MR from John — High priority"
+  Opens MR-0051
   Reviews:
     - Cement: 43 bags in stock. Request: 200 bags. Justified ✓
     - Sand: 2 cbm in stock. Request: 5 cbm. Justified ✓
@@ -994,14 +994,14 @@ Project Manager (Sarah) — 8:05 AM
   Clicks Approve.
 
 System — 8:06 AM (automatic)
-  PR-0051 status → APPROVED
-  John gets notification: "PR-0051 Approved ✓"
-  All Procurement Officers get notification: "PR-0051 ready for PO"
+  MR-0051 status → APPROVED
+  John gets notification: "MR-0051 Approved ✓"
+  All Procurement Officers get notification: "MR-0051 ready for PO"
   Dashboard pending count drops from 3 to 2
 
 Procurement Officer (David) — 8:30 AM
-  Opens PR-0051. Clicks "Create Purchase Order"
-  System pre-fills items from the PR
+  Opens MR-0051. Clicks "Create Purchase Order"
+  System pre-fills items from the MR
   David selects: Roofings Uganda (★★★★★)
   Confirms prices:
     200 bags cement × 32,000 = 6,400,000
@@ -1009,7 +1009,7 @@ Procurement Officer (David) — 8:30 AM
     Total: UGX 6,750,000
   Expected delivery: Thursday
   Saves PO-0023.
-  PR-0051 status → PO CREATED
+  MR-0051 status → PO CREATED
 
 Thursday 10:00 AM
   Roofings Uganda truck arrives.
@@ -1054,7 +1054,7 @@ Project Manager (Sarah) joins the conversation:
 Sarah:    "John — how much do you need to finish Block A?"
 John:     "Minimum 50 rolls to complete all columns"
 Sarah:    "David, can you raise an urgent PO directly? 
-           I'll approve the PR right now."
+           I'll approve the MR right now."
 
 Procurement Officer (David):
 David:    "On it. Which supplier has stock today?"
@@ -1075,7 +1075,7 @@ This entire conversation is preserved in the project chat forever, linked to the
 
 ---
 
-### Workflow D — Low Stock Alert to PR (Automated Path)
+### Workflow D — Low Stock Alert to MR (Automated Path)
 
 ```
 11:00 PM — Automated Celery task runs
@@ -1097,11 +1097,11 @@ Next morning — 7:00 AM
   Dashboard shows 2 low stock items highlighted red.
   
   Paul opens Cement alert → clicks "Request More"
-  System opens New PR form pre-filled with:
+  System opens New MR form pre-filled with:
     Material: Hima Cement
     Suggested Quantity: [empty — Paul fills in 200 bags]
   
-  Paul submits PR-0052.
+  Paul submits MR-0052.
   Sarah approves at 7:15 AM.
   David creates PO-0025 at 7:30 AM.
 ```
@@ -1368,7 +1368,7 @@ The system is a Django monolith handling HTTP, WebSockets, background tasks, not
 │                         │   │                              │
 │  All persistent data    │   │  Channel layers (WebSocket   │
 │  Users, materials,      │   │  message routing)            │
-│  movements, PRs, POs,   │   │  Celery task broker          │
+│  movements, MRs, POs,   │   │  Celery task broker          │
 │  chat, notifications,   │   │  (background jobs)           │
 │  audit log              │   │                              │
 │  Backed up nightly      │   │  In-memory — fast            │
@@ -1402,7 +1402,7 @@ construction_saas/
 │   ├── projects/            Projects, budget tracking
 │   ├── suppliers/           Supplier directory
 │   ├── warehouse/           Stock movements, goods receipt
-│   ├── procurement/         PRs, POs, approval workflow
+│   ├── procurement/         MRs, POs, approval workflow
 │   ├── notifications/       Alerts, WebSocket consumer
 │   ├── chat/                Project chat, WebSocket consumer
 │   ├── dashboard/           KPIs, live dashboard consumer
@@ -1425,7 +1425,7 @@ Three WebSocket connections run simultaneously for every logged-in user.
 
 **What it delivers:**
 - Low stock alerts
-- PR submitted / approved / rejected
+- MR submitted / approved / rejected
 - PO created / received
 - System announcements
 
@@ -1441,10 +1441,10 @@ Three WebSocket connections run simultaneously for every logged-in user.
 **Group:** `dashboard_company_{company_id}` (shared by all users in the company)
 
 **What it delivers:**
-- Updated KPI values (materials, projects, low stock count, pending PRs, stock in/out today, inventory value)
+- Updated KPI values (materials, projects, low stock count, pending MRs, stock in/out today, inventory value)
 - Updated recent movements table
 
-**When it fires:** Any time a stock movement is recorded, a PR is approved, or a PO is received — `DashboardConsumer.push_update(company_id)` is called and every user on the dashboard gets fresh numbers.
+**When it fires:** Any time a stock movement is recorded, a MR is approved, or a PO is received — `DashboardConsumer.push_update(company_id)` is called and every user on the dashboard gets fresh numbers.
 
 ---
 
@@ -1504,7 +1504,7 @@ Every sensitive view has a role decorator. Blocked at the server — not just hi
 def create_purchase_order(request):
     ...
 
-# PR approval — only project manager or admin
+# MR approval — only project manager or admin
 @manager_required
 def approve_request(request, pk):
     ...
@@ -1530,9 +1530,9 @@ Every significant action is recorded permanently:
 | User login | "admin logged in from 41.210.x.x" |
 | Material created | "Storekeeper Paul created 'Bamboo Poles'" |
 | Stock movement | "Paul recorded: 200 bags Hima Cement IN" |
-| PR submitted | "John submitted PR-0051 for Project Ntinda" |
-| PR approved | "Sarah approved PR-0051" |
-| PR rejected | "Sarah rejected PR-0052: budget exhausted" |
+| MR submitted | "John submitted MR-0051 for Project Ntinda" |
+| MR approved | "Sarah approved MR-0051" |
+| MR rejected | "Sarah rejected MR-0052: budget exhausted" |
 | PO created | "David created PO-0023 for Roofings Uganda" |
 | PO received | "Paul marked PO-0023 as received" |
 | User invited | "Admin invited driver@nile.co as Storekeeper" |
@@ -1678,14 +1678,14 @@ Server:            Hetzner Cloud (Ubuntu 24)
 
 ### Procurement
 ```
-/procurement/requests/                  PR list
-/procurement/requests/create/           Submit PR
-/procurement/requests/{id}/             PR detail
-/procurement/requests/{id}/approve/     Approve PR
-/procurement/requests/{id}/reject/      Reject PR
+/procurement/requests/                  MR list
+/procurement/requests/create/           Submit MR
+/procurement/requests/{id}/             MR detail
+/procurement/requests/{id}/approve/     Approve MR
+/procurement/requests/{id}/reject/      Reject MR
 /procurement/orders/                    PO list
 /procurement/orders/create/             Create PO
-/procurement/orders/create/{pr_id}/     Create PO from PR
+/procurement/orders/create/{pr_id}/     Create PO from MR
 /procurement/orders/{id}/               PO detail
 /procurement/orders/{id}/receive/       Mark PO as received
 ```

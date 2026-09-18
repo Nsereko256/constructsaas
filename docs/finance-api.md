@@ -32,7 +32,7 @@ manager approval thresholds, maker-checker enforcement, and negative-stock polic
 
 ## Workflow
 
-1. Existing PR technical approval changes the PR to `APPROVED`.
+1. Existing MR technical approval changes the MR to `APPROVED`.
 2. Submit it with `/api/purchase-requests/{id}/submit-finance/`, then use a finance
    decision action.
 3. Procurement creates and approves the PO; a storekeeper or authorized site
@@ -68,7 +68,7 @@ remaining commitment. Posting an invoice releases the applicable commitment and
 records actual expenditure atomically, keeping commitments and actuals in separate
 summary buckets.
 
-PRs created before finance remain compatible. If a PR has a budget approval record,
+MRs created before finance remain compatible. If a MR has a budget approval record,
 PO creation is blocked until that record is approved.
 
 ## Resources

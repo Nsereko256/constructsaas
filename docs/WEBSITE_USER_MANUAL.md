@@ -14,7 +14,7 @@ Projects and sites
         ↓
 Work orders and material requests
         ↓
-Purchase requests and approvals
+Material requests and approvals
         ↓
 Supplier pricing and purchase orders
         ↓
@@ -54,7 +54,7 @@ Common areas include:
 - Dashboard
 - Projects
 - Project staffing
-- Purchase requests
+- Material requests
 - Work orders
 - Work-order invoices
 - Site progress
@@ -118,7 +118,7 @@ The Project Manager owns project delivery decisions.
 
 Typical responsibilities:
 
-- review and approve project purchase requests;
+- review and approve project material requests;
 - return requests for correction with a reason;
 - manage project sites, goals, staffing, and delegations;
 - monitor project budget position and delivery progress;
@@ -370,7 +370,7 @@ Work order
 
 Warehouse issues tied to the work order contribute to actual material cost. Contractor/service invoices should identify the work order and site package so Finance can calculate total actual cost.
 
-## 7. Purchase requests
+## 7. Material requests
 
 ### 7.1 Project material request
 
@@ -905,7 +905,7 @@ Exports should use the same filters currently applied on the screen. Before expo
 
 Documents that commonly require PDF/Excel output include:
 
-- purchase requests;
+- material requests;
 - purchase orders;
 - GRNs;
 - inventory movements;

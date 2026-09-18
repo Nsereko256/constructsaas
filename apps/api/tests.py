@@ -1200,7 +1200,7 @@ class ApiFoundationTests(TestCase):
         self.assertEqual(response.data['count'], 1)
         self.assertEqual(response.data['results'][0]['movement_type'], StockMovement.MOVEMENT_OUT)
 
-    def test_site_engineer_can_create_purchase_request_with_multiple_items(self):
+    def test_site_engineer_can_create_material_request_with_multiple_items(self):
         self.project.site_engineers.add(self.site_engineer)
         self.client.force_login(self.site_engineer)
         steel = Material.objects.create(
@@ -1236,6 +1236,7 @@ class ApiFoundationTests(TestCase):
         self.assertEqual(purchase_request.company, self.company)
         self.assertEqual(purchase_request.requested_by, self.site_engineer)
         self.assertEqual(purchase_request.status, PurchaseRequest.STATUS_PENDING)
+        self.assertTrue(purchase_request.number.startswith('MR-'))
         self.assertEqual(purchase_request.items.count(), 2)
         self.assertEqual(response.data['items'][0]['current_stock'], 8)
         self.assertEqual(response.data['total_estimated_cost'], 285000)

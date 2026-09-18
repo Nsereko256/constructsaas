@@ -62,7 +62,7 @@ class FinanceFixtureFactory:
 
     def purchase_request(self, status=PurchaseRequest.STATUS_APPROVED, quantity=Decimal('10.00')):
         purchase_request = PurchaseRequest.objects.create(
-            company=self.company, project=self.project, number=f'PR-{self.company_id}-{PurchaseRequest.objects.count() + 1}',
+            company=self.company, project=self.project, number=f'MR-{self.company_id}-{PurchaseRequest.objects.count() + 1}',
             title='Site materials', status=status, requested_by=self.engineer,
         )
         PurchaseRequestItem.objects.create(

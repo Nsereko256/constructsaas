@@ -605,7 +605,7 @@ class StockMovementSerializer(serializers.ModelSerializer):
         if movement_type in {StockMovement.MOVEMENT_OUT, StockMovement.MOVEMENT_ADJUSTMENT_OUT}:
             raise serializers.ValidationError({
                 'movement_type': (
-                    'Stock reductions require a finance-approved purchase request and must be completed '
+                    'Stock reductions require a finance-approved material request and must be completed '
                     'through the warehouse stock-issue workflow.'
                 ),
             })
@@ -1206,7 +1206,7 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
         if project and project.company_id != company_id:
             raise serializers.ValidationError('Project must belong to your company.')
         if user and user.role == User.ROLE_SITE_ENGINEER and project is None:
-            raise serializers.ValidationError('Site Engineers must link every purchase request to a project.')
+            raise serializers.ValidationError('Site Engineers must link every material request to a project.')
         if user and user.role == User.ROLE_PROCUREMENT_OFFICER and project is not None:
             raise serializers.ValidationError(
                 'Procurement may only create projectless warehouse replenishment requests. Use the engineer request workflow for project demand.'
@@ -1215,10 +1215,10 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
 
     def validate_items(self, items):
         if not items:
-            raise serializers.ValidationError('At least one purchase request item is required.')
+            raise serializers.ValidationError('At least one material request item is required.')
         material_ids = [item['material'].pk for item in items]
         if len(material_ids) != len(set(material_ids)):
-            raise serializers.ValidationError('Each material may only appear once in a purchase request.')
+            raise serializers.ValidationError('Each material may only appear once in a material request.')
         return items
 
     @transaction.atomic
@@ -1479,13 +1479,13 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         company_id = getattr(getattr(request, 'user', None), 'company_id', None)
         if purchase_request and purchase_request.company_id != company_id:
-            raise serializers.ValidationError('Purchase request must belong to your company.')
+            raise serializers.ValidationError('Material request must belong to your company.')
         if purchase_request and purchase_request.status not in {
             PurchaseRequest.STATUS_APPROVED, PurchaseRequest.STATUS_PARTIAL_STOCK_ISSUED,
         }:
             raise serializers.ValidationError('Only approved requests, including partially stock-issued requests, can be linked to a purchase order.')
         if purchase_request and purchase_request.purchase_orders.exclude(pk=getattr(self.instance, 'pk', None)).exists():
-            raise serializers.ValidationError('This purchase request already has a purchase order.')
+            raise serializers.ValidationError('This material request already has a purchase order.')
         return purchase_request
 
     def validate_project(self, project):
@@ -1515,7 +1515,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'status': 'Use the confirm-dispatch endpoint to confirm direct-to-site dispatch.'})
         purchase_request = attrs.get('purchase_request') or getattr(self.instance, 'purchase_request', None)
         if not purchase_request:
-            raise serializers.ValidationError({'purchase_request': 'A manager-approved purchase request is required for every purchase order.'})
+            raise serializers.ValidationError({'purchase_request': 'A manager-approved material request is required for every purchase order.'})
         project = attrs.get('project') or getattr(self.instance, 'project', None)
         delivery_destination = attrs.get('delivery_destination') or getattr(
             self.instance,
@@ -1525,7 +1525,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         if purchase_request and not project:
             attrs['project'] = purchase_request.project
         elif purchase_request and purchase_request.project_id and project != purchase_request.project:
-            raise serializers.ValidationError({'project': 'Project must match the linked purchase request project.'})
+            raise serializers.ValidationError({'project': 'Project must match the linked material request project.'})
         if delivery_destination == PurchaseOrder.DELIVERY_SITE and not (attrs.get('project') or project):
             raise serializers.ValidationError({'project': 'Direct-to-site purchase orders must be linked to a project.'})
         if self.instance is None and 'delivery_destination' not in attrs:

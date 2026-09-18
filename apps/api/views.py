@@ -1419,12 +1419,12 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
             allowed_statuses={PurchaseRequest.STATUS_PENDING, PurchaseRequest.STATUS_RETURNED},
             actor=self.request.user,
             owner_id=purchase_request.requested_by_id,
-            owner_label='purchase request',
+            owner_label='material request',
         )
         if purchase_request.purchase_orders.exists():
-            raise ValidationError({'status': 'A purchase request with a purchase order must be corrected through the amendment workflow.'})
+            raise ValidationError({'status': 'A material request with a purchase order must be corrected through the amendment workflow.'})
         updated = serializer.save()
-        audit_lifecycle(instance=updated, actor=self.request.user, action='purchase_request.updated', message='Draft purchase request updated.')
+        audit_lifecycle(instance=updated, actor=self.request.user, action='purchase_request.updated', message='Draft material request updated.')
 
     def perform_destroy(self, instance):
         require_draft(
@@ -1432,11 +1432,11 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
             allowed_statuses={PurchaseRequest.STATUS_PENDING},
             actor=self.request.user,
             owner_id=instance.requested_by_id,
-            owner_label='purchase request',
+            owner_label='material request',
         )
         if instance.purchase_orders.exists():
-            raise ValidationError({'status': 'A purchase request with a purchase order cannot be deleted.'})
-        audit_lifecycle(instance=instance, actor=self.request.user, action='purchase_request.deleted', message='Draft purchase request deleted.')
+            raise ValidationError({'status': 'A material request with a purchase order cannot be deleted.'})
+        audit_lifecycle(instance=instance, actor=self.request.user, action='purchase_request.deleted', message='Draft material request deleted.')
         instance.delete()
 
     def get_queryset(self):
@@ -1737,7 +1737,7 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
     def correct(self, request, pk=None):
         purchase_request = self.get_object()
         if purchase_request.requested_by_id != request.user.id and request.user.role != User.ROLE_ADMIN:
-            return Response({'detail': 'Only the original requester can correct a returned purchase request.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'detail': 'Only the original requester can correct a returned material request.'}, status=status.HTTP_403_FORBIDDEN)
         approval = BudgetApproval.objects.filter(purchase_request=purchase_request, company=request.user.company).first()
         finance_returned = bool(approval and approval.status == BudgetApproval.STATUS_RETURNED)
         technical_returned = purchase_request.status == PurchaseRequest.STATUS_RETURNED
@@ -1771,7 +1771,7 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
         transaction.on_commit(lambda: push_dashboard_update(corrected.company))
         return Response(self.get_serializer(corrected).data)
 
-    @extend_schema(tags=['Purchase Requests'], request=RequiredCommentsSerializer, responses=PurchaseRequestSerializer)
+    @extend_schema(tags=['Material Requests'], request=RequiredCommentsSerializer, responses=PurchaseRequestSerializer)
     @action(detail=True, methods=['post'], url_path='return-for-correction')
     def return_for_correction(self, request, pk=None):
         purchase_request = self.get_object()
@@ -1857,7 +1857,7 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
             )
         if purchase_request.status != PurchaseRequest.STATUS_APPROVED:
             return Response(
-                {'detail': 'Only approved purchase requests can be accepted for warehouse stock issue.'},
+                {'detail': 'Only approved material requests can be accepted for warehouse stock issue.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not purchase_request.technical_approved_by_id or purchase_request.technical_approved_by.role != User.ROLE_ADMIN:
@@ -1867,12 +1867,12 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
             )
         if purchase_request.purchase_orders.exists():
             return Response(
-                {'purchase_request': 'This purchase request already has a purchase order and cannot be requested from stock.'},
+                {'purchase_request': 'This material request already has a purchase order and cannot be requested from stock.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not purchase_request.items.exists():
             return Response(
-                {'items': 'Purchase request must have at least one item before stock issue can be requested.'},
+                {'items': 'Material request must have at least one item before stock issue can be requested.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         purchase_request.status = PurchaseRequest.STATUS_STOCK_ISSUE_REQUESTED
@@ -1901,7 +1901,7 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
                 PurchaseRequest.objects.select_for_update(),
             ).filter(pk=pk).first()
             if purchase_request is None:
-                return Response({'detail': 'Purchase request not found.'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'detail': 'Material request not found.'}, status=status.HTTP_404_NOT_FOUND)
             if purchase_request.status != PurchaseRequest.STATUS_STOCK_ISSUE_REQUESTED:
                 return Response(
                     {'detail': 'Only stock issue requests can be fulfilled by warehouse.'},
@@ -1914,13 +1914,13 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
                 )
             if purchase_request.purchase_orders.exists():
                 return Response(
-                    {'purchase_request': 'This purchase request already has a purchase order and cannot be issued from stock.'},
+                    {'purchase_request': 'This material request already has a purchase order and cannot be issued from stock.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             items = list(purchase_request.items.select_related('material'))
             if not items:
                 return Response(
-                    {'items': 'Purchase request must have at least one item before stock can be issued.'},
+                    {'items': 'Material request must have at least one item before stock can be issued.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             locked_materials = Material.objects.select_for_update().filter(
@@ -2078,7 +2078,7 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
             'created': request_record.created_at,
         } for request_record in queryset]
         return _operational_export(
-            kind=kind, title='Purchase request register', filename='purchase-request-register',
+            kind=kind, title='Material request register', filename='material-request-register',
             columns=[('request', 'Request'), ('project', 'Project'), ('title', 'Title'), ('status', 'Status'), ('priority', 'Priority'), ('requested_by', 'Requested by'), ('items', 'Requested materials'), ('created', 'Created')],
             rows=rows, totals={'Requests': len(rows)},
         )
@@ -2247,7 +2247,7 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
             )
         if not purchase_order.purchase_request_id:
             return Response(
-                {'purchase_request': 'A purchase order must be linked to a purchase request before it can be sent to Finance.'},
+                {'purchase_request': 'A purchase order must be linked to a material request before it can be sent to Finance.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         payload = FinanceSubmissionSerializer(data=request.data, context={'request': request})
@@ -2283,7 +2283,7 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
             object_id=purchase_order.pk,
             message=comments,
         )
-        purchase_request_number = purchase_order.purchase_request.number if purchase_order.purchase_request_id else 'the linked purchase request'
+        purchase_request_number = purchase_order.purchase_request.number if purchase_order.purchase_request_id else 'the linked material request'
         recipients = User.objects.filter(
             company=purchase_order.company,
             role__in=[User.ROLE_FINANCE_OFFICER, User.ROLE_FINANCE_MANAGER, User.ROLE_ADMIN],
@@ -2322,7 +2322,7 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
             .first()
         )
         if purchase_request is None:
-            return Response({'detail': 'Purchase request not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': 'Material request not found.'}, status=status.HTTP_404_NOT_FOUND)
         if purchase_request.status not in {
             PurchaseRequest.STATUS_APPROVED,
             PurchaseRequest.STATUS_PARTIAL_STOCK_ISSUED,
@@ -2336,12 +2336,12 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
         # dispatched, or received, so this draft cannot become an obligation.
         if purchase_request.purchase_orders.exists():
             return Response(
-                {'purchase_request': 'This purchase request already has a purchase order.'},
+                {'purchase_request': 'This material request already has a purchase order.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not purchase_request.items.exists():
             return Response(
-                {'items': 'Purchase request must have at least one item before a purchase order can be created.'},
+                {'items': 'Material request must have at least one item before a purchase order can be created.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -2376,7 +2376,7 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
             self.perform_create(serializer)
         except IntegrityError:
             return Response(
-                {'purchase_request': 'This purchase request already has a purchase order.'},
+                {'purchase_request': 'This material request already has a purchase order.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -2414,7 +2414,7 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
             if not purchase_order.purchase_request_id:
                 raise ValidationError({
                     'purchase_request': [
-                        'A finance-approved purchase request is required before supplier dispatch.'
+                        'A finance-approved material request is required before supplier dispatch.'
                     ],
                 })
             ensure_budget_clearance(purchase_order.purchase_request)
@@ -2744,7 +2744,7 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
             if not purchase_order.purchase_request_id:
                 raise ValidationError({
                     'purchase_request': [
-                        'A finance-approved purchase request is required before receiving a purchase order.'
+                        'A finance-approved material request is required before receiving a purchase order.'
                     ],
                 })
             ensure_budget_clearance(purchase_order.purchase_request)
@@ -3134,7 +3134,7 @@ class NotificationViewSet(CompanyScopedReadOnlyViewSet):
             for label, condition in category_queries.items()
         ]
         priority_queries = [
-            ('Purchase requests', 'Awaiting your review', Q(notification_type__startswith='pr_'), 'urgent'),
+            ('Material requests', 'Awaiting your review', Q(notification_type__startswith='pr_'), 'urgent'),
             ('Stock confirmations', 'Confirm stock issues', Q(notification_type=Notification.TYPE_LOW_STOCK), 'high'),
             ('Budget approval', 'Awaiting approval', Q(notification_type__startswith='budget_'), 'medium'),
             ('Other approvals', 'Various requests', Q(notification_type__icontains='approval'), 'neutral'),

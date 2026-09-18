@@ -356,7 +356,7 @@ def issue_stock_to_project(
     if project is None:
         raise ValidationError({'project': ['Project must belong to your company.']})
     if purchase_request.project_id != project.pk:
-        raise ValidationError({'project': ['Project must match the approved purchase request.']})
+        raise ValidationError({'project': ['Project must match the approved material request.']})
     if work_order is not None:
         from apps.workorders.models import WorkOrder
         work_order = WorkOrder.objects.select_for_update().filter(
@@ -384,7 +384,7 @@ def issue_stock_to_project(
             material=material,
         ).first()
     if purchase_request_item is None:
-        raise ValidationError({'material': ['Material is not on the approved purchase request.']})
+        raise ValidationError({'material': ['Material is not on the approved material request.']})
     if Decimal(quantity) > purchase_request_item.quantity:
         raise ValidationError({'quantity': ['Quantity cannot exceed the approved request quantity.']})
     if not reason or not reason.strip():

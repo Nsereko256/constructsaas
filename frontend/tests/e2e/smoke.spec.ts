@@ -22,7 +22,7 @@ test('seeded admin can follow the operational workflow surfaces', async ({ page 
   await expect(page).toHaveURL(/\/dashboard$/);
 
   const workflowRoutes = [
-    ['/procurement/requests', /purchase requests/i],
+    ['/procurement/requests', /material requests/i],
     ['/procurement/purchase-orders', /purchase orders/i],
     ['/procurement/deliveries', /deliveries/i],
     ['/inventory', /inventory/i],
@@ -54,7 +54,7 @@ test('seeded admin can follow the operational workflow surfaces', async ({ page 
   await page.goto('/procurement/requests');
   await page.locator('.pr-table tbody tr').first().getByRole('link').first().click();
   await expect(page).toHaveURL(/\/procurement\/requests\/\d+\/$/);
-  await expect(page.getByRole('button', { name: /back to purchase requests/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /back to material requests/i })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/procurement\/requests$/);
 

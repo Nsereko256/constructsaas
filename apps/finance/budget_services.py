@@ -425,13 +425,13 @@ def submit_purchase_request_to_finance(*, purchase_request, user, budget_line=No
             pk=budget_line.pk, company=user.company,
         )
         if line.budget.status != ProjectBudget.STATUS_APPROVED or line.budget.project_id != request.project_id:
-            raise ValidationError({'budget_line': ['Select an approved budget line for the purchase request project.']})
+            raise ValidationError({'budget_line': ['Select an approved budget line for the material request project.']})
     elif request.project_id and ProjectBudget.objects.filter(
         company=user.company,
         project_id=request.project_id,
         status=ProjectBudget.STATUS_APPROVED,
     ).exists():
-        raise ValidationError({'budget_line': ['Select an approved budget line for the purchase request project.']})
+        raise ValidationError({'budget_line': ['Select an approved budget line for the material request project.']})
     if line is None and not settings.allow_unbudgeted_requests:
         raise ValidationError({'budget_line': ['An approved budget line is required by this company policy.']})
     amount = purchase_request_estimated_total(request)
@@ -652,7 +652,7 @@ def approve_purchase_order(*, purchase_order, user):
         return po
     if not po.purchase_request_id:
         raise ValidationError({
-            'purchase_request': ['A finance-approved purchase request is required before approving a purchase order.'],
+            'purchase_request': ['A finance-approved material request is required before approving a purchase order.'],
         })
     if po.amendments.filter(
         amendment_type=PurchaseOrderAmendment.TYPE_PRE_APPROVAL_EDIT,

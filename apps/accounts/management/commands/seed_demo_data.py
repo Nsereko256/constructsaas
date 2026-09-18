@@ -144,7 +144,7 @@ class Command(BaseCommand):
                 budget=budget, user=users[User.ROLE_FINANCE_MANAGER], comments='Approved demo project budget.',
             )
         line = budget.lines.get(category=category)
-        purchase_request = PurchaseRequest.objects.get(company=company, number='PR-20260726-0003')
+        purchase_request = PurchaseRequest.objects.get(company=company, number='MR-20260726-0003')
         if not hasattr(purchase_request, 'budget_approval'):
             budget_services.submit_purchase_request_to_finance(
                 purchase_request=purchase_request, user=users[User.ROLE_PROJECT_MANAGER], budget_line=line,
@@ -367,7 +367,7 @@ class Command(BaseCommand):
     def create_procurement_data(self, company, users, materials, projects, suppliers):
         pending_pr, _ = PurchaseRequest.objects.update_or_create(
             company=company,
-            number='PR-20260726-0001',
+            number='MR-20260726-0001',
             defaults={
                 'project': projects['PRJ-NTD-001'],
                 'title': 'Cement and tiles for finishing phase',
@@ -388,7 +388,7 @@ class Command(BaseCommand):
 
         po_created_pr, _ = PurchaseRequest.objects.update_or_create(
             company=company,
-            number='PR-20260726-0002',
+            number='MR-20260726-0002',
             defaults={
                 'project': projects['PRJ-JRD-002'],
                 'title': 'Steel bars and hardcore for basement works',
@@ -409,7 +409,7 @@ class Command(BaseCommand):
 
         approved_pr, _ = PurchaseRequest.objects.update_or_create(
             company=company,
-            number='PR-20260726-0003',
+            number='MR-20260726-0003',
             defaults={
                 'project': projects['PRJ-NTD-001'],
                 'title': 'Iron sheets for roof extension',

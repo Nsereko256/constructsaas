@@ -22,7 +22,7 @@ export function ControlledApprovalModal({
   const valid = reason.trim().length >= 10;
 
   return (
-    <FormModal open={open} title={`Approve ${recordNumber || 'purchase request'}`} onClose={onClose}>
+    <FormModal open={open} title={`Approve ${recordNumber || 'material request'}`} onClose={onClose}>
       <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); if (valid) onApprove(reason.trim()); }}>
         <div className="flex gap-3 rounded-lg border border-warning/35 bg-warning/5 p-4 text-sm">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-warning" />

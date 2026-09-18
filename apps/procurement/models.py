@@ -159,7 +159,7 @@ class PurchaseRequestItem(models.Model):
     def clean(self):
         if self.purchase_request_id and self.material_id:
             if self.material.company_id != self.purchase_request.company_id:
-                raise ValidationError({'material': 'Selected material must belong to the same company as the PR.'})
+                raise ValidationError({'material': 'Selected material must belong to the same company as the MR.'})
         if self.quantity is not None and self.quantity <= 0:
             raise ValidationError({'quantity': 'Quantity must be greater than zero.'})
 
@@ -272,13 +272,13 @@ class PurchaseOrder(models.Model):
 
     def clean(self):
         if self.purchase_request_id and self.company_id and self.purchase_request.company_id != self.company_id:
-            raise ValidationError({'purchase_request': 'Selected purchase request must belong to the same company.'})
+            raise ValidationError({'purchase_request': 'Selected material request must belong to the same company.'})
         if self.purchase_request_id:
             duplicate_po_exists = PurchaseOrder.objects.filter(
                 purchase_request_id=self.purchase_request_id,
             ).exclude(pk=self.pk).exists()
             if duplicate_po_exists:
-                raise ValidationError({'purchase_request': 'This purchase request already has a purchase order.'})
+                raise ValidationError({'purchase_request': 'This material request already has a purchase order.'})
         if self.project_id and self.company_id and self.project.company_id != self.company_id:
             raise ValidationError({'project': 'Selected project must belong to the same company.'})
         if self.supplier_id and self.company_id and self.supplier.company_id != self.company_id:
@@ -295,7 +295,7 @@ class PurchaseOrder(models.Model):
             raise ValidationError({'delivery_revision_reason': 'Explain every revised delivery date.'})
         if self.purchase_request_id and self.project_id and self.purchase_request.project_id:
             if self.purchase_request.project_id != self.project_id:
-                raise ValidationError({'project': 'Project must match the linked purchase request project.'})
+                raise ValidationError({'project': 'Project must match the linked material request project.'})
         if self.delivery_destination == self.DELIVERY_SITE and not self.project_id:
             raise ValidationError({'project': 'Direct-to-site purchase orders must be linked to a project.'})
         if self.delivery_destination == self.DELIVERY_WAREHOUSE and self.status == self.STATUS_DISPATCH_CONFIRMED:
@@ -529,7 +529,7 @@ class DocumentSequence(models.Model):
     TYPE_GOODS_RECEIVED_NOTE = 'GRN'
 
     TYPE_CHOICES = [
-        (TYPE_PURCHASE_REQUEST, 'Purchase Request'),
+        (TYPE_PURCHASE_REQUEST, 'Material Request'),
         (TYPE_PURCHASE_ORDER, 'Purchase Order'),
         (TYPE_GOODS_RECEIVED_NOTE, 'Goods Received Note'),
     ]

@@ -16,9 +16,9 @@ Use this checklist before a demo or local release. It covers the current web app
 
 - [x] Dashboard renders for an authenticated role
 - [x] Action queues render on Dashboard, Procurement, Finance, and Work Orders
-- [x] Purchase requests, purchase orders, GRNs, inventory, notifications, and work orders render
+- [x] Material requests, purchase orders, GRNs, inventory, notifications, and work orders render
 - [x] Finance payables and reconciliation render
-- [x] PR → PO → GRN → invoice linkage verified with seeded records
+- [x] MR → PO → GRN → invoice linkage verified with seeded records
 - [x] Three-way matching reaches `VERIFIED`
 - [x] Maker-checker prevents the invoice preparer from approving their own invoice
 - [x] A separate reviewer can approve and post the invoice
@@ -27,7 +27,7 @@ Use this checklist before a demo or local release. It covers the current web app
 
 ## Demo data created during the latest browser run
 
-- Purchase request: `PR-20260822-0050`
+- Purchase request: `MR-20260822-0050`
 - Purchase order: `PO-20260822-0020`
 - Goods received note: `GRN-20260822-0018`
 - Supplier invoice: `INV-20260824-00014`

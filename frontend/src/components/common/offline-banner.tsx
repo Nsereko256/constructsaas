@@ -38,12 +38,12 @@ export function OfflineBanner() {
         {online && queued && !needsAttention ? <button className="inline-flex shrink-0 items-center gap-1 text-primary" onClick={() => void syncOfflineActions(scope)}><RefreshCw className="h-3.5 w-3.5" />Sync</button> : null}
       </div>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent title="Offline sync centre" description="Only purchase requests and goods receipts can be saved offline. Approval, payment, posting, and reversal actions always require a live connection.">
+        <DialogContent title="Offline sync centre" description="Only material requests and goods receipts can be saved offline. Approval, payment, posting, and reversal actions always require a live connection.">
           <div className="grid gap-3">
             {!actions.length ? <p className="text-sm text-muted">There are no local actions waiting to sync.</p> : actions.map((action) => {
               const attention = action.state === 'attention';
               return <article key={action.id} className="grid gap-2 rounded-lg border border-border bg-background p-3">
-                <div className="flex items-start justify-between gap-3"><div><strong className="text-sm">{action.kind === 'purchase-request' ? 'Purchase request' : 'Goods receipt'}</strong><p className="mt-0.5 text-xs text-muted">Saved {new Date(action.createdAt).toLocaleString()}</p></div><span className={attention ? 'text-xs font-bold text-warning' : 'text-xs font-bold text-info'}>{attention ? 'Needs review' : action.state === 'syncing' ? 'Syncing' : 'Queued'}</span></div>
+                <div className="flex items-start justify-between gap-3"><div><strong className="text-sm">{action.kind === 'purchase-request' ? 'Material request' : 'Goods receipt'}</strong><p className="mt-0.5 text-xs text-muted">Saved {new Date(action.createdAt).toLocaleString()}</p></div><span className={attention ? 'text-xs font-bold text-warning' : 'text-xs font-bold text-info'}>{attention ? 'Needs review' : action.state === 'syncing' ? 'Syncing' : 'Queued'}</span></div>
                 {attention ? <p className="text-sm text-warning">{action.error || 'The server needs this draft to be reviewed before it can be synced.'}</p> : null}
                 <div className="flex flex-wrap gap-2">
                   {online && attention ? <Button size="sm" variant="secondary" onClick={() => void retryOfflineAction(action.id).then(() => syncOfflineActions(scope))}><RefreshCw className="h-4 w-4" />Retry</Button> : null}

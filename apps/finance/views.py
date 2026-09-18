@@ -502,7 +502,7 @@ class FinancialApprovalViewSet(CompanyScopedMixin, viewsets.ReadOnlyModelViewSet
 @extend_schema_view(
     list=extend_schema(tags=['Finance - Budget'], summary='List budget approvals'),
     retrieve=extend_schema(tags=['Finance - Budget'], summary='Retrieve a budget approval'),
-    create=extend_schema(tags=['Finance - Budget'], summary='Start budget approval for a technically approved PR'),
+    create=extend_schema(tags=['Finance - Budget'], summary='Start budget approval for a technically approved MR'),
 )
 class BudgetApprovalViewSet(CompanyScopedMixin, viewsets.ModelViewSet):
     queryset = BudgetApproval.objects.select_related(

@@ -762,9 +762,9 @@ paths:
           - valuation_adjustment
         description: |-
           * `low_stock` - Low stock
-          * `pr_submitted` - PR submitted
-          * `pr_approved` - PR approved
-          * `pr_rejected` - PR rejected
+          * `pr_submitted` - MR submitted
+          * `pr_approved` - MR approved
+          * `pr_rejected` - MR rejected
           * `po_created` - PO created
           * `po_received` - PO received
           * `system` - System
@@ -1450,7 +1450,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this purchase request.
+        description: A unique integer value identifying this material request.
         required: true
       tags:
       - purchase-requests
@@ -1472,7 +1472,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this purchase request.
+        description: A unique integer value identifying this material request.
         required: true
       tags:
       - purchase-requests
@@ -1506,7 +1506,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this purchase request.
+        description: A unique integer value identifying this material request.
         required: true
       tags:
       - Finance - Approvals
@@ -1539,7 +1539,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this purchase request.
+        description: A unique integer value identifying this material request.
         required: true
       tags:
       - Finance - Approvals
@@ -1573,7 +1573,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this purchase request.
+        description: A unique integer value identifying this material request.
         required: true
       tags:
       - Finance - Approvals
@@ -1607,7 +1607,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this purchase request.
+        description: A unique integer value identifying this material request.
         required: true
       tags:
       - Finance - Approvals
@@ -1641,7 +1641,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this purchase request.
+        description: A unique integer value identifying this material request.
         required: true
       tags:
       - purchase-requests
@@ -1675,7 +1675,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this purchase request.
+        description: A unique integer value identifying this material request.
         required: true
       tags:
       - purchase-requests
@@ -1709,7 +1709,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this purchase request.
+        description: A unique integer value identifying this material request.
         required: true
       tags:
       - purchase-requests
@@ -1743,7 +1743,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this purchase request.
+        description: A unique integer value identifying this material request.
         required: true
       tags:
       - Finance - Approvals
@@ -3207,7 +3207,7 @@ paths:
           description: ''
     post:
       operationId: v1_finance_budget_approvals_create
-      summary: Start budget approval for a technically approved PR
+      summary: Start budget approval for a technically approved MR
       tags:
       - Finance - Budget
       requestBody:
@@ -16198,9 +16198,9 @@ components:
       type: string
       description: |-
         * `low_stock` - Low stock
-        * `pr_submitted` - PR submitted
-        * `pr_approved` - PR approved
-        * `pr_rejected` - PR rejected
+        * `pr_submitted` - MR submitted
+        * `pr_approved` - MR approved
+        * `pr_rejected` - MR rejected
         * `po_created` - PO created
         * `po_received` - PO received
         * `system` - System

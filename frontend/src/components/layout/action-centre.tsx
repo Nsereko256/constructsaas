@@ -31,7 +31,7 @@ const queues: Record<Role, QueueItem[]> = {
     { badge: 'expenses', label: 'Expense drafts to prepare', href: '/finance/expenses', icon: Banknote },
   ],
   finance_manager: [
-    { badge: 'requests', label: 'Purchase requests and PO reviews', href: '/procurement/requests?action_queue=my_requests', icon: ClipboardCheck },
+    { badge: 'requests', label: 'Material requests and PO reviews', href: '/procurement/requests?action_queue=my_requests', icon: ClipboardCheck },
     { badge: 'budgets', label: 'Budget approvals', href: '/finance/budgets', icon: Banknote },
     { badge: 'supplier_invoices', label: 'Invoice authorizations', href: '/finance/payables', icon: FileText },
     { badge: 'payments', label: 'Payment approvals / posting', href: '/finance/payments', icon: Wallet },
@@ -39,7 +39,7 @@ const queues: Record<Role, QueueItem[]> = {
   ],
   finance_viewer: [],
   admin: [
-    { badge: 'requests', label: 'Purchase requests', href: '/procurement/requests', icon: ClipboardList },
+    { badge: 'requests', label: 'Material requests', href: '/procurement/requests', icon: ClipboardList },
     { badge: 'purchase_orders', label: 'Purchase orders', href: '/procurement/purchase-orders', icon: PackageCheck },
     { badge: 'deliveries', label: 'Warehouse receipts', href: '/procurement/deliveries?delivery_destination=WAREHOUSE', icon: ReceiptText },
     { badge: 'inventory', label: 'Low-stock materials', href: '/inventory', icon: Boxes },

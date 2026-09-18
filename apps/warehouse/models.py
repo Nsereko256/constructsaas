@@ -273,14 +273,14 @@ class StockMovement(models.Model):
             if self.purchase_order_item.material_id != self.material_id:
                 raise ValidationError({'purchase_order_item': 'PO item material must match the movement material.'})
         if self.purchase_request_id and self.purchase_request.company_id != self.company_id:
-            raise ValidationError({'purchase_request': 'Purchase request must belong to the same company.'})
+            raise ValidationError({'purchase_request': 'Material request must belong to the same company.'})
         if self.purchase_request_item_id:
             if self.purchase_request_item.purchase_request.company_id != self.company_id:
-                raise ValidationError({'purchase_request_item': 'PR item must belong to the same company.'})
+                raise ValidationError({'purchase_request_item': 'MR item must belong to the same company.'})
             if self.purchase_request_id and self.purchase_request_item.purchase_request_id != self.purchase_request_id:
-                raise ValidationError({'purchase_request_item': 'PR item must belong to the selected purchase request.'})
+                raise ValidationError({'purchase_request_item': 'MR item must belong to the selected material request.'})
             if self.purchase_request_item.material_id != self.material_id:
-                raise ValidationError({'purchase_request_item': 'PR item material must match the movement material.'})
+                raise ValidationError({'purchase_request_item': 'MR item material must match the movement material.'})
 
         if self.goods_received_note_item_id:
             grn_item = self.goods_received_note_item

@@ -22,7 +22,7 @@ export function AppShell() {
     item.href === '/dashboard' ? location.pathname === item.href : location.pathname.startsWith(item.href),
   );
   const procurementPage = [
-    ['/procurement/requests', 'Purchase requests'], ['/procurement/purchase-orders', 'Purchase orders'],
+    ['/procurement/requests', 'Material requests'], ['/procurement/purchase-orders', 'Purchase orders'],
     ['/procurement/grns', 'Receipts'], ['/procurement/deliveries', 'Deliveries'],
   ].find(([path]) => location.pathname.startsWith(path))?.[1];
   const financePage = [

@@ -49,9 +49,9 @@ class Notification(models.Model):
 
     NOTIFICATION_TYPE_CHOICES = [
         (TYPE_LOW_STOCK, 'Low stock'),
-        (TYPE_PR_SUBMITTED, 'PR submitted'),
-        (TYPE_PR_APPROVED, 'PR approved'),
-        (TYPE_PR_REJECTED, 'PR rejected'),
+        (TYPE_PR_SUBMITTED, 'MR submitted'),
+        (TYPE_PR_APPROVED, 'MR approved'),
+        (TYPE_PR_REJECTED, 'MR rejected'),
         (TYPE_PO_CREATED, 'PO created'),
         (TYPE_PO_RECEIVED, 'PO received'),
         (TYPE_SUPPLIER_CLAIM_OPENED, 'Supplier claim opened'),

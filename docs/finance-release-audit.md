@@ -8,7 +8,7 @@ finance payloads do not accept a writable company field.
 
 - Company finance settings, currencies, configurable tax codes, cost centres,
   budget categories, and append-only audit events.
-- Project budgets, revisions, transfers, technical/financial PR approval,
+- Project budgets, revisions, transfers, technical/financial MR approval,
   commitments, actuals, exhaustion controls, thresholds, and overrides.
 - Immutable GRNs, partial receiving/invoicing, item-level three-way matching,
   controlled match exceptions, supplier invoices, attachments, and credit notes.
@@ -96,7 +96,7 @@ Stale offline updates return HTTP 409:
 Project managers retain technical approval and finance-submission access;
 procurement officers retain PO/invoice preparation access where existing APIs allow.
 Storekeepers receive warehouse GRNs and perform inventory actions. Site engineers
-submit PRs and confirm assigned direct-to-site receipts. Maker-checker blocks a user
+submit MRs and confirm assigned direct-to-site receipts. Maker-checker blocks a user
 from approving/posting their own applicable record when enabled.
 
 ## Performance And Deployment

@@ -104,7 +104,7 @@ def ensure_budget_clearance(purchase_request):
         })
     if approval.status not in {BudgetApproval.STATUS_APPROVED, BudgetApproval.STATUS_OVERRIDDEN}:
         raise ValidationError({
-            'purchase_request': ['This purchase request has not passed finance approval.'],
+            'purchase_request': ['This material request has not passed finance approval.'],
         })
     return approval
 

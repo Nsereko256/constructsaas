@@ -35,7 +35,7 @@ The system must remain usable on desktop and phone-sized browser screens. Web UI
 ### Strengths to preserve
 
 - Role-based navigation and API permissions already exist.
-- Purchase requests, purchase orders, GRNs, supplier claims, warehouse movements, budgets, invoices, payments, work orders, and audit records are integrated.
+- Material requests, purchase orders, GRNs, supplier claims, warehouse movements, budgets, invoices, payments, work orders, and audit records are integrated.
 - Stock issues now require Project Manager and Admin approval, but do not require Finance approval.
 - When stock is issued to a project, the movement value is recorded against the approved project budget actuals.
 - Partial deliveries and cumulative stock movements are supported.

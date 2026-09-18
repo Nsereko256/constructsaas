@@ -204,7 +204,7 @@ class ApprovalMatrixRule(models.Model):
     DOCUMENT_PAYMENT = 'PAYMENT'
     DOCUMENT_BUDGET = 'BUDGET'
     DOCUMENT_JOURNAL = 'JOURNAL'
-    DOCUMENT_CHOICES = [(DOCUMENT_PR, 'Purchase request'), (DOCUMENT_PO, 'Purchase order'), (DOCUMENT_INVOICE, 'Supplier invoice'), (DOCUMENT_PAYMENT, 'Payment'), (DOCUMENT_BUDGET, 'Budget'), (DOCUMENT_JOURNAL, 'Journal')]
+    DOCUMENT_CHOICES = [(DOCUMENT_PR, 'Material request'), (DOCUMENT_PO, 'Purchase order'), (DOCUMENT_INVOICE, 'Supplier invoice'), (DOCUMENT_PAYMENT, 'Payment'), (DOCUMENT_BUDGET, 'Budget'), (DOCUMENT_JOURNAL, 'Journal')]
     STAGE_TECHNICAL = 'TECHNICAL'
     STAGE_FINANCE = 'FINANCE'
     STAGE_FINAL = 'FINAL'
@@ -822,7 +822,7 @@ class BudgetApproval(models.Model):
 
     def clean(self):
         if self.purchase_request_id and self.purchase_request.company_id != self.company_id:
-            raise ValidationError({'purchase_request': 'Purchase request must belong to the same company.'})
+            raise ValidationError({'purchase_request': 'Material request must belong to the same company.'})
         if self.created_by_id and self.created_by.company_id != self.company_id:
             raise ValidationError({'created_by': 'User must belong to the same company.'})
         if self.reviewed_by_id and self.reviewed_by.company_id != self.company_id:
@@ -3312,7 +3312,7 @@ class WorkflowConfirmation(models.Model):
     DOCUMENT_SUPPLIER_INVOICE = 'SUPPLIER_INVOICE'
     DOCUMENT_PAYMENT = 'PAYMENT'
     DOCUMENT_CHOICES = [
-        (DOCUMENT_PURCHASE_REQUEST, 'Purchase request'),
+        (DOCUMENT_PURCHASE_REQUEST, 'Material request'),
         (DOCUMENT_STOCK_ISSUE, 'Stock issue'),
         (DOCUMENT_PURCHASE_ORDER, 'Purchase order'),
         (DOCUMENT_PO_DISPATCH, 'Purchase order dispatch'),

@@ -17,7 +17,7 @@ The major backend domains are:
 - `projects`: projects, sites, goals, staffing, and project scope.
 - `materials`: the material catalogue and material requests.
 - `warehouse`: stock, receipts, issues, transfers, returns, and locations.
-- `procurement`: purchase requests, quotations, purchase orders, and amendments.
+- `procurement`: material requests, quotations, purchase orders, and amendments.
 - `suppliers`: suppliers, contractors, claims, and supplier evidence.
 - `finance`: budgets, invoices, payments, expenses, reconciliation, and reports.
 - `workorders`: work orders, site packages, tasks, progress, and verification.

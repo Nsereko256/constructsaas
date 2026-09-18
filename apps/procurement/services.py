@@ -56,7 +56,7 @@ def generate_pr_number(company):
     return generate_document_number(
         company,
         DocumentSequence.TYPE_PURCHASE_REQUEST,
-        'PR',
+        'MR',
         PurchaseRequest,
     )
 
@@ -102,7 +102,7 @@ def create_purchase_order(*, serializer, user):
 def approve_purchase_request(*, purchase_request, approver=None):
     """Apply the technical approval transition to a pending request."""
     if purchase_request.status != PurchaseRequest.STATUS_PENDING:
-        raise ValidationError('Only pending purchase requests can be approved.')
+        raise ValidationError('Only pending material requests can be approved.')
     purchase_request.status = PurchaseRequest.STATUS_APPROVED
     if approver is not None:
         if approver.role == User.ROLE_PROJECT_MANAGER:
@@ -121,15 +121,15 @@ def approve_stock_issue_request(*, purchase_request, approver):
     if approver.role != User.ROLE_ADMIN:
         raise ValidationError('Only an Admin can approve a warehouse stock issue.')
     if purchase_request.status != PurchaseRequest.STATUS_APPROVED:
-        raise ValidationError('Only approved purchase requests can be approved for warehouse stock issue.')
+        raise ValidationError('Only approved material requests can be approved for warehouse stock issue.')
     if purchase_request.purchase_orders.exists():
-        raise ValidationError('A purchase request with a purchase order cannot use warehouse stock issue.')
+        raise ValidationError('A material request with a purchase order cannot use warehouse stock issue.')
     if not purchase_request.project_id:
         raise ValidationError('Warehouse replenishment requests cannot use warehouse stock issue.')
     if not purchase_request.manager_approved_by_id or purchase_request.manager_approved_by.role != User.ROLE_PROJECT_MANAGER:
         raise ValidationError('Project Manager approval is required before Admin can approve warehouse stock issue.')
     if not purchase_request.items.exists():
-        raise ValidationError('The purchase request must have at least one line item.')
+        raise ValidationError('The material request must have at least one line item.')
     purchase_request.technical_approved_by = approver
     purchase_request.save(update_fields=['technical_approved_by', 'updated_at'])
     return purchase_request
@@ -138,7 +138,7 @@ def approve_stock_issue_request(*, purchase_request, approver):
 def reject_purchase_request(*, purchase_request, rejection_reason):
     """Apply the technical rejection transition to a pending request."""
     if purchase_request.status != PurchaseRequest.STATUS_PENDING:
-        raise ValidationError('Only pending purchase requests can be rejected.')
+        raise ValidationError('Only pending material requests can be rejected.')
     purchase_request.status = PurchaseRequest.STATUS_REJECTED
     purchase_request.rejection_reason = rejection_reason
     purchase_request.save(update_fields=['status', 'rejection_reason', 'updated_at'])
@@ -148,7 +148,7 @@ def reject_purchase_request(*, purchase_request, rejection_reason):
 def return_purchase_request_for_correction(*, purchase_request, comments):
     """Return a pending request with a mandatory correction explanation."""
     if purchase_request.status != PurchaseRequest.STATUS_PENDING:
-        raise ValidationError('Only pending purchase requests can be returned for correction.')
+        raise ValidationError('Only pending material requests can be returned for correction.')
     purchase_request.status = PurchaseRequest.STATUS_RETURNED
     purchase_request.technical_return_reason = comments
     purchase_request.rejection_reason = ''
@@ -552,7 +552,7 @@ def notify_pr_submitted(purchase_request):
         recipients,
         Notification.TYPE_PR_SUBMITTED,
         Notification.LEVEL_INFO,
-        f'New PR submitted: {purchase_request.number}',
+        f'New MR submitted: {purchase_request.number}',
         message,
         f'/api/purchase-requests/{purchase_request.pk}/',
     )
@@ -573,7 +573,7 @@ def notify_pr_approved(purchase_request):
         recipients,
         Notification.TYPE_PR_APPROVED,
         Notification.LEVEL_SUCCESS,
-        f'PR approved: {purchase_request.number}',
+        f'MR approved: {purchase_request.number}',
         message,
         f'/api/purchase-requests/{purchase_request.pk}/',
     )
@@ -588,7 +588,7 @@ def notify_pr_rejected(purchase_request):
         [purchase_request.requested_by],
         Notification.TYPE_PR_REJECTED,
         Notification.LEVEL_DANGER,
-        f'PR rejected: {purchase_request.number}',
+        f'MR rejected: {purchase_request.number}',
         message,
         f'/api/purchase-requests/{purchase_request.pk}/',
     )
@@ -602,7 +602,7 @@ def notify_pr_returned_for_correction(purchase_request):
         [purchase_request.requested_by],
         Notification.TYPE_SYSTEM,
         Notification.LEVEL_WARNING,
-        f'PR returned for correction: {purchase_request.number}',
+        f'MR returned for correction: {purchase_request.number}',
         f'{purchase_request.number} was returned by the project manager. Reason: {reason}',
         f'/api/purchase-requests/{purchase_request.pk}/',
     )
@@ -658,7 +658,7 @@ def notify_pr_stock_issue_requested(purchase_request, requested_by):
 def notify_po_created_from_pr(purchase_order, creator):
     project_name = purchase_order.project.name if purchase_order.project else 'No project assigned'
     supplier = purchase_order.supplier_name or 'No supplier specified'
-    pr_number = purchase_order.purchase_request.number if purchase_order.purchase_request else 'the linked PR'
+    pr_number = purchase_order.purchase_request.number if purchase_order.purchase_request else 'the linked MR'
     message = (
         f'{purchase_order.number} was created from {pr_number}. '
         f'Supplier: {supplier}. Project: {project_name}.'
