@@ -308,6 +308,8 @@ export type PurchaseRequest = {
   id: number;
   project: number | null;
   project_name: string | null;
+  preferred_supplier: number | null;
+  preferred_supplier_name: string;
   number: string;
   title: string;
   priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';

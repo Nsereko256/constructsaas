@@ -13,6 +13,7 @@ import { useAuth } from '@/auth/auth-context';
 import { FormModal } from '@/components/common/form-modal';
 import { ControlledApprovalModal } from '@/components/common/controlled-approval-modal';
 import { MaterialLookup } from '@/components/common/material-lookup';
+import { SupplierLookup } from '@/components/common/supplier-lookup';
 import { Badge, statusTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -353,6 +354,7 @@ function RequestModal({ open, onClose }: { open: boolean; onClose: () => void })
       const body = {
       client_uuid: crypto.randomUUID(),
       project: isWarehouseReplenishment ? null : form.project || null,
+      preferred_supplier: isWarehouseReplenishment ? Number(form.preferred_supplier_id) : null,
       title: form.title,
       priority: form.priority,
       justification: form.justification,
@@ -401,6 +403,14 @@ function RequestModal({ open, onClose }: { open: boolean; onClose: () => void })
               {(projects.data?.results || []).map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
           </Field> : null}
+          {isWarehouseReplenishment ? <Field label="Preferred supplier" required>
+            <SupplierLookup
+              label={form.preferred_supplier_label}
+              supplierId={form.preferred_supplier_id}
+              onChange={(id, label) => setForm((current) => ({ ...current, preferred_supplier_id: id, preferred_supplier_label: label }))}
+            />
+            <p className="mt-1 text-xs text-muted">This supplier is carried into the purchase order and can still be changed before submission to Finance.</p>
+          </Field> : null}
           <Field label="Priority">
             <select className={inputClass} value={form.priority} onChange={(event) => set('priority', event.target.value)}>
               <option value="LOW">Low</option>
@@ -441,6 +451,7 @@ function RequestModal({ open, onClose }: { open: boolean; onClose: () => void })
           disabled={
             !form.title
             || (requiresProject && !form.project)
+            || (isWarehouseReplenishment && !form.preferred_supplier_id)
             || !form.items.length
             || form.items.some((item) => !item.material_id || !item.quantity)
             || mutation.isPending
@@ -455,6 +466,8 @@ function RequestModal({ open, onClose }: { open: boolean; onClose: () => void })
 
 type RequestDraft = {
   project: string;
+  preferred_supplier_id: string;
+  preferred_supplier_label: string;
   title: string;
   priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
   justification: string;
@@ -471,6 +484,8 @@ type RequestDraft = {
 function defaultDraft(): RequestDraft {
   return {
     project: '',
+    preferred_supplier_id: '',
+    preferred_supplier_label: '',
     title: '',
     priority: 'NORMAL',
     justification: '',

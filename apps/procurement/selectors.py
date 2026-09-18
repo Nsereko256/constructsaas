@@ -14,7 +14,7 @@ def purchase_requests_for_user(user):
     return (
         accessible_purchase_requests(user, PurchaseRequest.objects.all())
         .select_related(
-            'project', 'requested_by', 'technical_approved_by', 'manager_approved_by',
+            'project', 'preferred_supplier', 'requested_by', 'technical_approved_by', 'manager_approved_by',
             'work_order', 'work_order_site', 'budget_approval__budget_line',
             'budget_approval__reviewed_by',
         )

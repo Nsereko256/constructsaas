@@ -231,6 +231,9 @@ function PurchaseOrderModal({ open, onClose, onCreated, initialPurchaseRequestId
   useEffect(() => {
     if (!selectedPr) return;
     setDeliveryDestination(selectedPr.delivery_destination);
+    if (selectedPr.preferred_supplier) {
+      setSupplier({ id: String(selectedPr.preferred_supplier), label: selectedPr.preferred_supplier_name });
+    }
     if (selectedPr.required_date) setExpectedDeliveryDate(selectedPr.required_date);
     setItems(remainingItems(selectedPr).map((item) => ({
       material_id: String(item.material),

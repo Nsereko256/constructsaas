@@ -54,6 +54,13 @@ class PurchaseRequest(models.Model):
         blank=True,
         related_name='purchase_requests',
     )
+    preferred_supplier = models.ForeignKey(
+        'suppliers.Supplier',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='preferred_purchase_requests',
+    )
     work_order = models.ForeignKey(
         'workorders.WorkOrder', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='purchase_requests',
@@ -114,6 +121,9 @@ class PurchaseRequest(models.Model):
             raise ValidationError({'delivery_destination': 'Direct-to-site requests require a project.'})
         if self.project_id and self.company_id and self.project.company_id != self.company_id:
             raise ValidationError({'project': 'Selected project must belong to the same company.'})
+        if self.preferred_supplier_id and self.company_id:
+            if self.preferred_supplier.company_id != self.company_id or not self.preferred_supplier.is_active:
+                raise ValidationError({'preferred_supplier': 'Select an active supplier from the same company.'})
         if self.work_order_id:
             if self.work_order.company_id != self.company_id:
                 raise ValidationError({'work_order': 'Work order must belong to the same company.'})

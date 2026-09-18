@@ -838,6 +838,7 @@ class PurchaseRequestItemSerializer(serializers.ModelSerializer):
 
 class PurchaseRequestSerializer(serializers.ModelSerializer):
     project_name = serializers.CharField(source='project.name', read_only=True)
+    preferred_supplier_name = serializers.CharField(source='preferred_supplier.name', read_only=True)
     requested_by_username = serializers.CharField(source='requested_by.username', read_only=True)
     technical_approved_by_name = serializers.SerializerMethodField()
     manager_approved_by_name = serializers.SerializerMethodField()
@@ -873,6 +874,8 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
             'company',
             'project',
             'project_name',
+            'preferred_supplier',
+            'preferred_supplier_name',
             'number',
             'title',
             'priority',
@@ -918,6 +921,7 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
             'id',
             'company',
             'project_name',
+            'preferred_supplier_name',
             'number',
             'status',
             'status_display',
@@ -958,6 +962,10 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
                 user,
                 Project.objects.filter(is_active=True),
             ).order_by('name')
+            self.fields['preferred_supplier'].queryset = Supplier.objects.filter(
+                company=company,
+                is_active=True,
+            ).order_by('name')
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -968,6 +976,10 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
         )
         if destination == PurchaseRequest.DESTINATION_SITE and not project:
             raise serializers.ValidationError({'delivery_destination': 'Direct-to-site requests require a project.'})
+        preferred_supplier = attrs.get('preferred_supplier', getattr(self.instance, 'preferred_supplier', None))
+        request_user = getattr(self.context.get('request'), 'user', None)
+        if request_user and request_user.role == User.ROLE_PROCUREMENT_OFFICER and not project and not preferred_supplier:
+            raise serializers.ValidationError({'preferred_supplier': 'Select the intended supplier for this warehouse replenishment.'})
         return attrs
 
     def get_total_estimated_cost(self, obj) -> Decimal:
@@ -1266,7 +1278,7 @@ class PurchaseRequestCorrectionSerializer(PurchaseRequestSerializer):
     correction_summary = serializers.CharField(required=True, allow_blank=False, trim_whitespace=True, write_only=True)
 
     class Meta(PurchaseRequestSerializer.Meta):
-        fields = ['project', 'title', 'priority', 'justification', 'items', 'correction_summary']
+        fields = ['project', 'preferred_supplier', 'title', 'priority', 'justification', 'items', 'correction_summary']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

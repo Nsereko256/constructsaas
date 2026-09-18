@@ -7,6 +7,25 @@ test('login page renders the ConstructSaaS shell', async ({ page }) => {
   await expect(page.getByRole('textbox', { name: /password/i })).toBeVisible();
 });
 
+test('procurement can choose a supplier for warehouse replenishment', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByLabel(/username/i).fill('demo_procurement');
+  await page.getByRole('textbox', { name: /password/i }).fill('Demo123!');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  const takeover = page.getByRole('button', { name: /sign out other device and continue/i });
+  await takeover.waitFor({ state: 'visible', timeout: 2500 }).catch(() => undefined);
+  if (await takeover.isVisible().catch(() => false)) await takeover.click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.goto('/procurement/requests');
+  await page.getByRole('button', { name: /warehouse replenishment/i }).click();
+  await expect(page.getByRole('heading', { name: /new warehouse replenishment/i })).toBeVisible();
+  const supplier = page.getByRole('combobox', { name: /preferred supplier/i });
+  await expect(supplier).toBeVisible();
+  await supplier.click();
+  await expect(page.getByRole('option').first()).toBeVisible();
+});
+
 test('seeded admin can follow the operational workflow surfaces', async ({ page }) => {
   test.setTimeout(60_000);
   const username = process.env.E2E_USER || 'demo_admin';

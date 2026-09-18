@@ -1268,6 +1268,7 @@ class ApiFoundationTests(TestCase):
                 'title': 'Replenish warehouse cement stock',
                 'priority': PurchaseRequest.PRIORITY_NORMAL,
                 'justification': 'Restore warehouse safety stock.',
+                'preferred_supplier': self.supplier.pk,
                 'items': [{'material': self.material.pk, 'quantity': '20.00'}],
             },
             format='json',
@@ -1277,6 +1278,8 @@ class ApiFoundationTests(TestCase):
         replenishment = PurchaseRequest.objects.get(pk=response.data['id'])
         self.assertIsNone(replenishment.project)
         self.assertEqual(replenishment.requested_by, self.procurement_officer)
+        self.assertEqual(replenishment.preferred_supplier, self.supplier)
+        self.assertEqual(response.data['preferred_supplier_name'], self.supplier.name)
         self.assertEqual(replenishment.status, PurchaseRequest.STATUS_APPROVED)
 
         finance_response = self.client.post(
@@ -1297,6 +1300,24 @@ class ApiFoundationTests(TestCase):
         issue_response = self.client.post(f'/api/purchase-requests/{replenishment.pk}/issue-stock/')
         self.assertEqual(issue_response.status_code, 400)
         self.assertIn('cannot request stock issue', str(issue_response.data).lower())
+
+    def test_warehouse_replenishment_requires_an_active_company_supplier(self):
+        self.client.force_login(self.procurement_officer)
+        payload = {
+            'project': None,
+            'title': 'Replenish warehouse steel stock',
+            'priority': PurchaseRequest.PRIORITY_NORMAL,
+            'justification': 'Restore warehouse safety stock.',
+            'items': [{'material': self.material.pk, 'quantity': '5.00'}],
+        }
+        missing = self.client.post('/api/purchase-requests/', payload, format='json')
+        self.assertEqual(missing.status_code, 400, missing.data)
+        self.assertIn('preferred_supplier', missing.data)
+
+        payload['preferred_supplier'] = self.other_supplier.pk
+        other_company = self.client.post('/api/purchase-requests/', payload, format='json')
+        self.assertEqual(other_company.status_code, 400, other_company.data)
+        self.assertIn('preferred_supplier', other_company.data)
 
     def test_purchase_request_create_rejects_other_company_project_and_material(self):
         self.client.force_login(self.site_engineer)
