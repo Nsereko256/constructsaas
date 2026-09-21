@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ArrowRight, Boxes, CircleDollarSign, Clock3, ReceiptText, WalletCards } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { financeApi } from '@/modules/finance/api';
@@ -24,13 +24,6 @@ export function FinanceOverviewPage() {
         <FinanceKpi label="Approved budgets" value={formatMoney(data.approved_budgets, currency)} detail={`${data.project_balances.length} approved project budgets`} href="/finance/budgets" />
         <FinanceKpi label="Open commitments" value={formatMoney(data.open_commitments, currency)} detail="Approved purchasing not yet expensed" tone="info" href="/finance/budgets" />
         <FinanceKpi label="Actual expenditure" value={formatMoney(data.actual_expenditure, currency)} detail="Posted project expenditure" href="/finance/reports" />
-        <FinanceKpi label="Available balance" value={formatMoney(data.available_project_balances, currency)} detail="Budget less commitments and actuals" tone="info" href="/finance/budgets" />
-      </section>
-      <section className="finance-secondary-kpis" aria-label="Finance exceptions">
-        <FinanceKpi label="Pending approvals" value={data.pending_financial_approvals} detail="Budgets, invoices, payments and expenses" tone="warning" />
-        <FinanceKpi label="Unmatched invoices" value={data.unmatched_invoices} detail="Requires three-way match review" tone={data.unmatched_invoices ? 'warning' : 'primary'} href="/finance/payables" />
-        <FinanceKpi label="Unpaid invoices" value={formatMoney(data.unpaid_invoices.base_amount, currency)} detail={`${data.unpaid_invoices.count} open invoices`} href="/finance/payables" />
-        <FinanceKpi label="Overdue invoices" value={formatMoney(data.overdue_invoices.base_amount, currency)} detail={`${data.overdue_invoices.count} past due`} tone={data.overdue_invoices.count ? 'critical' : 'primary'} href="/finance/payables" />
       </section>
       <section aria-label="Finance work queues" className="finance-queue-grid">
         <QueueLink href="/finance/payables" label="Invoice control queue" detail="Match, verify, approve and post supplier invoices." count={data.unmatched_invoices} />
@@ -38,21 +31,11 @@ export function FinanceOverviewPage() {
         <QueueLink href="/finance/expenses" label="Staff cost queue" detail="Review expense claims and outstanding advances." count={formatMoney(data.outstanding_staff_advances, currency)} />
         <QueueLink href="/finance/budgets" label="Budget control queue" detail="Review approvals, commitments and available balances." count={data.pending_financial_approvals} />
       </section>
-      <section className="grid gap-4 xl:grid-cols-[1.5fr_0.5fr]">
+      <section>
         <Card>
           <CardHeader><CardTitle>Project budget position</CardTitle></CardHeader>
           <CardContent className="h-[300px]">
             {chart.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={chart}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="code" /><YAxis tickFormatter={(value) => `${Number(value) / 1000000}m`} /><Tooltip formatter={(value) => formatMoney(String(value), currency)} /><Legend /><Bar dataKey="Actual" stackId="used" fill="#087A3E" /><Bar dataKey="Committed" stackId="used" fill="#2878D0" /><Bar dataKey="Available" fill="#D7DDD7" /></BarChart></ResponsiveContainer> : <div className="grid h-full place-items-center text-sm text-muted">Approve a project budget to populate this view.</div>}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Control signals</CardTitle></CardHeader>
-          <CardContent className="grid gap-2 p-3">
-            <Signal icon={Clock3} label="Payments awaiting approval" value={data.payments_awaiting_approval.count} />
-            <Signal icon={WalletCards} label="Payment queue value" value={formatMoney(data.payments_awaiting_approval.base_amount, currency)} />
-            <Signal icon={ReceiptText} label="Outstanding advances" value={formatMoney(data.outstanding_staff_advances, currency)} />
-            <Signal icon={Boxes} label="Inventory valuation" value={formatMoney(data.inventory_value, currency)} />
-            <Signal icon={CircleDollarSign} label="Project material costs" value={formatMoney(data.project_material_costs, currency)} />
           </CardContent>
         </Card>
       </section>
@@ -75,12 +58,8 @@ export function FinanceOverviewPage() {
 }
 
 function QueueLink({ href, label, detail, count }: { href: string; label: string; detail: string; count: number | string }) {
-  return <Link to={href} className="group rounded-xl border border-border bg-white p-3 shadow-panel transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lift">
-    <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[0.12em] text-muted">Finance queue</p><strong className="mt-1 block text-sm">{label}</strong></div><span className="grid h-8 min-w-8 place-items-center rounded-full bg-primary/10 px-2 text-sm font-black text-primary">{count}</span></div>
-    <p className="mt-2 text-xs text-muted">{detail}</p><span className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-primary">Open queue <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span>
+  return <Link to={href} className="group border border-border bg-white p-3 hover:border-primary/40">
+    <div className="flex items-start justify-between gap-3"><strong className="block text-sm">{label}</strong><span className="min-w-8 text-right text-sm font-black text-primary">{count}</span></div>
+    <p className="mt-1 text-xs text-muted">{detail}</p><span className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-primary">Open <ArrowRight className="h-3.5 w-3.5" /></span>
   </Link>;
-}
-
-function Signal({ icon: Icon, label, value }: { icon: typeof AlertTriangle; label: string; value: string | number }) {
-  return <div className="flex items-center gap-3 border-b border-border p-2.5 last:border-0"><div className="grid h-8 w-8 place-items-center border border-border bg-background"><Icon className="h-4 w-4 text-primary" /></div><div><p className="text-xs text-muted">{label}</p><strong className="text-sm">{value}</strong></div></div>;
 }

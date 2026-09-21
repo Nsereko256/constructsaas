@@ -1,0 +1,215 @@
+/* Task-first application layer. Operational state and next actions carry the
+   emphasis; containers and decoration stay deliberately quiet. */
+.professional-workspace {
+  --direct-line: #dfe5e8;
+  --direct-muted: #64747d;
+  --direct-accent: #0b7478;
+}
+
+.professional-workspace main { color: #20313a; }
+
+.professional-workspace main :is(.card-surface, .panel, [class*='-panel'], [class*='-kpi']) {
+  box-shadow: none !important;
+}
+
+.professional-workspace main :is(.card-surface, .panel, [class*='-panel']) {
+  border-radius: 6px !important;
+}
+
+.professional-workspace main :is(
+  .ops-kpi-icon, .projects-kpi-icon, .procurement-kpi-icon, .pr-kpi-icon,
+  .po-kpi-icon, .grn-kpi-icon, .del-kpi-icon, .notifications-kpi-icon,
+  .finance-kpi-icon
+) { display: none !important; }
+
+.professional-workspace main :is(
+  .ops-kpi, .projects-kpi, .procurement-kpi, .pr-kpi, .po-kpi,
+  .grn-kpi, .del-kpi, .notifications-kpi, .finance-kpi
+) {
+  min-height: 66px !important;
+  padding: 10px 12px !important;
+}
+
+.professional-workspace .finance-kpi-content,
+.professional-workspace .finance-secondary-kpis .finance-kpi-content {
+  display: block !important;
+  min-height: 66px !important;
+  padding: 10px 12px !important;
+}
+
+.professional-workspace main :is(
+  .ops-kpi, .projects-kpi, .procurement-kpi, .pr-kpi, .po-kpi,
+  .grn-kpi, .del-kpi, .notifications-kpi
+) > :last-child {
+  min-width: 0;
+  width: 100%;
+}
+
+.professional-workspace main :is(
+  .ops-kpi, .projects-kpi, .procurement-kpi, .pr-kpi, .po-kpi,
+  .grn-kpi, .del-kpi, .notifications-kpi
+) strong {
+  max-width: none !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+}
+
+.finance-primary-kpis {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.workspace-tabs-direct {
+  position: relative;
+  display: flex;
+  min-height: 38px;
+  align-items: flex-end;
+  gap: 22px;
+  overflow: visible;
+  border-bottom: 1px solid var(--direct-line);
+}
+
+.workspace-tabs-direct > a,
+.workspace-tabs-direct > details > summary {
+  display: inline-flex;
+  min-height: 38px;
+  cursor: pointer;
+  align-items: center;
+  gap: 5px;
+  border-bottom: 2px solid transparent;
+  color: var(--direct-muted);
+  font-size: 13px;
+  font-weight: 650;
+  list-style: none;
+  white-space: nowrap;
+}
+
+.workspace-tabs-direct > a.active,
+.workspace-tabs-direct > details.active > summary {
+  border-bottom-color: var(--direct-accent);
+  color: var(--direct-accent);
+}
+
+.workspace-tabs-direct summary::-webkit-details-marker { display: none; }
+.workspace-tabs-direct > details { position: relative; }
+.workspace-tabs-direct > details[open] > summary svg { transform: rotate(180deg); }
+.workspace-tabs-direct > details > div {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 190px;
+  overflow: hidden;
+  border: 1px solid var(--direct-line);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(24 44 60 / 12%);
+}
+.workspace-tabs-direct > details > div a {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 11px;
+  color: #33464f;
+  font-size: 13px;
+  font-weight: 600;
+}
+.workspace-tabs-direct > details > div a:hover,
+.workspace-tabs-direct > details > div a[aria-current='page'] { background: #f0f6f6; color: var(--direct-accent); }
+
+.direct-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--direct-line);
+  border-radius: 6px;
+  background: #fff;
+  padding: 9px;
+}
+
+.direct-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  white-space: nowrap;
+}
+.direct-row-actions > details { position: relative; }
+.direct-row-actions > details > summary {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  place-items: center;
+  border: 1px solid var(--direct-line);
+  border-radius: 4px;
+  color: #50616a;
+  list-style: none;
+}
+.direct-row-actions > details > summary::-webkit-details-marker { display: none; }
+.direct-row-actions > details > div {
+  position: absolute;
+  top: 34px;
+  right: 0;
+  z-index: 25;
+  display: grid;
+  min-width: 160px;
+  overflow: hidden;
+  border: 1px solid var(--direct-line);
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgb(24 44 60 / 12%);
+}
+.direct-row-actions > details > div button,
+.direct-row-actions > details > div a {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 10px;
+  color: #374951;
+  font-size: 12px;
+  text-align: left;
+}
+.direct-row-actions > details > div :is(button, a):hover { background: #f3f7f7; }
+
+.professional-workspace main table th {
+  background: #f8fafb !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+.professional-workspace main table tbody tr:hover { background: #f6f9f9 !important; }
+
+.professional-workspace main :is(
+  .ops-filters, .procurement-filters, .pr-filters, .po-filters,
+  .grn-filters, .del-filters, .notifications-filters
+) {
+  background: #fff !important;
+}
+
+.professional-workspace main :is(
+  .ops-guidance, .ops-alert, .projects-alert, .procurement-alert,
+  .pr-guidance, .po-guidance, .grn-guidance, .del-guidance
+) {
+  border-left-width: 3px !important;
+  background: #fff !important;
+}
+
+.professional-workspace .card-surface-interactive:hover,
+.professional-workspace .interactive-lift:hover,
+.professional-workspace .surface-hover:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 640px) {
+  .workspace-tabs-direct { gap: 17px; overflow-x: auto; }
+  .workspace-tabs-direct > details { position: static; }
+  .workspace-tabs-direct > details > div { right: 0; }
+  .direct-filter-bar { flex-direction: column; align-items: stretch; }
+  .finance-primary-kpis { grid-template-columns: 1fr !important; }
+  .professional-workspace main :is(
+    .procurement-titlebar, .pr-titlebar, .po-titlebar, .grn-titlebar,
+    .del-titlebar, .projects-titlebar, .notifications-titlebar
+  ) { gap: 10px !important; }
+}

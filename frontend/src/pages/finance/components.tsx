@@ -147,7 +147,7 @@ export function FinanceWorkspaceSummary({ view }: { view: FinanceSummaryView }) 
     ],
   };
   return <section className="finance-primary-kpis" aria-label={`${view} summary`}>
-    {summaries[view].map((item) => <FinanceKpi key={item.label} {...item} />)}
+    {summaries[view].slice(0, 3).map((item) => <FinanceKpi key={item.label} {...item} />)}
   </section>;
 }
 

@@ -1,5 +1,5 @@
-import { ArrowRight, type LucideIcon } from 'lucide-react';
-import { Link, NavLink } from 'react-router-dom';
+import { ArrowRight, ChevronDown, type LucideIcon } from 'lucide-react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export type WorkspaceLink = {
@@ -17,8 +17,13 @@ export type WorkspaceTab = {
 };
 
 export function WorkspaceTabs({ links }: { links: WorkspaceTab[] }) {
-  return <nav aria-label="Workspace sections" className="flex gap-1 overflow-x-auto rounded-xl border border-border bg-surface p-1">
-    {links.map(({ href, label, icon: Icon }) => <NavLink key={href} end={href.split('/').length <= 2} to={href} className={({ isActive }) => `flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${isActive ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted hover:bg-muted/10 hover:text-foreground'}`}>{Icon ? <Icon className="h-3.5 w-3.5" /> : null}{label}</NavLink>)}
+  const location = useLocation();
+  const primaryLinks = links.slice(0, 4);
+  const secondaryLinks = links.slice(4);
+  const secondaryActive = secondaryLinks.some(({ href }) => location.pathname === href || location.pathname.startsWith(`${href}/`));
+  return <nav aria-label="Workspace sections" className="workspace-tabs-direct">
+    {primaryLinks.map(({ href, label, icon: Icon }) => <NavLink key={href} end={href.split('/').length <= 2} to={href} className={({ isActive }) => isActive ? 'active' : ''}>{Icon ? <Icon className="h-3.5 w-3.5" /> : null}{label}</NavLink>)}
+    {secondaryLinks.length ? <details className={secondaryActive ? 'active' : ''}><summary>More <ChevronDown className="h-3.5 w-3.5" /></summary><div>{secondaryLinks.map(({ href, label, icon: Icon }) => <NavLink key={href} to={href}>{Icon ? <Icon className="h-3.5 w-3.5" /> : null}{label}</NavLink>)}</div></details> : null}
   </nav>;
 }
 

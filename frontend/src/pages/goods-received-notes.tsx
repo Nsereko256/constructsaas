@@ -8,6 +8,7 @@ import { qk } from '@/api/queryKeys';
 import { can } from '@/api/roles';
 import { useAuth } from '@/auth/auth-context';
 import { FormModal } from '@/components/common/form-modal';
+import { ProcurementTabs } from '@/components/common/procurement-tabs';
 import { RecordContext } from '@/components/common/record-context';
 import { Badge, statusTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -103,7 +104,7 @@ export function GoodsReceivedNotesPage() {
   return <div className="goods-received-reference">
     <section className="grn-top">
       <div className="grn-titlebar"><div><h1>Goods received notes</h1><p>Verify quantities, condition and destination before materials enter stock.</p></div><div className="grn-title-actions"><details className="grn-export-menu"><summary><Download size={15} />Export <ChevronDown size={13} /></summary><div><button type="button" onClick={() => void exportRegister('pdf')}>PDF register</button><button type="button" onClick={() => void exportRegister('xlsx')}>Excel register</button></div></details><Button asChild><Link to="/procurement/deliveries">{can.receivePo(role) ? <><PackageCheck className="h-4 w-4" />Record receipt</> : <><Truck className="h-4 w-4" />Receipt queue</>}</Link></Button></div></div>
-      <nav className="grn-tabs" aria-label="Procurement sections"><Link to="/procurement">Overview</Link><Link to="/procurement/requests">Material requests</Link><Link to="/procurement/purchase-orders">Purchase orders</Link><Link className="active" to="/procurement/grns">Receipts</Link><Link to="/procurement/deliveries">Deliveries</Link></nav>
+      <ProcurementTabs />
     </section>
     <section className="grn-guidance"><CircleAlert size={17} /><span><strong>Accepted GRNs are permanent inventory records.</strong><small>Corrections require an approved reversal; recorded quantities cannot be silently edited.</small></span><Link to="/procurement/grns">Receipt policy <ChevronRight size={14} /></Link></section>
     <section className="grn-kpis"><ReceiptKpi icon={FileText} tone="blue" label="Total GRNs" value={rows.length} note="Across selected sites" /><ReceiptKpi icon={CheckCircle2} tone="green" label="Accepted" value={activeRows.length} note={rows.length ? `${Math.round(activeRows.length / rows.length * 100)}% active records` : 'No records yet'} /><ReceiptKpi icon={CalendarDays} tone="indigo" label="Received today" value={todayRows.length} note={todayRows.length ? 'Physical receipts recorded' : 'No receipts today'} /><ReceiptKpi icon={Box} tone="green" label="Stock posted" value={stockPosted.length} note="Accepted quantities updated" /><ReceiptKpi icon={CircleAlert} tone="amber" label="Exceptions" value={exceptionRows.length} note={exceptionRows.length ? 'Rejected or damaged lines' : 'No quantity exceptions'} /></section>

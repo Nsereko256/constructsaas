@@ -10,14 +10,11 @@ import type { PurchaseOrder, PurchaseRequest } from '@/api/types';
 import { useAuth } from '@/auth/auth-context';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ProcurementTabs } from '@/components/common/procurement-tabs';
 import { inputClass } from '@/components/ui/field';
 import { formatUGX } from '@/lib/utils';
 import './procurement-reference.css';
 
-const tabs = [
-  ['Overview', '/procurement'], ['Material requests', '/procurement/requests'], ['Purchase orders', '/procurement/purchase-orders'],
-  ['Receipts', '/procurement/grns'], ['Deliveries', '/procurement/deliveries'],
-] as const;
 const openStatuses = new Set(['DRAFT', 'PENDING', 'ORDERED', 'DISPATCH_CONFIRMED', 'PARTIAL']);
 const issuedStatuses = new Set(['ORDERED', 'DISPATCH_CONFIRMED']);
 const priorityWeight: Record<string, number> = { URGENT: 4, HIGH: 3, NORMAL: 2, LOW: 1 };
@@ -131,7 +128,7 @@ export function ProcurementPage() {
 
   return (
     <div className="procurement-reference">
-      <section className="procurement-top"><div className="procurement-titlebar"><div><h1>Procurement</h1><p>Control requests, sourcing, orders, deliveries and supplier performance.</p></div><div className="procurement-title-actions"><Button variant="secondary" onClick={() => exportOrders(filteredOrders)}><Upload className="h-4 w-4" />Export</Button>{can.submitPr(role) || can.submitWarehouseReplenishment(role) ? <Button asChild><Link to="/procurement/requests?create=1"><Plus className="h-4 w-4" />New request</Link></Button> : null}</div></div><nav className="procurement-tabs" aria-label="Procurement sections">{tabs.map(([label, href], index) => <Link className={index === 0 ? 'active' : ''} to={href} key={href}>{label}</Link>)}</nav></section>
+      <section className="procurement-top"><div className="procurement-titlebar"><div><h1>Procurement</h1><p>Control requests, sourcing, orders, deliveries and supplier performance.</p></div><div className="procurement-title-actions"><Button variant="secondary" onClick={() => exportOrders(filteredOrders)}><Upload className="h-4 w-4" />Export</Button>{can.submitPr(role) || can.submitWarehouseReplenishment(role) ? <Button asChild><Link to="/procurement/requests?create=1"><Plus className="h-4 w-4" />New material request</Link></Button> : null}</div></div><ProcurementTabs /></section>
       <section className="procurement-alert"><AlertTriangle size={17} /><strong>{actionTotal} actions require your attention</strong><Link to="/procurement/requests?action_queue=my_requests">View priority queue <ChevronRight size={14} /></Link></section>
       <section className="procurement-kpis"><ProcurementKpi icon={ClipboardList} tone="amber" label="Pending approvals" value={pendingApprovals} note={urgentApprovals ? `${urgentApprovals} urgent` : 'No urgent items'} noteTone={urgentApprovals ? 'amber' : 'green'} /><ProcurementKpi icon={Box} tone="blue" label="Open purchase orders" value={openOrders.length} note={`${compactUGX(committed)} committed`} noteTone="blue" /><ProcurementKpi icon={Truck} tone="green" label="Deliveries in transit" value={inTransit.length} note={dueToday ? `${dueToday} due today` : 'No deliveries due today'} noteTone={dueToday ? 'amber' : 'green'} /><ProcurementKpi icon={CircleDollarSign} tone="indigo" label="Spend this month" value={compactUGX(monthSpend)} note="Issued PO value" noteTone="green" /></section>
       <section className="procurement-pipeline procurement-panel"><div className="procurement-panel-heading"><h2>Procurement pipeline</h2></div><div className="procurement-pipeline-row">{pipeline.map((item, index) => <Link to={item.href} className="procurement-stage" key={item.label}><span className="procurement-stage-number">{index + 1}</span><span><small>{item.label}</small><strong>{item.value}</strong><em className={item.tone}>{item.note}</em></span>{index < pipeline.length - 1 ? <i aria-hidden="true" /> : null}</Link>)}</div></section>

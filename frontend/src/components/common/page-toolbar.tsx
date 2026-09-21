@@ -19,9 +19,9 @@ export function PageToolbar({
   children?: React.ReactNode;
 }) {
   return (
-    <header className="workspace-toolbar flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+    <header className="workspace-toolbar flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <h2 className="text-2xl font-semibold sm:text-3xl">{title}</h2>
+        <h2 className="text-2xl font-semibold">{title}</h2>
         {subtitle ? <p className="mt-1 max-w-2xl text-sm text-muted">{subtitle}</p> : null}
       </div>
       <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2 [&>button]:w-auto [&>button]:shrink-0 [&>select]:min-w-[145px] [&>select]:flex-1 sm:flex-nowrap sm:[&>select]:w-auto sm:[&>select]:flex-none">

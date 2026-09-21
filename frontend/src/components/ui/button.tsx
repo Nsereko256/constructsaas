@@ -5,15 +5,15 @@ import { LoaderCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex min-h-9 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold shadow-sm transition-all duration-150 disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-info/30 active:translate-y-px',
+  'inline-flex min-h-9 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-info/30',
   {
     variants: {
       variant: {
-        default: 'border-primary bg-primary text-white hover:bg-[#0B5F63] hover:shadow-md',
-        secondary: 'border-border bg-white text-foreground hover:border-primary/30 hover:bg-[#F0F3F5] hover:shadow-md',
+        default: 'border-primary bg-primary text-white hover:bg-[#0B5F63]',
+        secondary: 'border-border bg-white text-foreground hover:border-primary/30 hover:bg-[#F0F3F5]',
         ghost: 'border-transparent bg-transparent text-foreground shadow-none hover:bg-[#F0F3F5]',
-        destructive: 'border-critical bg-critical text-white hover:bg-[#C83131] hover:shadow-md',
-        warning: 'border-warning bg-warning text-[#201604] hover:bg-[#D38B0E] hover:shadow-md',
+        destructive: 'border-critical bg-critical text-white hover:bg-[#C83131]',
+        warning: 'border-warning bg-warning text-[#201604] hover:bg-[#D38B0E]',
       },
       size: {
         sm: 'min-h-8 rounded-md px-2.5 text-xs',

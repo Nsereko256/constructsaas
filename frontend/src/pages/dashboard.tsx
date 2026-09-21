@@ -47,7 +47,7 @@ export function DashboardPage() {
 
   const data = normalizeDashboardData(dashboard.data);
   const primaryAction: Record<Role, { label: string; href: string }> = {
-    admin: { label: 'New request', href: '/procurement/requests?create=1' },
+    admin: { label: 'New material request', href: '/procurement/requests?create=1' },
     project_manager: { label: 'Review approvals', href: '/procurement/requests?action_queue=my_requests' },
     procurement_officer: { label: 'Open buying queue', href: '/procurement/requests?action_queue=my_requests' },
     storekeeper: { label: 'Receive deliveries', href: '/procurement/deliveries?action_queue=warehouse_receipts' },

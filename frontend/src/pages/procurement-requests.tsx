@@ -12,6 +12,7 @@ import { can, hasRole } from '@/api/roles';
 import { useAuth } from '@/auth/auth-context';
 import { FormModal } from '@/components/common/form-modal';
 import { ControlledApprovalModal } from '@/components/common/controlled-approval-modal';
+import { ProcurementTabs } from '@/components/common/procurement-tabs';
 import { MaterialLookup } from '@/components/common/material-lookup';
 import { SupplierLookup } from '@/components/common/supplier-lookup';
 import { Badge, statusTone } from '@/components/ui/badge';
@@ -213,9 +214,7 @@ export function ProcurementRequestsPage() {
             {can.submitPr(role) || can.submitWarehouseReplenishment(role) ? <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" />{can.submitWarehouseReplenishment(role) && !can.submitPr(role) ? 'Warehouse replenishment' : 'New MR'}</Button> : null}
           </div>
         </div>
-        <nav className="pr-tabs" aria-label="Procurement sections">
-          <Link to="/procurement">Overview</Link><Link className="active" to="/procurement/requests">Material requests</Link><Link to="/procurement/purchase-orders">Purchase orders</Link><Link to="/procurement/grns">Receipts</Link><Link to="/procurement/deliveries">Deliveries</Link>
-        </nav>
+        <ProcurementTabs />
       </section>
       <section className="pr-guidance"><AlertCircle size={18} /><span><strong>Manager review required before approval</strong><small>Confirm project, justification, quantities, budget and warehouse availability.</small></span><Link to="/procurement/requests?action_queue=my_requests">View workflow <ChevronRight size={14} /></Link></section>
       <section className="pr-kpis">

@@ -83,7 +83,7 @@ export function DataTable<T>({
               {actionCell ? <div className="flex flex-wrap gap-2 border-t border-border bg-background px-2.5 py-2.5">{flexRender(actionCell.column.columnDef.cell, actionCell.getContext())}</div> : null}
               {detailCells.length ? (
                 <details className="border-t border-border">
-                  <summary className="cursor-pointer px-2.5 py-2 text-xs font-bold text-primary marker:text-primary">More details and actions</summary>
+                  <summary className="cursor-pointer px-2.5 py-2 text-xs font-bold text-primary marker:text-primary">More details</summary>
                   <div className="grid gap-2 border-t border-border bg-background px-2.5 py-2.5">
                     {detailCells.map((cell) => (
                       <div key={cell.id} className="text-sm">
