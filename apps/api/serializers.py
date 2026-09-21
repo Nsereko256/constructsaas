@@ -30,6 +30,20 @@ from apps.finance.configuration_services import soft_finance_enabled
 from apps.finance.services import ensure_budget_clearance
 
 
+class HideMaterialCostsFromSiteEngineersMixin:
+    """Strip material pricing from every Site Engineer representation."""
+
+    site_engineer_cost_fields = ()
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if getattr(getattr(request, 'user', None), 'role', None) == User.ROLE_SITE_ENGINEER:
+            for field in self.site_engineer_cost_fields:
+                data.pop(field, None)
+        return data
+
+
 class CompanySerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
@@ -156,7 +170,8 @@ class CategorySerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'company', 'created_at']
 
 
-class MaterialSerializer(serializers.ModelSerializer):
+class MaterialSerializer(HideMaterialCostsFromSiteEngineersMixin, serializers.ModelSerializer):
+    site_engineer_cost_fields = ('unit_price', 'stock_value')
     category_name = serializers.CharField(source='category.name', read_only=True)
     unit_display = serializers.CharField(source='get_unit_display', read_only=True)
     current_stock = serializers.SerializerMethodField()
@@ -492,7 +507,8 @@ class SupplierSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'company', 'created_at', 'updated_at']
 
 
-class StockMovementSerializer(serializers.ModelSerializer):
+class StockMovementSerializer(HideMaterialCostsFromSiteEngineersMixin, serializers.ModelSerializer):
+    site_engineer_cost_fields = ('unit_price', 'unit_cost', 'valuation_rate', 'total_cost', 'value_effect')
     material_name = serializers.CharField(source='material.name', read_only=True)
     project_name = serializers.CharField(source='project.name', read_only=True)
     movement_type_display = serializers.CharField(source='get_movement_type_display', read_only=True)
@@ -743,7 +759,8 @@ class ValuationReconciliationSerializer(serializers.Serializer):
     status = serializers.CharField()
 
 
-class PurchaseRequestItemSerializer(serializers.ModelSerializer):
+class PurchaseRequestItemSerializer(HideMaterialCostsFromSiteEngineersMixin, serializers.ModelSerializer):
+    site_engineer_cost_fields = ('unit_price', 'estimated_cost')
     material_name = serializers.CharField(source='material.name', read_only=True)
     material_code = serializers.CharField(source='material.code', read_only=True)
     unit = serializers.CharField(source='material.unit', read_only=True)
@@ -836,7 +853,11 @@ class PurchaseRequestItemSerializer(serializers.ModelSerializer):
         return material
 
 
-class PurchaseRequestSerializer(serializers.ModelSerializer):
+class PurchaseRequestSerializer(HideMaterialCostsFromSiteEngineersMixin, serializers.ModelSerializer):
+    site_engineer_cost_fields = (
+        'total_estimated_cost', 'finance_budget_line', 'finance_review_reason',
+        'finance_return_reason',
+    )
     project_name = serializers.CharField(source='project.name', read_only=True)
     preferred_supplier_name = serializers.CharField(source='preferred_supplier.name', read_only=True)
     requested_by_username = serializers.CharField(source='requested_by.username', read_only=True)
@@ -1309,7 +1330,8 @@ class RejectPurchaseRequestSerializer(serializers.Serializer):
     rejection_reason = serializers.CharField(required=True, allow_blank=False, trim_whitespace=True)
 
 
-class PurchaseOrderItemSerializer(serializers.ModelSerializer):
+class PurchaseOrderItemSerializer(HideMaterialCostsFromSiteEngineersMixin, serializers.ModelSerializer):
+    site_engineer_cost_fields = ('unit_price', 'line_total')
     material_name = serializers.CharField(source='material.name', read_only=True)
     material_code = serializers.CharField(source='material.code', read_only=True)
     unit = serializers.CharField(source='material.unit', read_only=True)
@@ -1338,7 +1360,8 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
         return material
 
 
-class PurchaseOrderSerializer(serializers.ModelSerializer):
+class PurchaseOrderSerializer(HideMaterialCostsFromSiteEngineersMixin, serializers.ModelSerializer):
+    site_engineer_cost_fields = ('total_cost', 'pending_preapproval_edit')
     purchase_request_number = serializers.CharField(source='purchase_request.number', read_only=True)
     project_name = serializers.CharField(source='project.name', read_only=True)
     status_display = serializers.SerializerMethodField()
@@ -1622,7 +1645,8 @@ class PurchaseOrderDetailSerializer(PurchaseOrderSerializer):
         return [receipt.pk for receipt in obj.goods_received_notes.all()]
 
 
-class GoodsReceivedNoteItemSerializer(serializers.ModelSerializer):
+class GoodsReceivedNoteItemSerializer(HideMaterialCostsFromSiteEngineersMixin, serializers.ModelSerializer):
+    site_engineer_cost_fields = ('unit_price', 'accepted_value')
     material_name = serializers.CharField(source='purchase_order_item.material.name', read_only=True)
     unit_price = serializers.DecimalField(
         source='purchase_order_item.unit_price', max_digits=12, decimal_places=2, read_only=True,

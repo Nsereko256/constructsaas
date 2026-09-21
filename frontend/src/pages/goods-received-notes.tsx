@@ -132,6 +132,8 @@ function GrnDetail({ note, onClose }: { note: GoodsReceivedNote | null; onClose:
 }
 
 function Quantity({ label, value, warning = false }: { label: string; value: string; warning?: boolean }) {
+  const { role } = useAuth();
+  if (role === 'site_engineer' && (label === 'Approved price' || label === 'Accepted value')) return null;
   const displayValue = value.startsWith('UGX') ? value : formatNumber(value);
   return <div className={warning ? 'text-warning' : ''}><span className="text-xs text-muted">{label}</span><strong className="block">{displayValue}</strong></div>;
 }

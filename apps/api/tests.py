@@ -576,10 +576,13 @@ class ApiFoundationTests(TestCase):
         self.assertEqual(response.data['low_stock_count'], 1)
         self.assertEqual(response.data['pending_purchase_requests'], 1)
         self.assertEqual(response.data['stock_in_today'], 8)
-        self.assertEqual(response.data['inventory_value'], 210000)
+        self.assertNotIn('inventory_value', response.data)
         self.assertEqual(len(response.data['recent_stock_movements']), 2)
+        self.assertNotIn('unit_price', response.data['recent_stock_movements'][0])
         self.assertEqual(response.data['low_stock_materials'][0]['code'], 'HC-001')
         self.assertEqual(response.data['low_stock_materials'][0]['current_stock'], 6)
+        self.assertNotIn('unit_price', response.data['low_stock_materials'][0])
+        self.assertNotIn('stock_value', response.data['low_stock_materials'][0])
         self.assertEqual(response.data['pending_purchase_requests_list'][0]['number'], 'PR-API-001')
         self.assertEqual(response.data['project_budget_vs_actual'], [])
 
@@ -1239,7 +1242,59 @@ class ApiFoundationTests(TestCase):
         self.assertTrue(purchase_request.number.startswith('MR-'))
         self.assertEqual(purchase_request.items.count(), 2)
         self.assertEqual(response.data['items'][0]['current_stock'], 8)
-        self.assertEqual(response.data['total_estimated_cost'], 285000)
+        self.assertNotIn('total_estimated_cost', response.data)
+        self.assertNotIn('unit_price', response.data['items'][0])
+        self.assertNotIn('estimated_cost', response.data['items'][0])
+
+    def test_site_engineer_cannot_retrieve_material_prices_or_valuations(self):
+        self.project.site_engineers.add(self.site_engineer)
+        request_item = PurchaseRequestItem.objects.create(
+            purchase_request=self.purchase_request,
+            material=self.material,
+            quantity=Decimal('2.00'),
+        )
+        purchase_order = PurchaseOrder.objects.get(purchase_request=self.purchase_request)
+        PurchaseOrderItem.objects.create(
+            purchase_order=purchase_order,
+            material=self.material,
+            quantity=Decimal('2.00'),
+            unit_price=Decimal('35000.00'),
+        )
+        self.client.force_login(self.site_engineer)
+
+        material_response = self.client.get(f'/api/materials/{self.material.pk}/')
+        request_response = self.client.get(f'/api/purchase-requests/{self.purchase_request.pk}/')
+        order_response = self.client.get(f'/api/purchase-orders/{purchase_order.pk}/')
+        movement_response = self.client.get('/api/stock-movements/')
+        dashboard_response = self.client.get('/api/dashboard/')
+
+        self.assertEqual(material_response.status_code, 200)
+        self.assertNotIn('unit_price', material_response.data)
+        self.assertNotIn('stock_value', material_response.data)
+        self.assertEqual(request_response.status_code, 200)
+        self.assertNotIn('total_estimated_cost', request_response.data)
+        self.assertNotIn('unit_price', request_response.data['items'][0])
+        self.assertNotIn('estimated_cost', request_response.data['items'][0])
+        self.assertEqual(order_response.status_code, 200)
+        self.assertNotIn('total_cost', order_response.data)
+        self.assertNotIn('unit_price', order_response.data['items'][0])
+        self.assertNotIn('line_total', order_response.data['items'][0])
+        self.assertEqual(movement_response.status_code, 200)
+        self.assertNotIn('unit_price', movement_response.data['results'][0])
+        self.assertNotIn('value_effect', movement_response.data['results'][0])
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertNotIn('inventory_value', dashboard_response.data)
+        self.assertEqual(self.client.get('/api/inventory-valuations/').status_code, 403)
+        self.assertEqual(self.client.get('/api/project-material-costs/').status_code, 403)
+        self.assertEqual(self.client.get('/api/purchase-orders/download/pdf/').status_code, 200)
+        self.assertEqual(self.client.get('/api/materials/download-xlsx/').status_code, 200)
+
+        self.client.force_login(self.user)
+        admin_material_response = self.client.get(f'/api/materials/{self.material.pk}/')
+        admin_order_response = self.client.get(f'/api/purchase-orders/{purchase_order.pk}/')
+        self.assertIn('unit_price', admin_material_response.data)
+        self.assertIn('total_cost', admin_order_response.data)
+        self.assertIn('unit_price', admin_order_response.data['items'][0])
 
     def test_site_engineer_cannot_create_a_projectless_purchase_request(self):
         self.client.force_login(self.site_engineer)

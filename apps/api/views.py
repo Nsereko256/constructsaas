@@ -326,6 +326,7 @@ class DashboardAPIView(APIView):
 
     def get(self, request):
         company = request.user.company
+        hide_material_costs = request.user.role == User.ROLE_SITE_ENGINEER
         today = timezone.localdate()
         materials = Material.objects.for_company(company).with_current_stock().with_inventory_value().select_related('category')
         active_materials = materials.filter(is_active=True)
@@ -417,7 +418,7 @@ class DashboardAPIView(APIView):
                 'low_stock_count': low_stock_materials.count(),
                 'pending_purchase_requests': pending_purchase_requests.count(),
                 'stock_in_today': stock_in_today,
-                'inventory_value': inventory_value,
+                **({} if hide_material_costs else {'inventory_value': inventory_value}),
                 'recent_stock_movements': [
                     {
                         'id': movement.id,
@@ -438,7 +439,7 @@ class DashboardAPIView(APIView):
                         'source': movement.source,
                         'source_display': movement.get_source_display(),
                         'quantity': movement.quantity,
-                        'unit_price': movement.unit_price,
+                        **({} if hide_material_costs else {'unit_price': movement.unit_price}),
                         'date': movement.date,
                         'notes': movement.notes,
                     }
@@ -455,8 +456,10 @@ class DashboardAPIView(APIView):
                         'unit': material.unit,
                         'current_stock': material.current_stock_value,
                         'min_stock_level': material.min_stock_level,
-                        'unit_price': material.unit_price,
-                        'stock_value': material.stock_value,
+                        **({} if hide_material_costs else {
+                            'unit_price': material.unit_price,
+                            'stock_value': material.stock_value,
+                        }),
                     }
                     for material in low_stock_materials[:8]
                 ],
@@ -793,20 +796,26 @@ class MaterialViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='download-pdf')
     def download_pdf(self, request):
         queryset = self.filter_queryset(self.get_queryset())
+        hide_material_costs = request.user.role == User.ROLE_SITE_ENGINEER
         rows = [{
             'code': material.code, 'material': material.name, 'category': material.category.name,
             'unit': material.get_unit_display(), 'stock': material.current_stock_value,
-            'minimum': material.min_stock_level, 'value': f'UGX {material.stock_value:,.2f}',
+            'minimum': material.min_stock_level,
+            **({} if hide_material_costs else {'value': f'UGX {material.stock_value:,.2f}'}),
             'status': 'Low stock' if material.current_stock_value <= material.min_stock_level else 'Healthy',
         } for material in queryset]
         totals = {
             'Materials': len(rows),
             'Low stock items': sum(1 for material in queryset if material.current_stock_value <= material.min_stock_level),
-            'Inventory value': f'UGX {sum((material.stock_value for material in queryset), Decimal("0.00")):,.2f}',
+            **({} if hide_material_costs else {'Inventory value': f'UGX {sum((material.stock_value for material in queryset), Decimal("0.00")):,.2f}'}),
         }
+        columns = [('code', 'Code'), ('material', 'Material'), ('category', 'Category'), ('unit', 'Unit'), ('stock', 'Stock'), ('minimum', 'Minimum')]
+        if not hide_material_costs:
+            columns.append(('value', 'Value'))
+        columns.append(('status', 'Status'))
         return pdf_table_response(
             title='Inventory register', filename='inventory-register',
-            columns=[('code', 'Code'), ('material', 'Material'), ('category', 'Category'), ('unit', 'Unit'), ('stock', 'Stock'), ('minimum', 'Minimum'), ('value', 'Value'), ('status', 'Status')],
+            columns=columns,
             rows=rows, totals=totals, subtitle='Current stock and value for the selected inventory filters.',
         )
 
@@ -814,15 +823,21 @@ class MaterialViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='download-xlsx')
     def download_xlsx(self, request):
         queryset = self.filter_queryset(self.get_queryset())
+        hide_material_costs = request.user.role == User.ROLE_SITE_ENGINEER
         rows = [{
             'code': material.code, 'material': material.name, 'category': material.category.name,
             'unit': material.get_unit_display(), 'stock': material.current_stock_value,
-            'minimum': material.min_stock_level, 'value': material.stock_value,
+            'minimum': material.min_stock_level,
+            **({} if hide_material_costs else {'value': material.stock_value}),
             'status': 'Low stock' if material.current_stock_value <= material.min_stock_level else 'Healthy',
         } for material in queryset]
+        columns = [('code', 'Code'), ('material', 'Material'), ('category', 'Category'), ('unit', 'Unit'), ('stock', 'Stock'), ('minimum', 'Minimum')]
+        if not hide_material_costs:
+            columns.append(('value', 'Value'))
+        columns.append(('status', 'Status'))
         return xlsx_response({
             'title': 'Inventory register',
-            'columns': [{'key': key, 'label': label} for key, label in [('code', 'Code'), ('material', 'Material'), ('category', 'Category'), ('unit', 'Unit'), ('stock', 'Stock'), ('minimum', 'Minimum'), ('value', 'Value'), ('status', 'Status')]],
+            'columns': [{'key': key, 'label': label} for key, label in columns],
             'rows': rows,
             'totals': {'Materials': len(rows), 'Low stock items': sum(1 for row in rows if row['status'] == 'Low stock')},
         }, 'inventory-register')
@@ -1122,11 +1137,13 @@ class StockMovementViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='download-pdf')
     def download_pdf(self, request):
         queryset = self.filter_queryset(self.get_queryset()).order_by('-date', '-created_at')
+        hide_material_costs = request.user.role == User.ROLE_SITE_ENGINEER
         rows = [{
             'date': movement.date.isoformat(), 'material': f'{movement.material.code} / {movement.material.name}',
             'direction': movement.get_movement_type_display(), 'transaction': movement.get_transaction_type_display(),
             'project': movement.project.name if movement.project else 'Warehouse',
-            'quantity': movement.quantity, 'value': f'UGX {movement.total_cost:,.2f}',
+            'quantity': movement.quantity,
+            **({} if hide_material_costs else {'value': f'UGX {movement.total_cost:,.2f}'}),
             'recorded_by': movement.created_by.get_full_name() or movement.created_by.username if movement.created_by else '-',
         } for movement in queryset]
         totals = {
@@ -1134,9 +1151,13 @@ class StockMovementViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
             'Stock in quantity': sum((movement.quantity for movement in queryset if movement.movement_type in {StockMovement.MOVEMENT_IN, StockMovement.MOVEMENT_ADJUSTMENT_IN}), Decimal('0.00')),
             'Stock out quantity': sum((movement.quantity for movement in queryset if movement.movement_type in {StockMovement.MOVEMENT_OUT, StockMovement.MOVEMENT_ADJUSTMENT_OUT}), Decimal('0.00')),
         }
+        columns = [('date', 'Date'), ('material', 'Material'), ('direction', 'Direction'), ('transaction', 'Transaction'), ('project', 'Project'), ('quantity', 'Quantity')]
+        if not hide_material_costs:
+            columns.append(('value', 'Value'))
+        columns.append(('recorded_by', 'Recorded by'))
         return pdf_table_response(
             title='Stock movement register', filename='stock-movements',
-            columns=[('date', 'Date'), ('material', 'Material'), ('direction', 'Direction'), ('transaction', 'Transaction'), ('project', 'Project'), ('quantity', 'Quantity'), ('value', 'Value'), ('recorded_by', 'Recorded by')],
+            columns=columns,
             rows=rows, totals=totals, subtitle='Stock in, stock out, returns, and adjustments for the selected filters.',
         )
 
@@ -1144,16 +1165,22 @@ class StockMovementViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='download-xlsx')
     def download_xlsx(self, request):
         queryset = self.filter_queryset(self.get_queryset()).order_by('-date', '-created_at')
+        hide_material_costs = request.user.role == User.ROLE_SITE_ENGINEER
         rows = [{
             'date': movement.date, 'material': f'{movement.material.code} / {movement.material.name}',
             'direction': movement.get_movement_type_display(), 'transaction': movement.get_transaction_type_display(),
             'project': movement.project.name if movement.project else 'Warehouse',
-            'quantity': movement.quantity, 'value': movement.total_cost,
+            'quantity': movement.quantity,
+            **({} if hide_material_costs else {'value': movement.total_cost}),
             'recorded_by': movement.created_by.get_full_name() or movement.created_by.username if movement.created_by else '-',
         } for movement in queryset]
+        columns = [('date', 'Date'), ('material', 'Material'), ('direction', 'Direction'), ('transaction', 'Transaction'), ('project', 'Project'), ('quantity', 'Quantity')]
+        if not hide_material_costs:
+            columns.append(('value', 'Value'))
+        columns.append(('recorded_by', 'Recorded by'))
         return xlsx_response({
             'title': 'Stock movement register',
-            'columns': [{'key': key, 'label': label} for key, label in [('date', 'Date'), ('material', 'Material'), ('direction', 'Direction'), ('transaction', 'Transaction'), ('project', 'Project'), ('quantity', 'Quantity'), ('value', 'Value'), ('recorded_by', 'Recorded by')]],
+            'columns': [{'key': key, 'label': label} for key, label in columns],
             'rows': rows,
             'totals': {'Movements': len(rows), 'Stock in quantity': sum((movement.quantity for movement in queryset if movement.movement_type in {StockMovement.MOVEMENT_IN, StockMovement.MOVEMENT_ADJUSTMENT_IN}), Decimal('0.00')), 'Stock out quantity': sum((movement.quantity for movement in queryset if movement.movement_type in {StockMovement.MOVEMENT_OUT, StockMovement.MOVEMENT_ADJUSTMENT_OUT}), Decimal('0.00'))},
         }, 'stock-movements')
@@ -1212,6 +1239,8 @@ class InventoryValuationAPIView(APIView):
         ],
     )
     def get(self, request):
+        if request.user.role == User.ROLE_SITE_ENGINEER:
+            raise PermissionDenied('Site Engineers cannot view inventory valuation or material prices.')
         queryset = StockMovement.objects.filter(company=request.user.company)
         if request.query_params.get('material'):
             queryset = queryset.filter(material_id=request.query_params['material'])
@@ -1268,6 +1297,8 @@ class ProjectMaterialCostAPIView(APIView):
         ],
     )
     def get(self, request):
+        if request.user.role == User.ROLE_SITE_ENGINEER:
+            raise PermissionDenied('Site Engineers cannot view project material costs.')
         queryset = StockMovement.objects.filter(
             company=request.user.company, project__isnull=False,
             transaction_type__in=[
@@ -2066,6 +2097,7 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
 
     @action(detail=False, methods=['get'], url_path='download/(?P<kind>pdf|xlsx)')
     def download(self, request, kind=None):
+        hide_material_costs = request.user.role == User.ROLE_SITE_ENGINEER
         queryset = self.filter_queryset(self.get_queryset()).prefetch_related('items__material')
         rows = [{
             'request': request_record.number,
@@ -2147,6 +2179,8 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
     def three_way_summary(self, request, pk=None):
         from apps.finance.matching_services import purchase_order_three_way_summary
 
+        if request.user.role == User.ROLE_SITE_ENGINEER:
+            raise PermissionDenied('Site Engineers cannot view purchase-order pricing or matching values.')
         purchase_order = self.get_object()
         return Response({
             'purchase_order': purchase_order.pk,
@@ -2647,6 +2681,8 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def amendments(self, request, pk=None):
+        if request.user.role == User.ROLE_SITE_ENGINEER:
+            raise PermissionDenied('Site Engineers cannot view purchase-order pricing amendments.')
         return Response(PurchaseOrderAmendmentSerializer(self.get_object().amendments.select_related('submitted_by', 'decided_by'), many=True).data)
 
     @action(detail=True, methods=['post'], url_path=r'amendments/(?P<amendment_id>[^/.]+)/approve')
@@ -2832,6 +2868,7 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='download/(?P<kind>pdf|xlsx)')
     def download(self, request, kind=None):
+        hide_material_costs = request.user.role == User.ROLE_SITE_ENGINEER
         queryset = self.filter_queryset(self.get_queryset()).prefetch_related('items__material')
         rows = [{
             'po': po.number,
@@ -2839,14 +2876,23 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
             'project': po.project.name if po.project_id else '-',
             'status': po.get_status_display(),
             'destination': po.get_delivery_destination_display(),
-            'total': sum((item.quantity * item.unit_price for item in po.items.all()), Decimal('0.00')),
-            'items': ' | '.join(f'{item.material.name} x {item.quantity} @ {item.unit_price}' for item in po.items.all()),
+            **({} if hide_material_costs else {'total': sum((item.quantity * item.unit_price for item in po.items.all()), Decimal('0.00'))}),
+            'items': ' | '.join(
+                f'{item.material.name} x {item.quantity}' + ('' if hide_material_costs else f' @ {item.unit_price}')
+                for item in po.items.all()
+            ),
             'created': po.created_at,
         } for po in queryset]
+        columns = [('po', 'Purchase order'), ('supplier', 'Supplier'), ('project', 'Project'), ('status', 'Status'), ('destination', 'Destination')]
+        if not hide_material_costs:
+            columns.append(('total', 'Total'))
+        columns.extend([('items', 'Order lines'), ('created', 'Created')])
+        totals = {'Purchase orders': len(rows)}
+        if not hide_material_costs:
+            totals['Order value'] = sum((row['total'] for row in rows), Decimal('0.00'))
         return _operational_export(
             kind=kind, title='Purchase order register', filename='purchase-order-register',
-            columns=[('po', 'Purchase order'), ('supplier', 'Supplier'), ('project', 'Project'), ('status', 'Status'), ('destination', 'Destination'), ('total', 'Total'), ('items', 'Order lines'), ('created', 'Created')],
-            rows=rows, totals={'Purchase orders': len(rows), 'Order value': sum((row['total'] for row in rows), Decimal('0.00'))},
+            columns=columns, rows=rows, totals=totals,
         )
 
 

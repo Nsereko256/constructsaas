@@ -24,6 +24,7 @@ import { formatDate, formatNumber, formatUGX } from '@/lib/utils';
 
 export function InventoryMovementsPage() {
   const { role } = useAuth();
+  const canSeeMaterialCosts = role !== 'site_engineer';
   const list = useListState({ movement_type: '', project: '', material: '', date_from: '', date_to: '' });
   const [open, setOpen] = useState(false);
   const movements = useQuery({ queryKey: qk.movements(list.query), queryFn: () => api.movements(list.query) });
@@ -39,7 +40,7 @@ export function InventoryMovementsPage() {
     { header: 'Project', cell: ({ row }) => row.original.project_name || 'Warehouse' },
     { header: 'Type', cell: ({ row }) => <Badge tone={statusTone(row.original.movement_type)}>{row.original.movement_type_display}</Badge> },
     { header: 'Qty', cell: ({ row }) => formatNumber(row.original.quantity) },
-    { header: 'Unit price', cell: ({ row }) => formatUGX(row.original.unit_price) },
+    ...(canSeeMaterialCosts ? [{ header: 'Unit price', cell: ({ row }: { row: { original: StockMovement } }) => formatUGX(row.original.unit_price) }] : []),
     { header: 'Source', cell: ({ row }) => row.original.source_display },
   ];
 

@@ -48,6 +48,11 @@ export function AppShell() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+  useEffect(() => {
+    const roleClass = role ? `role-${role}` : '';
+    if (roleClass) document.body.classList.add(roleClass);
+    return () => { if (roleClass) document.body.classList.remove(roleClass); };
+  }, [role]);
   return (
     <div className="professional-workspace min-h-screen bg-background text-foreground">
       <a href="#workspace-content" className="workspace-skip-link">Skip to content</a>

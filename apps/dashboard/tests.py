@@ -112,7 +112,7 @@ class DashboardConsumerTests(TestCase):
         payload = await communicator.receive_json_from()
 
         self.assertEqual(payload['type'], 'dashboard.update')
-        self.assertEqual(payload['payload']['inventory_value'], '700000')
+        self.assertNotIn('inventory_value', payload['payload'])
 
         await communicator.disconnect()
 

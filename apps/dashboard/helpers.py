@@ -33,10 +33,6 @@ def get_dashboard_payload(company):
         movement_type=StockMovement.MOVEMENT_IN,
     ).aggregate(total=Coalesce(Sum('quantity'), Decimal('0.00')))['total']
 
-    inventory_value = active_materials.aggregate(
-        total=Coalesce(Sum('stock_value'), Decimal('0.00')),
-    )['total']
-
     recent_movements = [
         {
             'id': movement.id,
@@ -57,7 +53,6 @@ def get_dashboard_payload(company):
             'source': movement.source,
             'source_display': movement.get_source_display(),
             'quantity': format_decimal(movement.quantity),
-            'unit_price': format_decimal(movement.unit_price),
             'date': movement.date.isoformat(),
             'notes': movement.notes,
         }
@@ -75,7 +70,6 @@ def get_dashboard_payload(company):
             status=PurchaseRequest.STATUS_PENDING,
         ).count(),
         'stock_in_today': decimal_string(stock_in_today),
-        'inventory_value': decimal_string(inventory_value),
         'recent_stock_movements': recent_movements,
     }
 
