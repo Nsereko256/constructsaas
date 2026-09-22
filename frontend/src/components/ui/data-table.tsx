@@ -7,6 +7,7 @@ import {
 import type React from 'react';
 import { cn } from '@/lib/utils';
 import { EmptyState } from './empty-state';
+import { Skeleton } from './skeleton';
 
 export function DataTable<T>({
   columns,
@@ -17,6 +18,7 @@ export function DataTable<T>({
   mobileSummaryCells = 3,
   mobileSummaryStacked = false,
   mobileCardClassName,
+  loading = false,
 }: {
   columns: ColumnDef<T>[];
   data: T[];
@@ -28,8 +30,11 @@ export function DataTable<T>({
   /** Stack the leading summary cells on narrow screens when one cell contains long status text. */
   mobileSummaryStacked?: boolean;
   mobileCardClassName?: string;
+  loading?: boolean;
 }) {
   const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel() });
+
+  if (loading) return <div role="status" aria-label="Loading records" className="card-surface grid gap-3 p-4"><span className="text-sm text-muted">Loading records…</span>{[0, 1, 2].map((row) => <Skeleton key={row} className="h-12" />)}</div>;
 
   if (!data.length) return <EmptyState title={emptyTitle} message={emptyMessage} action={emptyAction} />;
 
@@ -87,7 +92,7 @@ export function DataTable<T>({
                   <div className="grid gap-2 border-t border-border bg-background px-2.5 py-2.5">
                     {detailCells.map((cell) => (
                       <div key={cell.id} className="text-sm">
-                        {typeof cell.column.columnDef.header === 'string' && cell.column.columnDef.header ? <p className="mb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted">{cell.column.columnDef.header}</p> : null}
+                        {typeof cell.column.columnDef.header === 'string' && cell.column.columnDef.header ? <p className="mb-1 text-xs font-semibold text-muted">{cell.column.columnDef.header}</p> : null}
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </div>
                     ))}

@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Bell, ChevronsLeft, HardHat, LogOut, Menu, WifiOff } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/services';
 import { qk } from '@/api/queryKeys';
@@ -15,6 +15,7 @@ export function AppShell() {
   const { sites, site, siteId, setSiteId, isLoading: sitesLoading } = useSiteScope();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
   const [online, setOnline] = useState(() => navigator.onLine);
   const location = useLocation();
   const nav = useMemo(() => visibleNav(role, user?.soft_finance_enabled !== false), [role, user?.soft_finance_enabled]);
@@ -53,14 +54,26 @@ export function AppShell() {
     if (roleClass) document.body.classList.add(roleClass);
     return () => { if (roleClass) document.body.classList.remove(roleClass); };
   }, [role]);
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [location.pathname]);
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setMobileOpen(false); menuButton.current?.focus(); }
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [mobileOpen]);
   return (
     <div className="professional-workspace min-h-screen bg-background text-foreground">
       <a href="#workspace-content" className="workspace-skip-link">Skip to content</a>
       <aside
+        id="workspace-navigation"
         className={cn(
           'fixed inset-y-0 left-0 z-40 flex w-[min(82vw,296px)] flex-col border-r border-sidebar-border bg-sidebar py-3 text-white transition-all md:w-auto md:translate-x-0',
           collapsed ? 'md:!w-[62px]' : 'md:!w-[170px]',
-          mobileOpen ? 'translate-x-0' : '-translate-x-full',
+          mobileOpen ? 'translate-x-0 visible' : '-translate-x-full invisible md:visible',
         )}
       >
         <div className="flex items-center gap-2 px-2.5">
@@ -72,7 +85,7 @@ export function AppShell() {
             </div>
           ) : null}
         </div>
-        <nav className="mt-5 grid gap-0.5 overflow-auto px-2 pb-4 scrollbar-thin">
+        <nav aria-label="Main navigation" className="mt-5 grid gap-0.5 overflow-auto px-2 pb-4 scrollbar-thin">
           {nav.map((item) => {
             const badgeCount = item.href === '/notifications'
               ? unread.data?.unread_count || 0
@@ -118,7 +131,7 @@ export function AppShell() {
 
       <div className={cn('transition-all', collapsed ? 'md:pl-[62px]' : 'md:pl-[170px]')}>
         <header className="sticky top-0 z-30 flex min-h-[48px] items-center gap-2 border-b border-border bg-white/95 px-3 backdrop-blur sm:gap-3 sm:px-5">
-          <Button variant="ghost" size="sm" className="md:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation">
+          <Button ref={menuButton} variant="ghost" size="sm" className="md:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation" aria-expanded={mobileOpen} aria-controls="workspace-navigation">
             <Menu className="h-5 w-5" />
           </Button>
           {currentNav ? location.pathname.startsWith('/projects') || location.pathname.startsWith('/procurement') || location.pathname.startsWith('/finance') || location.pathname.startsWith('/inventory') || location.pathname.startsWith('/suppliers') ? <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted">{compactWorkspaceLabel}</p> : <div className="min-w-0"><p className="hidden text-[10px] font-bold uppercase tracking-[0.14em] text-muted sm:block">ConstructSaaS</p><p className="truncate text-sm font-bold sm:text-base">{currentNav.label}</p></div> : null}

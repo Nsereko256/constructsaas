@@ -1,5 +1,6 @@
 import { ArrowRight, ChevronDown, type LucideIcon } from 'lucide-react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export type WorkspaceLink = {
@@ -18,13 +19,19 @@ export type WorkspaceTab = {
 
 export function WorkspaceTabs({ links }: { links: WorkspaceTab[] }) {
   const location = useLocation();
-  const primaryLinks = links.slice(0, 4);
-  const secondaryLinks = links.slice(4);
-  const secondaryActive = secondaryLinks.some(({ href }) => location.pathname === href || location.pathname.startsWith(`${href}/`));
-  return <nav aria-label="Workspace sections" className="workspace-tabs-direct">
+  const navigate = useNavigate();
+  const primaryCount = links.length <= 5 ? links.length : 4;
+  const primaryLinks = links.slice(0, primaryCount);
+  const secondaryLinks = links.slice(primaryCount);
+  const current = [...links].sort((a, b) => b.href.length - a.href.length).find(({ href }) => location.pathname === href || location.pathname.startsWith(`${href}/`));
+  const secondaryActive = secondaryLinks.some(({ href }) => href === current?.href);
+  return <>
+    <label className="workspace-section-picker"><span>Workspace</span><select aria-label="Workspace section" value={current?.href || ''} onChange={(event) => navigate(event.target.value)}>{!current ? <option value="" disabled>Choose a section</option> : null}{links.map(({ href, label }) => <option key={href} value={href}>{label}</option>)}</select></label>
+    <nav aria-label="Workspace sections" className="workspace-tabs-direct">
     {primaryLinks.map(({ href, label, icon: Icon }) => <NavLink key={href} end={href.split('/').length <= 2} to={href} className={({ isActive }) => isActive ? 'active' : ''}>{Icon ? <Icon className="h-3.5 w-3.5" /> : null}{label}</NavLink>)}
-    {secondaryLinks.length ? <details className={secondaryActive ? 'active' : ''}><summary>More <ChevronDown className="h-3.5 w-3.5" /></summary><div>{secondaryLinks.map(({ href, label, icon: Icon }) => <NavLink key={href} to={href}>{Icon ? <Icon className="h-3.5 w-3.5" /> : null}{label}</NavLink>)}</div></details> : null}
-  </nav>;
+    {secondaryLinks.length ? <DropdownMenu.Root><DropdownMenu.Trigger className={secondaryActive ? 'workspace-more active' : 'workspace-more'}>{secondaryActive ? current?.label : 'More'} <ChevronDown className="h-3.5 w-3.5" /></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content className="workspace-menu" align="end" sideOffset={6}>{secondaryLinks.map(({ href, label, icon: Icon }) => <DropdownMenu.Item key={href} asChild><NavLink to={href}>{Icon ? <Icon className="h-3.5 w-3.5" /> : null}{label}</NavLink></DropdownMenu.Item>)}</DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root> : null}
+    </nav>
+  </>;
 }
 
 export function WorkspaceHub({ eyebrow, title, description, links }: {

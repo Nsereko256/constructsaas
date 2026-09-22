@@ -2,7 +2,7 @@
    emphasis; containers and decoration stay deliberately quiet. */
 .professional-workspace {
   --direct-line: #dfe5e8;
-  --direct-muted: #64747d;
+  --direct-muted: #526571;
   --direct-accent: #0b7478;
 }
 
@@ -27,7 +27,8 @@
   .grn-kpi, .del-kpi, .notifications-kpi, .finance-kpi
 ) {
   min-height: 66px !important;
-  padding: 10px 12px !important;
+  padding: 14px 16px !important;
+  display: block !important;
 }
 
 .professional-workspace .finance-kpi-content,
@@ -70,7 +71,7 @@
 }
 
 .workspace-tabs-direct > a,
-.workspace-tabs-direct > details > summary {
+.workspace-tabs-direct > .workspace-more {
   display: inline-flex;
   min-height: 38px;
   cursor: pointer;
@@ -85,38 +86,44 @@
 }
 
 .workspace-tabs-direct > a.active,
-.workspace-tabs-direct > details.active > summary {
+.workspace-tabs-direct > .workspace-more.active {
   border-bottom-color: var(--direct-accent);
   color: var(--direct-accent);
 }
 
-.workspace-tabs-direct summary::-webkit-details-marker { display: none; }
-.workspace-tabs-direct > details { position: relative; }
-.workspace-tabs-direct > details[open] > summary svg { transform: rotate(180deg); }
-.workspace-tabs-direct > details > div {
-  position: absolute;
-  top: 40px;
-  right: 0;
-  z-index: 20;
+.workspace-more { background: transparent; }
+.workspace-section-picker { display: none; }
+.workspace-menu {
+  --direct-line: #dfe5e8;
+  z-index: 60;
   display: grid;
-  min-width: 190px;
-  overflow: hidden;
+  min-width: 200px;
+  max-width: calc(100vw - 24px);
+  max-height: var(--radix-dropdown-menu-content-available-height);
+  overflow: auto;
+  padding: 5px;
   border: 1px solid var(--direct-line);
   border-radius: 6px;
   background: #fff;
   box-shadow: 0 8px 24px rgb(24 44 60 / 12%);
 }
-.workspace-tabs-direct > details > div a {
+.workspace-menu [role='menuitem'] {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 9px 11px;
+  min-height: 40px;
+  padding: 10px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
   color: #33464f;
   font-size: 13px;
   font-weight: 600;
 }
-.workspace-tabs-direct > details > div a:hover,
-.workspace-tabs-direct > details > div a[aria-current='page'] { background: #f0f6f6; color: var(--direct-accent); }
+.workspace-menu [data-highlighted],
+.workspace-menu [aria-current='page'] { background: #edf6f6; color: #0b7478; }
+.workspace-menu [data-disabled] { opacity: .5; pointer-events: none; }
+.row-menu-trigger { display: inline-grid; place-items: center; width: 36px; height: 36px; border: 1px solid #dfe5e8; border-radius: 6px; background: white; color: #526571; flex-shrink: 0; }
 
 .direct-filter-bar {
   display: flex;
@@ -131,7 +138,7 @@
 .direct-row-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 5px;
   white-space: nowrap;
 }
@@ -203,13 +210,69 @@
 }
 
 @media (max-width: 640px) {
-  .workspace-tabs-direct { gap: 17px; overflow-x: auto; }
-  .workspace-tabs-direct > details { position: static; }
-  .workspace-tabs-direct > details > div { right: 0; }
+  .professional-workspace .workspace-tabs-direct { display: none; }
+  .workspace-section-picker { display: flex; align-items: center; gap: 12px; margin: 8px 0; color: #526571; font-size: 13px; }
+  .workspace-section-picker > select { flex: 1; min-width: 0; min-height: 44px; border: 1px solid #dfe5e8; border-radius: 6px; background: white; padding: 8px 12px; color: #20313a; font-size: 14px; font-weight: 600; }
   .direct-filter-bar { flex-direction: column; align-items: stretch; }
   .finance-primary-kpis { grid-template-columns: 1fr !important; }
   .professional-workspace main :is(
     .procurement-titlebar, .pr-titlebar, .po-titlebar, .grn-titlebar,
     .del-titlebar, .projects-titlebar, .notifications-titlebar
   ) { gap: 10px !important; }
+}
+
+/* Consistent reading rhythm and visible keyboard focus across workspaces. */
+.professional-workspace main h1 { font-size: clamp(23px, 2vw, 28px); line-height: 1.25; letter-spacing: -.035em; }
+.professional-workspace .finance-page-eyebrow { font-size: 11px; letter-spacing: .06em; font-weight: 600; margin-bottom: 5px; }
+.professional-workspace main :is(h2, .dashboard-panel-heading h2) { font-size: 15px; line-height: 1.4; }
+.professional-workspace main :is(.dashboard-kpi, .ops-kpi, .projects-kpi, .procurement-kpi, .pr-kpi, .po-kpi, .grn-kpi, .del-kpi, .notifications-kpi) p { font-size: 13px !important; line-height: 1.4 !important; color: #526571; }
+.professional-workspace main :is(.dashboard-kpi, .ops-kpi, .projects-kpi, .procurement-kpi, .pr-kpi, .po-kpi, .grn-kpi, .del-kpi, .notifications-kpi) strong { font-size: 24px !important; line-height: 1.25; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.professional-workspace main :is(.dashboard-kpi, .ops-kpi, .projects-kpi, .procurement-kpi, .pr-kpi, .po-kpi, .grn-kpi, .del-kpi, .notifications-kpi) small { line-height: 1.4 !important; color: #526571; }
+.professional-workspace main .finance-kpi { padding: 0 !important; }
+.professional-workspace .finance-kpi-content { padding: 14px 16px !important; }
+.professional-workspace main :is(button, a, summary, select, input, textarea):focus-visible,
+.professional-workspace aside a:focus-visible,
+.row-menu-trigger:focus-visible,
+.workspace-menu:focus-visible { outline: 2px solid #16888e; outline-offset: 3px; }
+.professional-workspace aside nav a { min-height: 40px; font-size: 13px; }
+.professional-workspace aside nav a[aria-current='page'] { box-shadow: inset 3px 0 0 #79d5d1; }
+.professional-workspace .dashboard-queue { padding-top: 14px; padding-bottom: 14px; }
+.professional-workspace .dashboard-queue:hover { background: #f0f7f7; }
+.professional-workspace .dashboard-greeting { gap: 16px; flex-wrap: wrap; }
+.professional-workspace .dashboard-primary { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
+.professional-workspace .dashboard-kpis { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.professional-workspace main .direct-filter-bar { flex-wrap: wrap; }
+
+@media (max-width: 640px) {
+  .professional-workspace .dashboard-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .professional-workspace .dashboard-greeting-actions { width: 100%; }
+  .professional-workspace .dashboard-primary { width: 100%; min-height: 44px; }
+  .professional-workspace main :is(.dashboard-kpi, .ops-kpi, .projects-kpi, .procurement-kpi, .pr-kpi, .po-kpi, .grn-kpi, .del-kpi, .notifications-kpi) strong { font-size: 21px !important; }
+  .professional-workspace .finance-primary-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .professional-workspace .finance-primary-kpis > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .professional-workspace main :is(.ops-kpis, .projects-kpis, .procurement-kpis, .pr-kpis, .po-kpis, .grn-kpis, .del-kpis, .notifications-kpis) > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .professional-workspace .direct-row-actions { flex-wrap: wrap; }
+  .professional-workspace .direct-row-actions :is(button, a), .row-menu-trigger { min-height: 40px; }
+  .dialog-surface input:not([type='checkbox']):not([type='radio']), .dialog-surface select, .dialog-surface textarea { font-size: 16px; }
+}
+
+.professional-workspace .procurement-pipeline-row { min-width: 0; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); }
+@media (max-width: 640px) {
+  .professional-workspace .procurement-pipeline-row { min-width: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 10px; padding: 8px 12px 14px; }
+  .professional-workspace .procurement-stage { gap: 6px; }
+  .professional-workspace .procurement-stage > i { display: none; }
+  .professional-workspace .procurement-stage em { white-space: normal; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .professional-workspace *, .dialog-surface * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
+
+/* Give working registers priority over supporting summaries on laptop screens. */
+@media (max-width: 1440px) {
+  .professional-workspace main :is(.procurement-content-grid, .projects-content-grid, .pr-workspace-grid, .po-workspace-grid, .grn-workspace-grid, .del-workspace-grid) { grid-template-columns: minmax(0, 1fr); }
+  .professional-workspace main :is(.procurement-side-column, .projects-side-column, .pr-side-column, .po-side-column, .grn-side-column, .del-side-column) { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-items: start; }
+}
+@media (max-width: 560px) {
+  .professional-workspace main :is(.procurement-side-column, .projects-side-column, .pr-side-column, .po-side-column, .grn-side-column, .del-side-column) { grid-template-columns: minmax(0, 1fr); }
 }
