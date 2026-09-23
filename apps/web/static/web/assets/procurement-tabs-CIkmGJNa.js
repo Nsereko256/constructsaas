@@ -1,1 +1,0 @@
-import{j as e,W as r}from"./index-BEFAXEnq.js";const s=[{label:"Overview",href:"/procurement"},{label:"Material requests",href:"/procurement/requests"},{label:"Purchase orders",href:"/procurement/purchase-orders"},{label:"Receipts",href:"/procurement/grns"},{label:"Deliveries",href:"/procurement/deliveries"}];function o(){return e.jsx(r,{links:s})}export{o as P};

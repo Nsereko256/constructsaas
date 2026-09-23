@@ -108,7 +108,7 @@ export function NotificationsPage() {
         <NotificationKpi icon={Info} tone="blue" label="System updates" value={summary.isError ? '—' : stats?.system_updates ?? 0} detail={summary.isError ? 'Unavailable' : 'Information only'} />
       </section>
       <div className="notifications-workspace-grid">
-        <section className="notifications-register">
+        <section data-pagination-region className="notifications-register">
           <div className="notifications-panel-heading"><h2>All notifications</h2><span>{stats?.total ?? 0} total</span></div>
           <nav className="notifications-tabs" aria-label="Notification filters">
             {tabs.map(([label, value]) => <button key={value || 'all'} type="button" className={list.filters.category === value ? 'active' : ''} onClick={() => list.setFilter('category', value)}>{label}{value && stats ? <b>{value === 'action' ? stats.action_required : value === 'approvals' ? stats.approvals : categoryCount(categories, label)}</b> : stats ? <b>{stats.total}</b> : null}</button>)}
@@ -119,7 +119,7 @@ export function NotificationsPage() {
             {(notifications.data?.results || []).map((item) => <NotificationRow key={item.id} item={item} onOpen={() => { setSelected(item); if (!item.is_read) markRead.mutate(item.id); }} />)}
             {!notifications.isError && !notifications.data?.results.length ? <p className="notifications-empty">No notifications match this view.</p> : null}
           </div>
-          <Pagination page={list.page} setPage={list.setPage} data={notifications.data} pageSize={5} />
+          <Pagination itemLabel="notifications" loading={notifications.isFetching} page={list.page} setPage={list.setPage} data={notifications.data} pageSize={5} />
         </section>
         <aside className="notifications-side-column">
           <section className="notifications-side-panel"><div className="notifications-panel-heading"><h2>Priority queue</h2><span className="notifications-side-link">{summary.isError ? 'Unavailable' : `${stats?.priority.filter((item) => item.count > 0).reduce((total, item) => total + item.count, 0) ?? 0} open`}</span></div>{summary.isError ? <p className="notifications-side-empty">Priority actions could not be loaded.</p> : (stats?.priority || []).map((item) => <button key={item.label} type="button" className="notifications-priority-row" onClick={() => list.setFilter('category', priorityCategory(item.label))}><span className={`notifications-priority-icon ${item.tone}`}><PriorityIcon label={item.label} /></span><span><strong>{item.label}</strong><small>{item.detail}</small></span><b>{item.count}</b><Badge tone={item.tone === 'urgent' ? 'danger' : item.tone === 'high' ? 'warning' : item.tone === 'medium' ? 'info' : 'neutral'}>{item.tone === 'neutral' ? '—' : item.tone[0].toUpperCase() + item.tone.slice(1)}</Badge></button>)}</section>

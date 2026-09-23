@@ -8,6 +8,7 @@ import type React from 'react';
 import { cn } from '@/lib/utils';
 import { EmptyState } from './empty-state';
 import { Skeleton } from './skeleton';
+import { TableScroll } from '@/components/common/table-scroll';
 
 export function DataTable<T>({
   columns,
@@ -40,7 +41,7 @@ export function DataTable<T>({
 
   return (
     <div className="card-surface overflow-hidden">
-      <div className="hidden overflow-x-auto md:block">
+      <div className="hidden md:block"><TableScroll label="Records">
         <table className="w-full border-collapse text-left text-sm">
           <thead className="bg-surface text-xs uppercase tracking-wide text-muted">
             {table.getHeaderGroups().map((headerGroup) => (
@@ -65,7 +66,7 @@ export function DataTable<T>({
             ))}
           </tbody>
         </table>
-      </div>
+      </TableScroll></div>
       <div className="grid gap-2 p-2.5 md:hidden">
         {table.getRowModel().rows.map((row) => {
           const cells = row.getVisibleCells();

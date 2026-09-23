@@ -6,6 +6,97 @@
   --direct-accent: #0b7478;
 }
 
+/* Registers share one quiet, readable footer rather than page-specific arrows. */
+.register-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-top: 1px solid #dfe5e8;
+  background: #fff;
+  border-radius: 0 0 6px 6px;
+  color: #526571;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-range { line-height: 1.5; }
+.pagination-controls, .pagination-pages { display: flex; align-items: center; gap: 5px; }
+.register-pagination button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 6px 9px;
+  border: 1px solid #dfe5e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #344b55;
+  font-size: 13px;
+  font-weight: 600;
+}
+.register-pagination button:hover:not(:disabled) { border-color: #88b8ba; background: #edf6f6; color: #08666c; }
+.register-pagination button[aria-current='page'] { border-color: #0b7478; background: #0b7478; color: #fff; }
+.register-pagination button:disabled { cursor: not-allowed; opacity: .45; }
+.pagination-pages > span { padding: 0 3px; }
+.pagination-mobile-position { display: none; white-space: nowrap; }
+[data-pagination-region] { scroll-margin-top: 68px; }
+
+/* Wide tables keep a native scrollbar and expose controls above the rows. */
+.table-scroll-shell { min-width: 0; max-width: 100%; }
+.table-scroll-viewport { min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: auto; scrollbar-color: #91a7ae #edf1f3; }
+.table-scroll-viewport::-webkit-scrollbar { height: 12px; width: 12px; }
+.table-scroll-viewport::-webkit-scrollbar-track { background: #edf1f3; border-radius: 8px; }
+.table-scroll-viewport::-webkit-scrollbar-thumb { background: #91a7ae; border: 3px solid #edf1f3; border-radius: 8px; }
+.table-scroll-viewport:focus-visible { outline: 2px solid #16888e; outline-offset: -2px; }
+.table-scroll-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px; border-top: 1px solid #e4eaed; border-bottom: 1px solid #e4eaed; background: #f8fafb; color: #526571; font-size: 12px; }
+.table-scroll-tools > div { display: flex; flex-shrink: 0; gap: 6px; }
+.table-scroll-tools button { display: grid; place-items: center; width: 34px; height: 32px; border: 1px solid #d6e0e3; border-radius: 5px; background: #fff; color: #0b7478; }
+.table-scroll-tools button:hover:not(:disabled) { background: #edf6f6; }
+.table-scroll-tools button:disabled { opacity: .4; cursor: not-allowed; }
+
+/* No invisible sliding action strips: controls wrap within the workspace. */
+.professional-workspace main :is(.ops-actions, .projects-title-actions, .procurement-title-actions, .pr-title-actions, .po-title-actions, .grn-title-actions, .del-title-actions, .notifications-title-actions, .finance-page-actions) {
+  flex-wrap: wrap !important;
+  overflow: visible;
+  row-gap: 8px;
+}
+.professional-workspace main :is(.projects-status-tabs, .procurement-order-tabs, .pr-queue-tabs, .po-queue-tabs, .grn-queue-tabs, .del-queue-tabs, .notifications-tabs) {
+  display: flex;
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 40px;
+  overflow: visible;
+  gap: 4px 16px !important;
+  padding-bottom: 3px;
+}
+.professional-workspace main :is(.projects-status-tabs, .procurement-order-tabs, .pr-queue-tabs, .po-queue-tabs, .grn-queue-tabs, .del-queue-tabs, .notifications-tabs) > button {
+  min-height: 38px;
+  white-space: nowrap;
+}
+.professional-workspace main :is(.pr-filters, .po-filters, .grn-filters, .del-filters, .procurement-filters) {
+  gap: 8px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+@media (min-width: 1101px) {
+  .professional-workspace main :is(.pr-filters, .po-filters, .del-filters, .procurement-filters) { grid-template-columns: minmax(220px, 1.6fr) repeat(4, minmax(100px, 1fr)); }
+}
+@media (max-width: 640px) {
+  .register-pagination { padding: 12px; gap: 8px; }
+  .pagination-range { width: 100%; }
+  .pagination-controls { width: 100%; justify-content: space-between; gap: 8px; }
+  .pagination-pages { display: none; }
+  .pagination-mobile-position { display: inline; font-size: 12px; }
+  .register-pagination button { min-height: 42px; }
+  .table-scroll-tools button { height: 40px; width: 40px; }
+  .professional-workspace .workspace-toolbar > div:last-child { flex-wrap: wrap; overflow: visible; }
+}
+
 .professional-workspace main { color: #20313a; }
 
 .professional-workspace main :is(.card-surface, .panel, [class*='-panel'], [class*='-kpi']) {
@@ -275,4 +366,43 @@
 }
 @media (max-width: 560px) {
   .professional-workspace main :is(.procurement-side-column, .projects-side-column, .pr-side-column, .po-side-column, .grn-side-column, .del-side-column) { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Mobile register cards flow in reading order, never into overlapping cells.
+   Keep existing display rules so role-specific price hiding remains intact. */
+@media (max-width: 560px) {
+  .professional-workspace main :is(.pr-table, .po-table, .grn-table, .del-table) tr {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 12px 14px;
+    padding: 14px;
+  }
+  .professional-workspace main :is(.pr-table, .po-table, .grn-table, .del-table) td:nth-child(n) {
+    grid-column: auto;
+    grid-row: auto;
+    justify-self: stretch;
+    min-width: 0;
+    width: auto;
+    max-width: none;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .professional-workspace main :is(.pr-table, .po-table, .grn-table, .del-table) td:first-child,
+  .professional-workspace main :is(.pr-table, .po-table, .grn-table, .del-table) td:nth-child(2),
+  .professional-workspace main :is(.pr-table, .po-table, .grn-table, .del-table) td:last-child { grid-column: 1 / -1; }
+  .professional-workspace main :is(.pr-table, .po-table, .grn-table, .del-table) td:nth-child(2) { padding-bottom: 10px; border-bottom: 1px solid #e5ebee; }
+  .professional-workspace main :is(.pr-table, .po-table, .grn-table, .del-table) td:last-child { justify-self: end; }
+  .professional-workspace main :is(.pr-table, .po-table, .grn-table, .del-table) td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    color: #526571;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .professional-workspace main :is(.pr-table, .po-table, .grn-table, .del-table) td:first-child::before,
+  .professional-workspace main :is(.pr-table, .po-table, .grn-table, .del-table) td:nth-child(2)::before,
+  .professional-workspace main :is(.pr-table, .po-table, .grn-table, .del-table) td:last-child::before { display: none; }
+  .professional-workspace main :is(.pr-next-actions, .po-next-actions, .del-next-actions) { flex-wrap: wrap; justify-content: flex-start; }
+  .professional-workspace main :is(.pr-table, .po-table, .grn-table, .del-table) td:nth-child(2) :is(button, a) { min-height: 40px; }
 }
