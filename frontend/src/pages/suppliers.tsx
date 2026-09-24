@@ -16,6 +16,7 @@ import { useToast } from '@/components/ui/toast';
 import { useListState } from '@/hooks/use-list-state';
 import { formatUGX } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { ActionMenu, ActionMenuItem } from '@/components/common/action-menu';
 import './operations-reference.css';
 
 export function SuppliersPage() {
@@ -73,7 +74,7 @@ export function SuppliersPage() {
       id: 'actions',
       header: '',
       cell: ({ row }) =>
-        <div className="ops-row-actions"><Button variant="ghost" size="sm" onClick={() => setSelected(row.original)}><Eye className="h-4 w-4" />View</Button>{allowed ? <><Button variant="ghost" size="sm" onClick={() => setOpen(row.original)}><Pencil className="h-4 w-4" />Edit</Button>{row.original.is_active ? <Button variant="ghost" size="sm" onClick={() => { if (window.confirm(`Deactivate ${row.original.name}? Existing procurement history will remain available.`)) deactivate.mutate(row.original.id); }}><Trash2 className="h-4 w-4" />Deactivate</Button> : null}</> : null}</div>,
+        <div className="ops-row-actions"><Button variant="ghost" size="sm" onClick={() => setSelected(row.original)}><Eye className="h-4 w-4" />View</Button>{allowed ? <ActionMenu label={`More actions for ${row.original.name}`}><ActionMenuItem onSelect={() => setOpen(row.original)}><Pencil className="h-4 w-4" />Edit supplier</ActionMenuItem>{row.original.is_active ? <ActionMenuItem onSelect={() => { if (window.confirm(`Deactivate ${row.original.name}? Existing procurement history will remain available.`)) deactivate.mutate(row.original.id); }}><Trash2 className="h-4 w-4" />Deactivate</ActionMenuItem> : null}</ActionMenu> : null}</div>,
     },
   ];
 

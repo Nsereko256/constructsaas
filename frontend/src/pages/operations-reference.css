@@ -27,7 +27,7 @@
 .ops-kpi.teal .ops-kpi-icon { background: #e7f5f4; color: var(--ops-teal); }
 .ops-kpi p { color: #64717b; font-size:13px; font-weight: 700; }
 .ops-kpi strong { display: block; font-size: 19px; font-weight: 900; letter-spacing: -.025em; line-height: 1.15; margin-top: 3px; overflow-wrap: anywhere; }
-.ops-workspace { align-items: start; display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 255px; }
+.ops-workspace { align-items: start; display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
 .ops-panel, .ops-register { background: white; border: 1px solid var(--ops-line); border-radius: 7px; box-shadow: 0 1px 3px rgb(15 35 45 / 4%); overflow: hidden; }
 .ops-panel-head, .ops-register-head { align-items: center; border-bottom: 1px solid var(--ops-line); display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; padding: 11px 12px; }
 .ops-panel h2, .ops-register h2 { font-size: 16px; font-weight: 900; letter-spacing: -.02em; }
@@ -43,7 +43,7 @@
 .ops-row-actions { align-items: center; display: flex; flex-wrap: nowrap; gap: 2px; justify-content: flex-end; white-space: nowrap; }
 .ops-row-actions button { flex: 0 0 auto; min-height: 30px; padding-left: 6px; padding-right: 6px; }
 .ops-register > nav[aria-label="Pagination"] { margin: 0; padding: 10px 12px; }
-.ops-aside { display: grid; gap: 9px; }
+.ops-aside { display: grid; gap: 9px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .ops-panel-body { padding: 11px 12px; }
 .ops-stat-row { align-items: center; border-bottom: 1px solid #edf0f2; display: grid; font-size:13px; gap: 7px; grid-template-columns: 22px minmax(0,1fr) auto; padding: 7px 0; }
 .ops-stat-row:last-child { border: 0; }
@@ -63,7 +63,6 @@
 
 @media (max-width: 1150px) {
   .ops-kpis { grid-template-columns: repeat(3, minmax(0,1fr)); }
-  .ops-workspace { grid-template-columns: 1fr; }
   .ops-aside { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
 @media (min-width: 768px) and (max-width: 1400px) {

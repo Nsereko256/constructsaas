@@ -368,6 +368,82 @@
   .professional-workspace main :is(.procurement-side-column, .projects-side-column, .pr-side-column, .po-side-column, .grn-side-column, .del-side-column) { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* Direct, register-first application layout. Supporting information follows
+   the working register and compact controls replace sliding action strips. */
+.professional-workspace,
+.professional-workspace > div,
+.professional-workspace main,
+.professional-workspace main > div { min-width: 0; max-width: 100%; }
+.professional-workspace { overflow-x: clip; }
+.professional-workspace .inventory-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.professional-workspace .ops-workspace-register-first { grid-template-columns: minmax(0, 1fr); }
+.professional-workspace .ops-support-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.professional-workspace .ops-row-actions { max-width: none; align-items: center; flex-wrap: nowrap; gap: 4px; }
+.professional-workspace .ops-row-actions .row-menu-trigger { width: 32px; height: 32px; }
+.professional-workspace .cell-numeric { display: inline-block; min-width: 4ch; font-variant-numeric: tabular-nums; text-align: right; }
+.professional-workspace .ops-filter-bar { grid-template-columns: minmax(220px, 1.5fr) repeat(3, minmax(135px, .8fr)); }
+.professional-workspace .ops-filter-toggle { display: none; }
+.professional-workspace .ops-filter-controls { display: contents; }
+.professional-workspace .material-inspector .ops-stat-row { min-height: 44px; }
+
+@media (max-width: 900px) {
+  .professional-workspace .inventory-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .professional-workspace .app-sheen { width: 100%; padding-inline: 12px; }
+  .professional-workspace main :is(
+    .ops-actions, .projects-title-actions, .procurement-title-actions,
+    .pr-title-actions, .po-title-actions, .grn-title-actions,
+    .del-title-actions, .notifications-title-actions, .finance-page-actions
+  ) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+    padding: 0;
+  }
+  .professional-workspace main :is(
+    .ops-actions, .projects-title-actions, .procurement-title-actions,
+    .pr-title-actions, .po-title-actions, .grn-title-actions,
+    .del-title-actions, .notifications-title-actions, .finance-page-actions
+  ) > * { width: 100% !important; min-width: 0 !important; }
+  .professional-workspace main :is(
+    .ops-actions, .projects-title-actions, .procurement-title-actions,
+    .pr-title-actions, .po-title-actions, .grn-title-actions,
+    .del-title-actions, .notifications-title-actions, .finance-page-actions
+  ) > :only-child { grid-column: 1 / -1; }
+  .professional-workspace .ops-filter-bar { grid-template-columns: minmax(0, 1fr) auto; }
+  .professional-workspace .ops-filter-toggle {
+    display: inline-flex;
+    min-height: 42px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid var(--direct-line);
+    border-radius: 6px;
+    background: #fff;
+    padding: 8px 12px;
+    color: #314750;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .professional-workspace .ops-filter-toggle span { min-width: 19px; border-radius: 99px; background: #e6f3f3; color: #08666c; line-height: 19px; }
+  .professional-workspace .ops-filter-controls { display: none; grid-column: 1 / -1; gap: 8px; }
+  .professional-workspace .ops-filter-controls.mobile-open { display: grid; }
+  .professional-workspace .ops-support-grid { grid-template-columns: minmax(0, 1fr); }
+  .professional-workspace .ops-register-tabs { gap: 16px; overflow-x: auto; }
+}
+
+@media (max-width: 420px) {
+  .professional-workspace .inventory-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .professional-workspace .inventory-summary > :last-child:nth-child(odd) { grid-column: auto !important; }
+  .professional-workspace main :is(
+    .ops-actions, .projects-title-actions, .procurement-title-actions,
+    .pr-title-actions, .po-title-actions, .grn-title-actions,
+    .del-title-actions, .notifications-title-actions, .finance-page-actions
+  ) { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* Mobile register cards flow in reading order, never into overlapping cells.
    Keep existing display rules so role-specific price hiding remains intact. */
 @media (max-width: 560px) {

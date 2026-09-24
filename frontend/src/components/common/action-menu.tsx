@@ -2,9 +2,9 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { MoreHorizontal } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-export function ActionMenu({ label, children }: { label: string; children: ReactNode }) {
+export function ActionMenu({ label, children, trigger }: { label: string; children: ReactNode; trigger?: ReactNode }) {
   return <DropdownMenu.Root>
-    <DropdownMenu.Trigger className="row-menu-trigger" aria-label={label}><MoreHorizontal size={18} /></DropdownMenu.Trigger>
+    {trigger ? <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger> : <DropdownMenu.Trigger className="row-menu-trigger" aria-label={label}><MoreHorizontal size={18} /></DropdownMenu.Trigger>}
     <DropdownMenu.Portal><DropdownMenu.Content className="workspace-menu" align="end" sideOffset={6}>{children}</DropdownMenu.Content></DropdownMenu.Portal>
   </DropdownMenu.Root>;
 }
