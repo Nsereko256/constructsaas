@@ -25,8 +25,8 @@ const config: Config = {
         'muted-foreground': '#69737C',
       },
       fontFamily: {
-        sans: ['Barlow', 'Aptos', 'Segoe UI', 'sans-serif'],
-        display: ['Archivo', 'Barlow', 'sans-serif'],
+        sans: ['Segoe UI', 'Aptos', 'sans-serif'],
+        display: ['Segoe UI', 'Aptos', 'sans-serif'],
       },
       borderRadius: {
         sm: '6px',

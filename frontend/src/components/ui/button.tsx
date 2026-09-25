@@ -5,7 +5,7 @@ import { LoaderCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex min-h-9 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-info/30',
+  'ui-button inline-flex min-h-9 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-info/30',
   {
     variants: {
       variant: {
@@ -41,6 +41,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     if (asChild) {
       return (
         <Slot
+          data-variant={variant || 'default'}
           aria-busy={loading || undefined}
           className={cn(buttonVariants({ variant, size }), className)}
           ref={ref}
@@ -53,6 +54,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const Comp = asChild ? Slot : 'button';
     return (
       <Comp
+        data-variant={variant || 'default'}
         aria-busy={loading || undefined}
         className={cn(buttonVariants({ variant, size }), className)}
         disabled={disabled || loading}

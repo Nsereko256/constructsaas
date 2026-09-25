@@ -67,7 +67,7 @@ export function InventoryMovementsPage() {
         <Field label="From date"><input className={inputClass} type="date" value={list.filters.date_from} onChange={(event) => list.setFilter('date_from', event.target.value)} /></Field>
         <Field label="To date"><input className={inputClass} type="date" min={list.filters.date_from || undefined} value={list.filters.date_to} onChange={(event) => list.setFilter('date_to', event.target.value)} /></Field>
       </RegisterFilters>
-      {movements.isError ? <div className="p-4" role="alert"><p>Could not load movement history.</p><Button variant="secondary" onClick={() => void movements.refetch()}>Retry</Button></div> : <DataTable columns={columns} data={movements.data?.results || []} emptyTitle={movements.isLoading ? 'Loading stock movements...' : 'No movements found'} />}
+      {movements.isError ? <div className="p-4" role="alert"><p>Could not load movement history.</p><Button variant="secondary" onClick={() => void movements.refetch()}>Retry</Button></div> : <DataTable columns={columns} data={movements.data?.results || []} loading={movements.isLoading} emptyTitle="No movements found" />}
       <Pagination page={list.page} setPage={list.setPage} data={movements.data} />
       </section>
       <MovementModal open={open} onClose={() => setOpen(false)} />

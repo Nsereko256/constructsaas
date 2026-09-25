@@ -4,7 +4,7 @@
 
 :root {
   color-scheme: light;
-  font-family: "Barlow", Aptos, "Segoe UI", sans-serif;
+  font-family: "Segoe UI", Aptos, sans-serif;
   background: #f8f8f5;
   color: #26313b;
   font-variant-numeric: tabular-nums;
@@ -218,7 +218,7 @@ input[type='file']::file-selector-button {
 .dialog-eyebrow {
   margin: 0 0 0.125rem;
   color: #0f7075;
-  font-family: "Archivo", "Barlow", sans-serif;
+  font-family: "Segoe UI", Aptos, sans-serif;
   font-size: 0.625rem;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -421,7 +421,7 @@ select:not(:disabled) { -webkit-tap-highlight-color: transparent; }
   background: rgb(63 111 159 / 18%);
 }
 
-h1, h2, h3, h4 { font-family: "Archivo", "Barlow", sans-serif; letter-spacing: -0.01em; }
+h1, h2, h3, h4 { font-family: "Segoe UI", Aptos, sans-serif; letter-spacing: -0.01em; }
 
 .panel {
   border: 1px solid #DDE1E3;

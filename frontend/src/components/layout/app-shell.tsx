@@ -72,14 +72,14 @@ export function AppShell() {
         id="workspace-navigation"
         className={cn(
           'fixed inset-y-0 left-0 z-40 flex w-[min(82vw,296px)] flex-col border-r border-sidebar-border bg-sidebar py-3 text-white transition-all md:w-auto md:translate-x-0',
-          collapsed ? 'md:!w-[62px]' : 'md:!w-[170px]',
+          collapsed ? 'md:!w-[62px]' : 'md:!w-[184px]',
           mobileOpen ? 'translate-x-0 visible' : '-translate-x-full invisible md:visible',
         )}
       >
         <div className="flex items-center gap-2 px-2.5">
           <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary text-white"><HardHat className="h-3.5 w-3.5" /></div>
             <div className={cn('min-w-0 navigation-label', collapsed && 'desktop-collapsed')}>
-              <strong className="block truncate font-display text-[11px]">ConstructSaaS</strong>
+              <strong className="block truncate font-display text-[13px]">ConstructSaaS</strong>
               <span className="block truncate text-[9px] uppercase tracking-wide text-white/60">NM Pro</span>
             </div>
         </div>
@@ -128,7 +128,7 @@ export function AppShell() {
         </div>
       </aside>
 
-      <div className={cn('transition-all', collapsed ? 'md:pl-[62px]' : 'md:pl-[170px]')}>
+      <div className={cn('transition-all', collapsed ? 'md:pl-[62px]' : 'md:pl-[184px]')}>
         <header className="sticky top-0 z-30 flex min-h-[48px] items-center gap-2 border-b border-border bg-white/95 px-3 backdrop-blur sm:gap-3 sm:px-5">
           <Button ref={menuButton} variant="ghost" size="sm" className="md:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation" aria-expanded={mobileOpen} aria-controls="workspace-navigation">
             <Menu className="h-5 w-5" />
