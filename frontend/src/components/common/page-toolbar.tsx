@@ -19,12 +19,12 @@ export function PageToolbar({
   children?: React.ReactNode;
 }) {
   return (
-    <header className="workspace-toolbar flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
-      <div>
-        <h2 className="text-2xl font-semibold">{title}</h2>
+    <header className="workspace-toolbar">
+      <div className="workspace-toolbar-heading">
+        <h1 className="text-2xl font-semibold">{title}</h1>
         {subtitle ? <p className="mt-1 max-w-2xl text-sm text-muted">{subtitle}</p> : null}
       </div>
-      <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2 [&>button]:w-auto [&>button]:shrink-0 [&>select]:min-w-[145px] [&>select]:flex-1 sm:flex-nowrap sm:[&>select]:w-auto sm:[&>select]:flex-none">
+      <div className="workspace-toolbar-controls">
         {onSearch ? (
           <div className={cn(inputClass, 'flex w-full items-center gap-2 px-3 sm:min-w-[190px] lg:min-w-[220px]')}>
             <Search className="h-4 w-4 text-muted" />

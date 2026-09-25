@@ -78,20 +78,19 @@ export function AppShell() {
       >
         <div className="flex items-center gap-2 px-2.5">
           <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary text-white"><HardHat className="h-3.5 w-3.5" /></div>
-          {!collapsed ? (
-            <div className="min-w-0">
+            <div className={cn('min-w-0 navigation-label', collapsed && 'desktop-collapsed')}>
               <strong className="block truncate font-display text-[11px]">ConstructSaaS</strong>
               <span className="block truncate text-[9px] uppercase tracking-wide text-white/60">NM Pro</span>
             </div>
-          ) : null}
         </div>
-        <nav aria-label="Main navigation" className="mt-5 grid gap-0.5 overflow-auto px-2 pb-4 scrollbar-thin">
-          {nav.map((item) => {
+        <nav aria-label="Main navigation" className="workspace-navigation mt-5 grid gap-0.5 overflow-auto px-2 pb-4 scrollbar-thin">
+          {nav.map((item, index) => {
             const badgeCount = item.href === '/notifications'
               ? unread.data?.unread_count || 0
               : item.badgeKey ? workflowBadges.data?.[item.badgeKey] || 0 : 0;
             return (
             <div key={item.href}>
+            {index === 0 || nav[index - 1].section !== item.section ? <p className={cn('navigation-section navigation-label', collapsed && 'desktop-collapsed')}>{item.section}</p> : null}
             <NavLink
               to={item.href}
               aria-label={item.label}
@@ -105,7 +104,7 @@ export function AppShell() {
               }
             >
               <item.icon className="h-4 w-4 shrink-0" />
-              {!collapsed ? <span>{item.label}</span> : null}
+              <span className={collapsed ? 'navigation-label desktop-collapsed' : 'navigation-label'}>{item.label}</span>
               {badgeCount > 0 ? (
                 <span
                   className={cn(

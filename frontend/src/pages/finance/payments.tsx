@@ -1,3 +1,4 @@
+import { RegisterFilters } from '@/components/common/register-filters';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, ChevronRight, Eye, Link2, Plus, Send, Upload, X } from 'lucide-react';
@@ -64,7 +65,7 @@ export function FinancePaymentsPage() {
       onShow={(status) => list.setFilter('status', status)}
     /> : null}
     {can.prepareFinance(role) && !can.manageFinance(role) ? <DraftAttentionPanel drafts={draftPayments.data?.results || []} count={draftPayments.data?.count || 0} onShow={() => list.setFilter('status', 'DRAFT')} /> : null}
-    <div className="flex flex-wrap gap-2 border border-border bg-white p-3 shadow-panel"><input className={inputClass} value={list.search} onChange={(event) => list.setSearch(event.target.value)} placeholder="Voucher, supplier or reference" aria-label="Search payments" /><select className={inputClass} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}><option value="">All statuses</option>{['DRAFT','SUBMITTED','APPROVED','POSTED','REJECTED','REVERSED'].map((value) => <option key={value}>{value}</option>)}</select><select className={inputClass} value={list.filters.method} onChange={(event) => list.setFilter('method', event.target.value)}><option value="">All methods</option><option>BANK</option><option>MOBILE_MONEY</option><option>CHEQUE</option><option>CASH</option></select></div>
+    <RegisterFilters className="direct-filter-bar" activeCount={[list.search, list.filters.status, list.filters.method].filter(Boolean).length} onClear={() => { list.setSearch(''); list.setFilter('status', ''); list.setFilter('method', ''); }}><input className={inputClass} value={list.search} onChange={(event) => list.setSearch(event.target.value)} placeholder="Voucher, supplier or reference" aria-label="Search payments" /><select aria-label="Payment status" className={inputClass} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}><option value="">All statuses</option>{['DRAFT','SUBMITTED','APPROVED','POSTED','REJECTED','REVERSED'].map((value) => <option key={value}>{value}</option>)}</select><select aria-label="Payment method" className={inputClass} value={list.filters.method} onChange={(event) => list.setFilter('method', event.target.value)}><option value="">All methods</option><option>BANK</option><option>MOBILE_MONEY</option><option>CHEQUE</option><option>CASH</option></select></RegisterFilters>
     <DataTable
       columns={columns}
       data={payments.data?.results || []}

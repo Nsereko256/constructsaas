@@ -11,6 +11,7 @@ import { FormModal } from '@/components/common/form-modal';
 import { MaterialLookup } from '@/components/common/material-lookup';
 import { PageToolbar } from '@/components/common/page-toolbar';
 import { InventoryTabs } from '@/components/common/inventory-tabs';
+import { RegisterFilters } from '@/components/common/register-filters';
 import './operations-reference.css';
 import './inventory-registers.css';
 import { Pagination } from '@/components/common/pagination';
@@ -54,8 +55,8 @@ export function InventoryMovementsPage() {
       <InventoryTabs />
       <section className="ops-register">
       <div className="ops-register-head"><h2>Movement history</h2><span className="text-sm text-muted">{movements.data ? `${movements.data.count} records` : 'Stock audit trail'}</span></div>
-      <div className="inventory-history-filters">
-        <Field label="Search"><input className={inputClass} value={list.search} onChange={event => list.setSearch(event.target.value)} placeholder="Search movements" /></Field>
+      <RegisterFilters className="inventory-history-filters" activeCount={[list.search, ...Object.values(list.filters)].filter(Boolean).length} onClear={() => { list.setSearch(''); Object.keys(list.filters).forEach((key) => list.setFilter(key, '')); }}>
+        <input aria-label="Search movements" className={inputClass} value={list.search} onChange={event => list.setSearch(event.target.value)} placeholder="Search movements" />
         <Field label="Movement type"><select className={inputClass} value={list.filters.movement_type} onChange={(event) => list.setFilter('movement_type', event.target.value)}>
           <option value="">All movement types</option>
           <option value="IN">Stock in</option>
@@ -65,7 +66,7 @@ export function InventoryMovementsPage() {
         </select></Field>
         <Field label="From date"><input className={inputClass} type="date" value={list.filters.date_from} onChange={(event) => list.setFilter('date_from', event.target.value)} /></Field>
         <Field label="To date"><input className={inputClass} type="date" min={list.filters.date_from || undefined} value={list.filters.date_to} onChange={(event) => list.setFilter('date_to', event.target.value)} /></Field>
-      </div>
+      </RegisterFilters>
       {movements.isError ? <div className="p-4" role="alert"><p>Could not load movement history.</p><Button variant="secondary" onClick={() => void movements.refetch()}>Retry</Button></div> : <DataTable columns={columns} data={movements.data?.results || []} emptyTitle={movements.isLoading ? 'Loading stock movements...' : 'No movements found'} />}
       <Pagination page={list.page} setPage={list.setPage} data={movements.data} />
       </section>

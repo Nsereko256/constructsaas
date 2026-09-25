@@ -444,6 +444,77 @@
   ) { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* Shared register controls: search first, optional filters second. */
+.professional-workspace main .register-filters {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(0, 2fr);
+  align-items: start;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--direct-line);
+}
+.professional-workspace main .register-filters > :first-child { width: 100%; min-width: 0; grid-column: auto; }
+.professional-workspace .register-filters > label:first-child { height: auto; min-height: 44px; display: flex; align-items: center; gap: 8px; }
+.professional-workspace .register-filters > label:first-child input { min-width: 0; width: 100%; border: 0; box-shadow: none; background: transparent; }
+.professional-workspace .register-filters > label:first-child svg { flex-shrink: 0; }
+.professional-workspace .register-filter-controls { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.professional-workspace .register-filter-controls > * { flex: 1 1 110px; width: auto; min-width: 0; }
+.professional-workspace main .register-filters :is(input, select) { min-height: 42px !important; font-size: 14px; }
+.professional-workspace .register-filter-toggle { display: none; }
+.professional-workspace .register-filter-state {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #526571;
+  font-size: 13px;
+}
+.professional-workspace .register-filter-state button {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: #08666c; font-weight: 600; min-height: 32px;
+}
+.professional-workspace .workspace-toolbar { display: grid; gap: 16px; margin-bottom: 4px; }
+.professional-workspace .workspace-toolbar-heading h1 { font-size: 26px; line-height: 1.25; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.professional-workspace .workspace-toolbar-controls {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-width: 0;
+}
+.professional-workspace .workspace-toolbar-controls > div:has(.inline-search-input) { flex: 1 1 260px; width: auto; max-width: 420px; }
+.professional-workspace .workspace-toolbar-controls > :is(select, button, a) { flex: 0 1 auto; }
+.professional-workspace .navigation-section { padding: 16px 10px 5px; color: #a5bbc7; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; }
+.professional-workspace .navigation-section:first-child { padding-top: 5px; }
+.professional-workspace .mobile-record-label { display: block; margin-bottom: 3px; color: #526571; font-size: 12px; font-weight: 500; }
+.professional-workspace .mobile-record-value { min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.professional-workspace .data-register .mobile-record { box-shadow: none; }
+.professional-workspace .data-register .mobile-record > div { padding: 14px; }
+.professional-workspace .register-filter-controls .projects-view-toggle { flex: 0 0 auto; width: auto; justify-self: start; align-self: center; }
+.professional-workspace .projects-portfolio-toolbar { display: block; }
+.supplier-inspector { --ops-line: #dfe5e8; --ops-teal: #0b7478; }
+.supplier-inspector .ops-panel h2 { font-size: 15px; font-weight: 600; }
+@media (min-width: 768px) {
+  .professional-workspace .navigation-label.desktop-collapsed { display: none; }
+}
+@media (min-width: 701px) {
+  .professional-workspace main .register-filters:has(> .register-filter-controls > :only-child) { grid-template-columns: minmax(220px, 1fr) minmax(180px, 260px); }
+}
+@media (max-width: 700px) {
+  .professional-workspace main .register-filters { grid-template-columns: minmax(0, 1fr) auto; }
+  .professional-workspace .register-filter-toggle {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    min-height: 44px; padding: 8px 12px; border: 1px solid var(--direct-line);
+    border-radius: 6px; background: #fff; color: #314750; font-size: 13px; font-weight: 600;
+  }
+  .professional-workspace .register-filter-toggle span { min-width: 19px; border-radius: 99px; background: #e6f3f3; color: #08666c; line-height: 19px; }
+  .professional-workspace .register-filter-controls { display: none; grid-column: 1 / -1; }
+  .professional-workspace .register-filter-controls.is-open { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .professional-workspace .register-filter-controls > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .professional-workspace .register-filter-state button { min-height: 44px; }
+  .professional-workspace .workspace-toolbar > .workspace-toolbar-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; white-space: normal; width: 100%; }
+  .professional-workspace .workspace-toolbar-controls > div:has(.inline-search-input) { grid-column: 1 / -1; max-width: none; min-width: 0; width: 100%; }
+  .professional-workspace .workspace-toolbar-controls > * { min-width: 0; width: 100%; }
+  .professional-workspace .ops-row-actions .row-menu-trigger { min-width: 44px; min-height: 44px; }
+}
+
 /* Mobile register cards flow in reading order, never into overlapping cells.
    Keep existing display rules so role-specific price hiding remains intact. */
 @media (max-width: 560px) {

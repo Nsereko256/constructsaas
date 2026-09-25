@@ -45,7 +45,7 @@ export function visibleNav(role: Role | null, softFinanceEnabled = true) {
   if (!role) return [];
   const items = navItems
     .filter((item) => item.roles.includes(role) && (softFinanceEnabled || item.href !== '/finance'))
-    .map((item) => ({ ...item, section: item.section || 'Operations' }));
+    .map((item) => ({ ...item, section: item.section || (item.href === '/settings' ? 'Team & Settings' : 'Operations') }));
   if (!softFinanceEnabled && role === 'admin') {
     const recoveryItem: NavItem = {
       label: 'Finance settings',

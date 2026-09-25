@@ -1,3 +1,4 @@
+import { RegisterFilters } from '@/components/common/register-filters';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRightLeft, Check, Plus, Send, SlidersHorizontal, X } from 'lucide-react';
@@ -52,10 +53,10 @@ export function FinanceBudgetsPage() {
   ];
   return <FinancePage eyebrow="Project controls" title="Budgets and commitments" description="Approve cost envelopes, monitor purchasing commitments, and protect available project balances." actions={can.prepareFinance(role) ? <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" />New budget</Button> : undefined}>
     <FinanceWorkspaceSummary view="budgets" />
-    <div className="flex flex-wrap gap-2 border border-border bg-white p-3 shadow-panel">
+    <RegisterFilters className="direct-filter-bar" activeCount={[list.search, list.filters.status].filter(Boolean).length} onClear={() => { list.setSearch(''); list.setFilter('status', ''); }}>
       <input className={inputClass} value={list.search} onChange={(event) => list.setSearch(event.target.value)} placeholder="Search project or budget" aria-label="Search budgets" />
-      <select className={inputClass} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}><option value="">All statuses</option><option>DRAFT</option><option>SUBMITTED</option><option>APPROVED</option><option>REJECTED</option></select>
-    </div>
+      <select aria-label="Budget status" className={inputClass} value={list.filters.status} onChange={(event) => list.setFilter('status', event.target.value)}><option value="">All statuses</option><option>DRAFT</option><option>SUBMITTED</option><option>APPROVED</option><option>REJECTED</option></select>
+    </RegisterFilters>
     <DataTable columns={columns} data={budgets.data?.results || []} emptyTitle={budgets.isLoading ? 'Loading budgets...' : 'No project budgets found'} />
     <Pagination page={list.page} setPage={list.setPage} data={budgets.data} />
     <BudgetModal key={creating ? 'open' : 'closed'} open={creating} onClose={() => setCreating(false)} canManageCategories={can.manageFinance(role)} />

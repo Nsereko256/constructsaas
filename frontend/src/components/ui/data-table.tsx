@@ -40,7 +40,7 @@ export function DataTable<T>({
   if (!data.length) return <EmptyState title={emptyTitle} message={emptyMessage} action={emptyAction} />;
 
   return (
-    <div className="card-surface overflow-hidden">
+    <div className="data-register card-surface overflow-hidden">
       <div className="hidden md:block"><TableScroll label="Records">
         <table className="w-full border-collapse text-left text-sm">
           <thead className="bg-surface text-xs uppercase tracking-wide text-muted">
@@ -75,14 +75,14 @@ export function DataTable<T>({
           const primaryCells = contentCells.slice(0, mobileSummaryCells);
           const detailCells = contentCells.slice(mobileSummaryCells);
           return (
-            <article key={row.id} className={cn('card-surface card-surface-interactive', mobileCardClassName)}>
+            <article key={row.id} className={cn('mobile-record card-surface card-surface-interactive', mobileCardClassName)}>
               <div className={mobileSummaryStacked ? 'grid min-w-0 gap-2.5 p-2.5' : 'grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,42%)] items-start gap-2.5 p-2.5'}>
                 <div className="min-w-0 text-sm">
                   {primaryCells[0] ? flexRender(primaryCells[0].column.columnDef.cell, primaryCells[0].getContext()) : null}
                 </div>
                 <div className={mobileSummaryStacked ? 'grid min-w-0 gap-1.5 text-left text-xs' : 'grid min-w-0 justify-items-end gap-1.5 overflow-hidden text-right text-xs'}>
                   {primaryCells.slice(1).map((cell) => (
-                    <div key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
+                    <div key={cell.id} className="mobile-record-value">{typeof cell.column.columnDef.header === 'string' && cell.column.columnDef.header ? <span className="mobile-record-label">{cell.column.columnDef.header}</span> : null}{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
                   ))}
                 </div>
               </div>
