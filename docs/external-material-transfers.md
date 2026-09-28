@@ -49,6 +49,28 @@ remain owed; this workflow does not silently write off debt or convert a loan in
 - Each receipt/post/rejection/reversal/return records its actor and reason. Role enforcement
   is on the server as well as in the UI. Notifications contain no prices.
 
+## PDF and Excel exports
+
+Use **PDF** or **Excel** on the External transfers register to download all move orders
+matching the current search, ownership, approval and active-site filters, across every page.
+Open an individual move order and use the same buttons for its full record: sender,
+warehouse, materials, pending and posted quantities, receipts, approvals and return history.
+Excel keeps quantities and dates as sortable typed values and freezes table headers.
+Borrowed documents show warehouse-held and still-owed balances without inventory valuation.
+Permanent documents distinguish proposed/latest approved unit values from historical
+receipt unit values. Exports are read-only and use the same tenant and role restrictions
+as the register; downloading never posts stock or creates a payable.
+
+## Site custody retirement
+
+The separate Site custody page and navigation entry are removed. Old page links redirect
+to Stock movements. Dispatch, acknowledgement, consumption and return transactions through
+the old site-custody API/services are disabled, including for Admin. Historical records and
+stock movements remain unchanged and readable; there is no automatic reversal or deletion.
+Any historical in-transit balances remain as recorded and are not silently settled.
+Normal approved material-request issues, project returns, procurement receipts and external
+move-order borrowing/returns remain separate enabled workflows.
+
 ## Release
 
 Run `python manage.py migrate` (warehouse migration 0014), build the frontend with
@@ -74,3 +96,9 @@ company's stock:
   Lint, production build, Django system checks and migration drift checks passed.
 
 These are local verification results, not confirmation of a production deployment.
+
+Export and retirement follow-up: 29 backend tests passed with one database-specific skip;
+31 frontend tests passed. Browser downloads of the register and individual order were
+opened for PDF/Excel validation, and the retired page redirected to Stock movements.
+Long move-order notes remain intact in the record and audit metadata; only the short audit
+summary is limited to its 500-character field.

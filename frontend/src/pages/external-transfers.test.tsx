@@ -10,7 +10,7 @@ vi.mock('@/auth/auth-context', () => ({ useAuth: () => auth }));
 vi.mock('@/components/ui/toast', () => ({ useToast: () => ({ push: vi.fn() }) }));
 vi.mock('@/api/external-transfers', async () => {
   const actual = await vi.importActual<typeof import('@/api/external-transfers')>('@/api/external-transfers');
-  return { ...actual, allChoices: vi.fn().mockResolvedValue([]), externalTransfers: { list: vi.fn(), detail: vi.fn(), create: vi.fn(), action: vi.fn() } };
+  return { ...actual, allChoices: vi.fn().mockResolvedValue([]), externalTransfers: { list: vi.fn(), detail: vi.fn(), create: vi.fn(), action: vi.fn(), download: vi.fn().mockResolvedValue(undefined) } };
 });
 function mount(detail = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -29,6 +29,7 @@ describe('External transfers', () => {
     mount();
     await screen.findByText('No external transfers');
     expect(externalTransfers.list).toHaveBeenCalledWith(expect.objectContaining({ page_size: 5 }));
+    expect(screen.queryByRole('link', { name: 'Site custody' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'New move order' }));
     expect(screen.getByRole('dialog')).toHaveTextContent('No stock or invoice is created');
     fireEvent.change(screen.getAllByRole('combobox', { name: /Ownership/ }).at(-1)!, { target: { value: 'BORROWED' } });
@@ -56,5 +57,22 @@ describe('External transfers', () => {
     auth.role = 'storekeeper'; mount(true);
     await screen.findByRole('heading', { name: 'Move order MO-1' });
     expect(screen.queryByRole('button', { name: 'Review & post' })).not.toBeInTheDocument();
+  });
+  it('exports the filtered register independently of pagination', async () => {
+    mount();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search move orders' }), { target: { value: 'Partner' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Ownership' }), { target: { value: 'BORROWED' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Download filtered move orders Excel' }));
+    await waitFor(() => expect(externalTransfers.download).toHaveBeenCalledWith('xlsx', undefined, { search: 'Partner', ownership: 'BORROWED', pending: '' }));
+  });
+  it('exports both formats for the open move order', async () => {
+    mount(true);
+    await screen.findByRole('heading', { name: 'Move order MO-1' });
+    fireEvent.click(screen.getByRole('button', { name: 'Download move order PDF' }));
+    await waitFor(() => expect(externalTransfers.download).toHaveBeenCalledWith('pdf', 1, {}));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Download move order Excel' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Download move order Excel' }));
+    await waitFor(() => expect(externalTransfers.download).toHaveBeenCalledWith('xlsx', 1, {}));
+    expect(externalTransfers.action).not.toHaveBeenCalled();
   });
 });

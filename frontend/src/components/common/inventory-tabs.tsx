@@ -10,6 +10,5 @@ export function InventoryTabs() {
     ...(canReadExternalTransfers(role) ? [{ href: '/inventory/external-transfers', label: 'External transfers', icon: ReceiptText }] : []),
     { href: '/inventory/bin-locations', label: 'Bin locations', icon: ReceiptText },
     { href: '/inventory/movements', label: 'Movements', icon: Route },
-    { href: '/inventory/site-custody', label: 'Site custody', icon: ReceiptText },
   ]} /></div>;
 }

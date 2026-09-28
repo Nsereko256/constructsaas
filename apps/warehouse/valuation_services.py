@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Sum
 from django.db.models.functions import Coalesce
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.accounts.models import User
 from apps.finance.configuration_services import record_finance_audit_event
@@ -21,6 +21,11 @@ MONEY_QUANTUM = Decimal('0.01')
 RATE_QUANTUM = Decimal('0.000001')
 WAREHOUSE_WRITE_ROLES = {User.ROLE_STOREKEEPER, User.ROLE_ADMIN}
 VALUATION_APPROVAL_ROLES = {User.ROLE_FINANCE_MANAGER, User.ROLE_ADMIN}
+
+
+def reject_site_custody_transaction():
+    # Retain historical models and calculations, but retire this write workflow.
+    raise PermissionDenied('Site custody transactions have been disabled. Use the material-request stock-issue workflow. Existing records are preserved.')
 
 
 def _decimal(value, field, *, allow_zero=False):
@@ -441,6 +446,7 @@ def return_stock_from_project(
 
 @transaction.atomic
 def dispatch_to_site(*, user, material, project, warehouse=None, quantity, date, reason):
+    reject_site_custody_transaction()
     _require_role(user, WAREHOUSE_WRITE_ROLES)
     project = Project.objects.select_for_update().filter(pk=getattr(project, 'pk', project), company=user.company, is_active=True).first()
     if project is None:
@@ -470,6 +476,7 @@ def dispatch_to_site(*, user, material, project, warehouse=None, quantity, date,
 
 @transaction.atomic
 def acknowledge_site_transfer(*, user, site_transfer):
+    reject_site_custody_transaction()
     transfer = SiteTransfer.objects.select_for_update().select_related(
         'project', 'material', 'destination_store', 'outbound_movement',
     ).filter(pk=getattr(site_transfer, 'pk', site_transfer), company=user.company).first()
@@ -497,6 +504,7 @@ def acknowledge_site_transfer(*, user, site_transfer):
 
 @transaction.atomic
 def consume_site_stock(*, user, material, project, quantity, date, reason):
+    reject_site_custody_transaction()
     _require_role(user, {User.ROLE_SITE_ENGINEER, User.ROLE_PROJECT_MANAGER, User.ROLE_ADMIN})
     project = Project.objects.select_for_update().filter(pk=getattr(project, 'pk', project), company=user.company, is_active=True).first()
     if project is None:
@@ -515,6 +523,7 @@ def consume_site_stock(*, user, material, project, quantity, date, reason):
 
 @transaction.atomic
 def return_site_stock_to_warehouse(*, user, material, project, warehouse, quantity, date, reason):
+    reject_site_custody_transaction()
     _require_role(user, WAREHOUSE_WRITE_ROLES)
     project = Project.objects.select_for_update().filter(pk=getattr(project, 'pk', project), company=user.company).first()
     if project is None:

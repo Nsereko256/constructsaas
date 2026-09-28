@@ -30,9 +30,11 @@ def reason_required(reason):
 
 
 def audit(order, user, action, reason, **metadata):
+    if len(reason) > 500:
+        metadata['full_reason'] = reason
     record_finance_audit_event(company=order.company, actor=user, action=action,
                               object_type='ExternalMoveOrder', object_id=order.pk,
-                              message=reason, metadata=metadata)
+                              message=reason[:500], metadata=metadata)
 
 
 def notify(order, roles, title, message):

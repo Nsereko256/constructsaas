@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from apps.warehouse import external_services as service
 from apps.warehouse.models import ExternalMoveOrder
+from apps.warehouse.external_exports import export_detail, export_register
 from .permissions import HasCompanyAndRole
 
 
@@ -149,7 +150,7 @@ class ExternalMoveOrderViewSet(viewsets.ReadOnlyModelViewSet):
         qs = ExternalMoveOrder.objects.filter(company=self.request.user.company).select_related('warehouse', 'created_by').prefetch_related(
             'lines__material', 'lines__bin_location', 'lines__events__project', 'lines__events__actor',
             'lines__receipt_lines__receipt', 'receipts__lines__movement', 'receipts__received_by', 'receipts__reviewed_by')
-        if self.action == 'list':
+        if self.action in {'list', 'download_register'}:
             search = self.request.query_params.get('search', '').strip()
             if search:
                 qs = qs.filter(Q(sender__icontains=search) | Q(reference__icontains=search) | Q(lines__material__name__icontains=search)).distinct()
@@ -161,6 +162,16 @@ class ExternalMoveOrderViewSet(viewsets.ReadOnlyModelViewSet):
             if self.request.query_params.get('project_site'):
                 qs = qs.filter(warehouse__project_site_id=self.request.query_params['project_site'])
         return qs
+
+    @action(detail=False, methods=['get'], url_path='download/(?P<kind>pdf|xlsx)')
+    def download_register(self, request, kind=None):
+        orders = self.get_serializer(self.get_queryset(), many=True).data
+        filters = ', '.join(f'{key}: {request.query_params[key]}' for key in ('search', 'ownership', 'pending', 'project_site') if request.query_params.get(key))
+        return export_register(orders=orders, company=request.user.company.name, kind=kind, filters=filters)
+
+    @action(detail=True, methods=['get'], url_path='download/(?P<kind>pdf|xlsx)')
+    def download(self, request, pk=None, kind=None):
+        return export_detail(order=self.get_serializer(self.get_object()).data, company=request.user.company.name, kind=kind)
 
     def create(self, request):
         data = MoveOrderInput(data=request.data)

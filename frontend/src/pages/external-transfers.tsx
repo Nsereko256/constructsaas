@@ -6,6 +6,7 @@ import { allChoices, canReadExternalTransfers, externalTransfers, type ExternalL
 import type { BinLocation, Material, Project, Warehouse } from '@/api/types';
 import { useAuth } from '@/auth/auth-context';
 import { FormModal } from '@/components/common/form-modal';
+import { ExportButton } from '@/components/common/export-button';
 import { InventoryTabs } from '@/components/common/inventory-tabs';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { PageToolbar } from '@/components/common/page-toolbar';
@@ -24,6 +25,19 @@ const today = () => new Date().toLocaleDateString('en-CA');
 const canCreate = (role: string | null) => ['admin', 'storekeeper', 'procurement_officer'].includes(role || '');
 const canReceive = (role: string | null) => ['admin', 'storekeeper'].includes(role || '');
 
+function MoveOrderExports({ id, filters = {} }: { id?: number; filters?: Record<string, string> }) {
+  const toast = useToast();
+  const download = useMutation({
+    mutationFn: (kind: 'pdf' | 'xlsx') => externalTransfers.download(kind, id, filters),
+    onError: (error: Error) => toast.push({ title: 'Move order export failed', message: error.message, tone: 'danger' }),
+  });
+  return <>
+    <ExportButton label="PDF" aria-label={id ? 'Download move order PDF' : 'Download filtered move orders PDF'} disabled={download.isPending} onClick={() => download.mutate('pdf')} />
+    <ExportButton label="Excel" aria-label={id ? 'Download move order Excel' : 'Download filtered move orders Excel'} disabled={download.isPending} onClick={() => download.mutate('xlsx')} />
+    {download.isPending && <span className="text-sm text-muted" role="status">Preparing download…</span>}
+  </>;
+}
+
 export function ExternalTransfersPage() {
   const { role } = useAuth();
   const [page, setPage] = useState(1);
@@ -35,6 +49,7 @@ export function ExternalTransfersPage() {
   if (!canReadExternalTransfers(role)) return <p>This inventory workflow is available to warehouse, procurement, finance and admin staff.</p>;
   return <div className="operations-reference external-transfers grid gap-4">
     <PageToolbar title="External transfers" subtitle="Receive materials from another company, without a purchase order.">
+      <MoveOrderExports filters={{ search, ownership, pending }} />
       {canCreate(role) && <Button onClick={() => setCreating(true)}><Plus size={16} />New move order</Button>}
     </PageToolbar>
     <InventoryTabs />
@@ -111,6 +126,7 @@ export function ExternalTransferDetailPage() {
   return <div className="operations-reference external-transfers grid gap-4">
     <Button variant="ghost" className="justify-self-start" asChild><Link to="/inventory/external-transfers"><ArrowLeft size={16} />External transfers</Link></Button>
     <PageToolbar title={`Move order MO-${order.id}`} subtitle={`${order.sender} · ${order.reference}`}>
+      <MoveOrderExports id={order.id} />
       {canReceive(role) && !order.closed && order.lines.some(l => Number(l.remaining) > 0) && <Button onClick={() => setMode({ kind: 'receive' })}>Confirm arrival</Button>}
       {role === 'admin' && !order.closed && <Button variant="secondary" onClick={() => setMode({ kind: 'close' })}>Close to receipts</Button>}
     </PageToolbar>

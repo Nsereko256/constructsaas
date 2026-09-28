@@ -1,9 +1,13 @@
 from decimal import Decimal
+from io import BytesIO
+from xml.etree import ElementTree as ET
+from zipfile import ZipFile
 from uuid import uuid4
 
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
+from rest_framework.exceptions import PermissionDenied
 
 from apps.accounts.models import Company, User
 from apps.finance.models import FinanceAuditEvent
@@ -12,6 +16,7 @@ from apps.projects.models import Project
 from apps.notifications.models import Notification
 from .models import ExternalMoveOrder, ExternalStockEvent, StockMovement, Warehouse, BinLocation
 from .valuation_services import valuation_state, record_opening_balance
+from . import valuation_services
 
 
 class ExternalTransferTests(TestCase):
@@ -226,3 +231,107 @@ class ExternalTransferTests(TestCase):
         order = self.receive(self.create_order())
         self.action(order, 'review', dict(receipt_id=order['receipts'][0]['id'], decision='post', reason='short'), status=400)
         self.assertFalse(StockMovement.objects.exists())
+
+    def workbook_sheets(self, response):
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        with ZipFile(BytesIO(response.content)) as book:
+            for name in book.namelist():
+                if name.endswith('.xml') or name.endswith('.rels'):
+                    ET.fromstring(book.read(name))
+            return [book.read(name).decode() for name in book.namelist() if name.startswith('xl/worksheets/')]
+
+    def test_move_order_exports_include_approved_values_and_do_not_post_stock(self):
+        order = self.create_order()
+        order = self.post_receipt(self.receive(order), costs={str(order['lines'][0]['id']): '120.50'})
+        before = (StockMovement.objects.count(), ExternalStockEvent.objects.count())
+        response = self.client.get(f'/api/external-move-orders/{order["id"]}/download/xlsx/')
+        sheets = self.workbook_sheets(response)
+        self.assertEqual(len(sheets), 4)
+        self.assertIn('120.50', sheets[1])
+        self.assertIn('Latest approved value', sheets[1])
+        self.assertIn('120.500000', sheets[2])
+        self.assertIn('POSTED', sheets[2])
+        self.assertIn('Verified delivery document', sheets[2])
+        ns = {'s': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+        self.assertTrue(ET.fromstring(sheets[0]).findall('.//s:c[@s="3"]/s:v', ns))
+        self.assertIn('private, no-store', response['Cache-Control'])
+        pdf = self.client.get(f'/api/external-move-orders/{order["id"]}/download/pdf/')
+        self.assertEqual(pdf.status_code, 200)
+        self.assertTrue(pdf.content.startswith(b'%PDF-'))
+        self.assertEqual(pdf['Content-Disposition'], f'attachment; filename="move-order-MO-{order["id"]}.pdf"')
+        self.assertEqual(before, (StockMovement.objects.count(), ExternalStockEvent.objects.count()))
+
+    def test_borrowed_exports_preserve_owed_balances_without_valuation(self):
+        order = self.post_receipt(self.receive(self.create_order('BORROWED')))
+        order = self.stock_action(order, action='ISSUE', quantity='3', project=self.project.pk)
+        sheets = self.workbook_sheets(self.client.get(f'/api/external-move-orders/{order["id"]}/download/xlsx/'))
+        self.assertIn('Still owed to sender', sheets[1])
+        self.assertIn('<v>7.00</v>', sheets[1])
+        self.assertIn('<v>10.00</v>', sheets[1])
+        self.assertNotIn('unit value (UGX)', ''.join(sheets))
+        self.assertNotIn('Unit values', ''.join(sheets))
+        self.assertFalse(StockMovement.objects.exists())
+
+    def test_export_filters_all_pages_and_escapes_user_text(self):
+        for index in range(6):
+            self.create_order('BORROWED', sender='=HYPERLINK("https://example.invalid") & <Sender>', reference=f'BORROW-{index}')
+        self.create_order('PERMANENT', reference='EXCLUDED')
+        response = self.client.get('/api/external-move-orders/download/xlsx/?ownership=BORROWED&search=BORROW&page_size=1&page=2')
+        sheets = self.workbook_sheets(response)
+        for index in range(6):
+            self.assertIn(f'BORROW-{index}', sheets[0])
+        self.assertNotIn('EXCLUDED', sheets[0])
+        self.assertIn('&amp; &lt;Sender&gt;', sheets[0])
+        self.assertNotIn('<f>', sheets[0])
+        self.assertIn('t="inlineStr"', sheets[0])
+        empty = self.client.get('/api/external-move-orders/download/pdf/?pending=true')
+        self.assertEqual(empty.status_code, 200)
+        self.assertTrue(empty.content.startswith(b'%PDF-'))
+
+    def test_export_access_is_tenant_scoped_and_role_protected(self):
+        order = self.create_order()
+        other_company = Company.objects.create(name='Foreign export tenant')
+        other_admin = User.objects.create_user(username='foreign-export-admin', company=other_company, role='admin')
+        for kind in ['pdf', 'xlsx']:
+            path = f'/api/external-move-orders/{order["id"]}/download/{kind}/'
+            self.client.force_authenticate(self.engineer)
+            self.assertEqual(self.client.get(path).status_code, 403)
+            self.assertEqual(self.client.get(f'/api/external-move-orders/download/{kind}/').status_code, 403)
+            self.client.force_authenticate(other_admin)
+            self.assertEqual(self.client.get(path).status_code, 404)
+            self.client.force_authenticate(self.finance)
+            self.assertEqual(self.client.get(path).status_code, 200)
+
+    def test_pdf_handles_long_names_notes_and_multiple_pages(self):
+        order = self.create_order(sender='A & B <Partners> ' * 9, notes='Long transfer note for testing wrapping. ' * 95)
+        event = FinanceAuditEvent.objects.get(object_id=str(order['id']), action='external_move_created')
+        self.assertEqual(event.metadata['full_reason'], order['notes'])
+        self.assertEqual(len(event.message), 500)
+        for index in range(4):
+            order = self.receive(order, accepted='1', reference=f'PART-{index}', notes='Delivery count & condition verified. ' * 10)
+            order = self.post_receipt(order)
+        response = self.client.get(f'/api/external-move-orders/{order["id"]}/download/pdf/')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.content.startswith(b'%PDF-'))
+        self.assertGreater(len(response.content), 4000)
+
+    def test_retired_site_custody_rejects_api_and_service_writes(self):
+        order = self.post_receipt(self.receive(self.create_order()))
+        original = valuation_state(company=self.company, material=self.material, warehouse=self.warehouse)
+        for url in ['dispatch-to-site', 'consume-site-stock', 'return-site-stock', 'site-transfers/999/acknowledge']:
+            response = self.client.post(f'/api/stock-movements/{url}/', {}, format='json')
+            self.assertEqual(response.status_code, 403, response.data)
+            self.assertIn('disabled', str(response.data))
+        args = dict(user=self.admin, material=self.material, project=self.project, warehouse=self.warehouse, quantity=1, date=self.date, reason='Attempt disabled operation.')
+        for service in [valuation_services.dispatch_to_site, valuation_services.return_site_stock_to_warehouse]:
+            with self.assertRaises(PermissionDenied):
+                service(**args)
+        with self.assertRaises(PermissionDenied):
+            valuation_services.consume_site_stock(**{key: value for key, value in args.items() if key != 'warehouse'})
+        with self.assertRaises(PermissionDenied):
+            valuation_services.acknowledge_site_transfer(user=self.admin, site_transfer=999)
+        self.assertEqual(valuation_state(company=self.company, material=self.material, warehouse=self.warehouse), original)
+        self.assertEqual(self.client.get('/api/stock-movements/site-transfers/').status_code, 200)
+        # External transfer receipts and returns are a separate, still-enabled workflow.
+        self.stock_action(order, quantity='1')

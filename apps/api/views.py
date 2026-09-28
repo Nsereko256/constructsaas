@@ -1076,6 +1076,7 @@ class StockMovementViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='dispatch-to-site')
     def dispatch_to_site(self, request):
+        valuation_services.reject_site_custody_transaction()
         payload = SiteTransferRequestSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         transfer = valuation_services.dispatch_to_site(user=request.user, **payload.validated_data)
@@ -1083,16 +1084,19 @@ class StockMovementViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path=r'site-transfers/(?P<transfer_id>[^/.]+)/acknowledge')
     def acknowledge_site_transfer(self, request, transfer_id=None):
+        valuation_services.reject_site_custody_transaction()
         transfer = valuation_services.acknowledge_site_transfer(user=request.user, site_transfer=transfer_id)
         transaction.on_commit(lambda: push_dashboard_update(transfer.company))
         return Response(SiteTransferSerializer(transfer).data)
 
     @action(detail=False, methods=['post'], url_path='consume-site-stock')
     def consume_site_stock(self, request):
+        valuation_services.reject_site_custody_transaction()
         return self._run_action(request, SiteTransferRequestSerializer, valuation_services.consume_site_stock)
 
     @action(detail=False, methods=['post'], url_path='return-site-stock')
     def return_site_stock(self, request):
+        valuation_services.reject_site_custody_transaction()
         return self._run_action(request, SiteReturnRequestSerializer, valuation_services.return_site_stock_to_warehouse)
 
     @action(detail=False, methods=['get'], url_path='site-transfers')

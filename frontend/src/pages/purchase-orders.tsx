@@ -311,7 +311,7 @@ function PurchaseOrderModal({ open, onClose, onCreated, initialPurchaseRequestId
             </select>
           </Field>
         </div>
-        {selectedPr?.project && deliveryDestination === 'WAREHOUSE' ? <p className="border border-warning/30 bg-warning/5 p-3 text-sm text-foreground">This is an exception route. After Storekeeper receipt, the stock is reserved for this project and cannot be issued to other project requests. Dispatch it to the site through Site custody for engineer acknowledgement.</p> : null}
+        {selectedPr?.project && deliveryDestination === 'WAREHOUSE' ? <p className="border border-warning/30 bg-warning/5 p-3 text-sm text-foreground">After Storekeeper receipt, stock is reserved for this project and cannot be issued to other projects. Use the approved material-request stock-issue workflow for this project.</p> : null}
         {selectedPr ? (
           <Card>
             <CardHeader>

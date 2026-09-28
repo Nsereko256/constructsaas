@@ -1,4 +1,4 @@
-import { apiRequest, pageParams } from './client';
+import { apiDownload, apiRequest, pageParams } from './client';
 import type { Paginated } from './types';
 
 export type ExternalEvent = { id: number; action: string; quantity: string; project_name: string; reason: string; actor: string; created_at: string };
@@ -22,6 +22,11 @@ export const externalTransfers = {
   detail: (id: string) => apiRequest<ExternalOrder>(`/api/external-move-orders/${id}/`),
   create: (body: unknown) => apiRequest<ExternalOrder>('/api/external-move-orders/', { method: 'POST', body }),
   action: (id: number, action: string, body: unknown) => apiRequest<ExternalOrder>(`/api/external-move-orders/${id}/${action}/`, { method: 'POST', body }),
+  download: (kind: 'pdf' | 'xlsx', id?: number, params: Record<string, string> = {}) => {
+    const site = typeof window !== 'undefined' ? window.localStorage.getItem('construct.active-project-site') : null;
+    const filters = id ? {} : { ...params, ...(site ? { project_site: site } : {}) };
+    return apiDownload(`/api/external-move-orders/${id ? `${id}/` : ''}download/${kind}/${pageParams(filters)}`, `${id ? `move-order-MO-${id}` : 'move-orders'}.${kind}`);
+  },
 };
 export const canReadExternalTransfers = (role: string | null) => ['admin', 'storekeeper', 'procurement_officer', 'finance_manager', 'finance_officer', 'finance_viewer'].includes(role || '');
 
