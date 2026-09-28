@@ -1,5 +1,6 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
+from .external_transfers import ExternalMoveOrderViewSet
 
 from .views import (
     CategoryViewSet,
@@ -37,6 +38,7 @@ from .views import (
 app_name = 'api'
 
 router = DefaultRouter()
+router.register('external-move-orders', ExternalMoveOrderViewSet, basename='external-move-order')
 router.register('companies', CompanyViewSet, basename='company')
 router.register('users', UserViewSet, basename='user')
 router.register('categories', CategoryViewSet, basename='category')

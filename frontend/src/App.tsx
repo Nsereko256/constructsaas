@@ -11,6 +11,8 @@ const GoodsReceivedNotesPage = lazy(() => import('@/pages/goods-received-notes')
 const ForgotPasswordPage = lazy(() => import('@/pages/forgot-password').then((module) => ({ default: module.ForgotPasswordPage })));
 const InventoryPage = lazy(() => import('@/pages/inventory').then((module) => ({ default: module.InventoryPage })));
 const InventoryMovementsPage = lazy(() => import('@/pages/inventory-movements').then((module) => ({ default: module.InventoryMovementsPage })));
+const ExternalTransfersPage = lazy(() => import('@/pages/external-transfers').then((module) => ({ default: module.ExternalTransfersPage })));
+const ExternalTransferDetailPage = lazy(() => import('@/pages/external-transfers').then((module) => ({ default: module.ExternalTransferDetailPage })));
 const SiteCustodyPage = lazy(() => import('@/pages/site-custody').then((module) => ({ default: module.SiteCustodyPage })));
 const BinLocationsPage = lazy(() => import('@/pages/bin-locations').then((module) => ({ default: module.BinLocationsPage })));
 const LoginPage = lazy(() => import('@/pages/login').then((module) => ({ default: module.LoginPage })));
@@ -78,6 +80,8 @@ export function App() {
             <Route path="/procurement/deliveries" element={<DeliveriesPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/inventory/movements" element={<InventoryMovementsPage />} />
+            <Route path="/inventory/external-transfers" element={<ExternalTransfersPage />} />
+            <Route path="/inventory/external-transfers/:id" element={<ExternalTransferDetailPage />} />
             <Route path="/inventory/site-custody" element={<SiteCustodyPage />} />
             <Route path="/inventory/bin-locations" element={<BinLocationsPage />} />
             <Route path="/suppliers" element={<SuppliersPage />} />

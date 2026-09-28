@@ -108,6 +108,8 @@ class StockMovement(models.Model):
         (SOURCE_ADJUSTMENT, 'Adjustment'),
     ]
 
+    TRANSACTION_EXTERNAL_RECEIPT = 'EXTERNAL_RECEIPT'
+    TRANSACTION_EXTERNAL_RETURN = 'EXTERNAL_RETURN'
     TRANSACTION_LEGACY = 'LEGACY'
     TRANSACTION_OPENING = 'OPENING'
     TRANSACTION_RECEIPT = 'RECEIPT'
@@ -126,6 +128,8 @@ class StockMovement(models.Model):
     TRANSACTION_LANDED_COST = 'LANDED_COST'
     TRANSACTION_LANDED_COST_REVERSAL = 'LANDED_COST_REVERSAL'
     TRANSACTION_CHOICES = [
+        (TRANSACTION_EXTERNAL_RECEIPT, 'External transfer receipt'),
+        (TRANSACTION_EXTERNAL_RETURN, 'External transfer return / reversal'),
         (TRANSACTION_LEGACY, 'Legacy movement'),
         (TRANSACTION_OPENING, 'Opening balance'),
         (TRANSACTION_RECEIPT, 'Valued receipt'),
@@ -347,3 +351,96 @@ class SiteTransfer(models.Model):
             raise ValidationError({'destination_store': 'Destination must be this project’s site store.'})
         if self.quantity is not None and self.quantity <= 0:
             raise ValidationError({'quantity': 'Quantity must be greater than zero.'})
+
+
+class ExternalMoveOrder(models.Model):
+    """A non-purchase inbound transfer. External parties are not tenant accounts."""
+    company = models.ForeignKey(Company, on_delete=models.PROTECT)
+    sender = models.CharField(max_length=160)
+    reference = models.CharField(max_length=100)
+    sender_key = models.CharField(max_length=160, editable=False)
+    reference_key = models.CharField(max_length=100, editable=False)
+    ownership = models.CharField(max_length=12, choices=[('PERMANENT', 'Permanent transfer'), ('BORROWED', 'Borrowed')])
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT)
+    expected_date = models.DateField(default=timezone.localdate)
+    return_due_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    closed = models.BooleanField(default=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-pk']
+        constraints = [models.UniqueConstraint(fields=['company', 'sender_key', 'reference_key'], name='external_move_sender_reference_unique')]
+
+
+class ExternalMoveLine(models.Model):
+    order = models.ForeignKey(ExternalMoveOrder, on_delete=models.PROTECT, related_name='lines')
+    material = models.ForeignKey('materials.Material', on_delete=models.PROTECT)
+    bin_location = models.ForeignKey(BinLocation, on_delete=models.PROTECT, null=True, blank=True)
+    quantity = models.DecimalField(max_digits=12, decimal_places=2)
+    unit_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ['pk']
+        constraints = [
+            models.UniqueConstraint(fields=['order', 'material'], name='external_move_unique_material'),
+            models.CheckConstraint(condition=models.Q(quantity__gt=0), name='external_move_positive_quantity'),
+            models.CheckConstraint(condition=models.Q(unit_cost__gte=0), name='external_move_nonnegative_cost'),
+        ]
+
+
+class ExternalReceipt(models.Model):
+    order = models.ForeignKey(ExternalMoveOrder, on_delete=models.PROTECT, related_name='receipts')
+    reference = models.CharField(max_length=100)
+    status = models.CharField(max_length=12, choices=[('PENDING', 'Awaiting admin'), ('POSTED', 'Posted'), ('REJECTED', 'Rejected'), ('REVERSED', 'Reversed')], default='PENDING')
+    received_date = models.DateField(default=timezone.localdate)
+    received_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='+')
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, related_name='+')
+    reviewed_at = models.DateTimeField(null=True)
+    notes = models.TextField(blank=True)
+    review_reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-pk']
+        constraints = [models.UniqueConstraint(fields=['order', 'reference'], name='external_receipt_reference_unique')]
+
+
+class ExternalReceiptLine(models.Model):
+    receipt = models.ForeignKey(ExternalReceipt, on_delete=models.PROTECT, related_name='lines')
+    order_line = models.ForeignKey(ExternalMoveLine, on_delete=models.PROTECT, related_name='receipt_lines')
+    accepted = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    damaged = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    rejected = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    movement = models.OneToOneField(StockMovement, on_delete=models.PROTECT, null=True, related_name='+')
+    reversal = models.OneToOneField(StockMovement, on_delete=models.PROTECT, null=True, related_name='+')
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['receipt', 'order_line'], name='external_receipt_unique_line'),
+            models.CheckConstraint(condition=models.Q(accepted__gte=0, damaged__gte=0, rejected__gte=0), name='external_receipt_nonnegative'),
+        ]
+
+
+class ExternalStockEvent(models.Model):
+    """Append-only custody/return history; borrowed quantities never enter owned valuation."""
+    line = models.ForeignKey(ExternalMoveLine, on_delete=models.PROTECT, related_name='events')
+    receipt = models.ForeignKey(ExternalReceipt, on_delete=models.PROTECT, null=True, related_name='events')
+    action = models.CharField(max_length=20, choices=[('RECEIVE', 'Received'), ('ISSUE', 'Issued to project'), ('PROJECT_RETURN', 'Returned from project'), ('OWNER_RETURN', 'Returned to sender'), ('REVERSE', 'Receipt reversed')])
+    quantity = models.DecimalField(max_digits=12, decimal_places=2)
+    project = models.ForeignKey('projects.Project', on_delete=models.PROTECT, null=True)
+    movement = models.OneToOneField(StockMovement, on_delete=models.PROTECT, null=True, related_name='+')
+    request_key = models.UUIDField(unique=True)
+    reason = models.TextField()
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'pk']
+        constraints = [models.CheckConstraint(condition=models.Q(quantity__gt=0), name='external_stock_event_positive')]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValidationError('Custody events are immutable. Record a compensating return.')
+        return super().save(*args, **kwargs)
