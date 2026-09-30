@@ -16,7 +16,8 @@ class WebAppRouteTests(TestCase):
         response = self.client.get('/')
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '<div id="root"></div>', html=True)
+        self.assertContains(response, '<div id="root">')
+        self.assertContains(response, 'Enable JavaScript in your browser')
         self.assertContains(response, '/static/web/assets/')
 
     def test_react_shell_does_not_embed_user_data(self):
@@ -29,10 +30,11 @@ class WebAppRouteTests(TestCase):
         response = self.client.get('/login/')
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '<div id="root"></div>', html=True)
+        self.assertContains(response, '<div id="root">')
 
     def test_client_side_route_serves_same_react_shell(self):
         response = self.client.get('/projects/123/')
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '<div id="root"></div>', html=True)
+        self.assertContains(response, '<div id="root">')
+        self.assertEqual(response.content, self.client.get('/').content)

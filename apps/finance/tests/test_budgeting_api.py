@@ -91,6 +91,10 @@ class ProjectBudgetingApiTests(TestCase):
         budget, line_ids = self._approved_budget()
         purchase_request, finance_approval = self._finance_approved_pr(line_ids[0])
         self.assertEqual(finance_approval.status_code, 200, finance_approval.data)
+        self.assertEqual(
+            Decimal(self.client.get(f'/api/purchase-requests/{purchase_request.id}/').data['finance_requested_amount']),
+            purchase_request.budget_approval.requested_amount,
+        )
         po = self._purchase_order(purchase_request)
         self.client.force_authenticate(self.fixture.procurement)
         approved_po = self.client.post(f'/api/purchase-orders/{po.id}/approve/')
@@ -176,6 +180,46 @@ class ProjectBudgetingApiTests(TestCase):
         self.assertTrue(FinanceAuditEvent.objects.filter(
             company=self.fixture.company, action='purchase_request.finance_overridden',
         ).exists())
+
+    def test_admin_finance_decision_requires_explicit_controlled_reason(self):
+        purchase_request = self.fixture.purchase_request(quantity=Decimal('2'))
+        self.client.force_authenticate(self.fixture.manager)
+        submitted = self.client.post(
+            f'/api/purchase-requests/{purchase_request.pk}/submit-finance/',
+            {'comments': 'Isolated QA review request'}, format='json',
+        )
+        self.assertEqual(submitted.status_code, 200, submitted.data)
+        po = self._purchase_order(purchase_request)
+        self.client.force_authenticate(self.fixture.admin)
+        handoff = self.client.post(f'/api/purchase-orders/{po.pk}/submit-to-finance/', {'comments': 'QA PO handoff by Admin'}, format='json')
+        self.assertEqual(handoff.status_code, 200, handoff.data)
+        detail = self.client.get(f'/api/purchase-requests/{purchase_request.pk}/')
+        self.assertTrue(detail.data['finance_admin_override_required'])
+        self.assertFalse(detail.data['finance_review_requires_independent_reviewer'])
+        body = {'override': True, 'comments': 'Documented local budget exception.'}
+        url = f'/api/purchase-requests/{purchase_request.pk}/finance-approve/'
+        blocked = self.client.post(url, body, format='json')
+        self.assertEqual(blocked.status_code, 400)
+        body['override_reason'] = 'Isolated QA Admin acting for the Finance reviewer.'
+        approved = self.client.post(url, body, format='json')
+        self.assertEqual(approved.status_code, 200, approved.data)
+        self.assertEqual(approved.data['status'], BudgetApproval.STATUS_OVERRIDDEN)
+
+    def test_finance_readiness_explains_self_review_restriction_without_weakening_it(self):
+        request = self.fixture.purchase_request()
+        self.client.force_authenticate(self.fixture.admin)
+        submitted = self.client.post(f'/api/purchase-requests/{request.pk}/submit-finance/', {'comments': 'QA Finance submission'}, format='json')
+        self.assertEqual(submitted.status_code, 200, submitted.data)
+        detail = self.client.get(f'/api/purchase-requests/{request.pk}/')
+        self.assertTrue(detail.data['finance_review_requires_independent_reviewer'])
+        denied = self.client.post(f'/api/purchase-requests/{request.pk}/finance-approve/', {
+            'override': True, 'comments': 'Documented budget exception',
+            'override_reason': 'Documented Admin reason does not bypass maker-checker.',
+        }, format='json')
+        self.assertEqual(denied.status_code, 400)
+        self.assertIn('different reviewing user', str(denied.data))
+        self.client.force_authenticate(self.fixture.finance_manager)
+        self.assertFalse(self.client.get(f'/api/purchase-requests/{request.pk}/').data['finance_review_requires_independent_reviewer'])
 
     def test_unbudgeted_request_requires_commented_manager_override(self):
         purchase_request = self.fixture.purchase_request(quantity=Decimal('2.00'))
@@ -473,7 +517,11 @@ class ProjectBudgetingApiTests(TestCase):
         self.assertEqual(corrected.data['title'], 'Corrected materials request')
         self.assertEqual(corrected.data['status'], PurchaseRequest.STATUS_PENDING)
         self.assertEqual(corrected.data['finance_status'], BudgetApproval.STATUS_RETURNED)
-        self.assertIn('Clarify the material quantity', corrected.data['finance_return_reason'])
+        # Engineers receive actionable non-commercial guidance, never Finance's
+        # free-text review (which may contain supplier prices).
+        self.assertNotIn('finance_return_reason', corrected.data)
+        self.assertNotIn('finance_requested_amount', corrected.data)
+        self.assertIn('Confirm the material quantities', corrected.data['correction_guidance'])
 
         self.client.force_authenticate(self.fixture.manager)
         self.assertEqual(self.client.post(f'/api/purchase-requests/{purchase_request.id}/approve/').status_code, 200)

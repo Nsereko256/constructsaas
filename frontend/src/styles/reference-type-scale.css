@@ -294,7 +294,7 @@
   }
   :is(.pr-table, .po-table, .grn-table, .del-table) :is(th, td):nth-child(2) {
     position: sticky;
-    left: 172px;
+    left: var(--register-identity-width, 172px);
     z-index: 3;
     background: #fff;
     box-shadow: 2px 0 3px rgb(16 37 50 / 8%);

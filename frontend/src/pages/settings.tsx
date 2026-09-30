@@ -7,6 +7,7 @@ import { useAuth } from '@/auth/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/toast';
+import { CompanyReadiness } from '@/components/common/company-readiness';
 
 const categories: Array<{ key: keyof EmailNotificationPreferences; label: string; detail: string }> = [
   { key: 'procurement', label: 'Procurement', detail: 'Requests, purchase orders, returns and approvals' },
@@ -47,6 +48,7 @@ export function SettingsPage() {
         <h1 className="mt-1 text-3xl font-bold tracking-tight">Settings</h1>
         <p className="mt-1 text-sm text-muted">Keep important operational alerts visible without filling your inbox with routine updates.</p>
       </header>
+      {user?.role === 'admin' ? <CompanyReadiness /> : null}
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(280px,.8fr)]">
         <Card>

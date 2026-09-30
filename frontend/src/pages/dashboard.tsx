@@ -83,12 +83,12 @@ export function DashboardPage() {
     return { ...project, actualSpend, forecastCost, actualSpendPercent, plannedProgress: Math.max(0, Math.min(100, Number(project.planned_progress ?? 0))), actualProgress: Math.max(0, Math.min(100, Number(project.actual_progress ?? 0))), atRisk: budget > 0 && forecastCost > budget };
   });
   const pipeline = [
-    { label: 'Requests', count: workflow.data?.requests || 0, status: 'Needs attention', href: '/procurement/requests?action_queue=my_requests' },
+    { label: 'Requests', count: workflow.data?.requests || 0, status: workflow.data ? (workflow.data.requests ? 'Needs attention' : 'All clear') : 'Loading', href: '/procurement/requests?action_queue=my_requests' },
     { label: 'POs', count: workflow.data?.purchase_orders || 0, status: 'Open', href: '/procurement/purchase-orders' },
     { label: 'Deliveries', count: workflow.data?.deliveries || 0, status: 'Needs action', href: '/procurement/deliveries' },
     { label: 'Stock', count: data.low_stock_count, status: data.low_stock_count ? 'Low stock' : 'Healthy', href: '/inventory' },
-    { label: 'Invoices', count: workflow.data?.supplier_invoices || 0, status: 'All clear', href: '/finance/payables' },
-    { label: 'Payments', count: workflow.data?.payments || 0, status: 'All clear', href: '/finance/payments' },
+    { label: 'Invoices', count: workflow.data?.supplier_invoices || 0, status: workflow.data ? (workflow.data.supplier_invoices ? 'Needs action' : 'All clear') : 'Loading', href: '/finance/payables' },
+    { label: 'Payments', count: workflow.data?.payments || 0, status: workflow.data ? (workflow.data.payments ? 'Needs action' : 'All clear') : 'Loading', href: '/finance/payments' },
   ] as const;
   const attentionItems = [
     ...data.pending_purchase_requests_list.slice(0, 3).map(request => ({

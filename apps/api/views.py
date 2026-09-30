@@ -1410,8 +1410,8 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
     filterset_fields = ['project', 'priority', 'status', 'requested_by']
     search_fields = ['number', 'title', 'project__name', 'requested_by__username', 'justification']
-    ordering_fields = ['number', 'priority', 'status', 'created_at', 'updated_at']
-    ordering = ['-created_at']
+    ordering_fields = ['id', 'number', 'priority', 'status', 'created_at', 'updated_at', 'queue_rank']
+    ordering = ['-created_at', '-id']
 
     def get_serializer_class(self):
         return PurchaseRequestDetailSerializer if self.action == 'retrieve' else PurchaseRequestSerializer
@@ -1481,9 +1481,25 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
         queryset = purchase_requests_for_user(self.request.user)
         if self.request.query_params.get('project_site'):
             queryset = queryset.filter(work_order_site__project_site_id=self.request.query_params['project_site'])
-        queue = self.request.query_params.get('action_queue')
+        if self.request.query_params.get('register_queue') == 'stock':
+            queryset = queryset.filter(status__in=[PurchaseRequest.STATUS_STOCK_ISSUE_REQUESTED, PurchaseRequest.STATUS_PARTIAL_STOCK_ISSUED])
+        if self.request.query_params.get('action_queue') == 'my_requests':
+            queryset = self.my_queue(queryset)
+        if 'queue_rank' in self.request.query_params.get('ordering', ''):
+            queryset = queryset.annotate(queue_rank=Case(
+                When(pk__in=self.my_queue(queryset).order_by().values('pk'), then=Value(0)),
+                default=Value(1),
+            ))
+        return queryset
+
+    def my_queue(self, queryset):
+        """One scope for the role queue, its count and cross-page ordering.
+
+        A queue can contain blocked work (for example stock awaiting clearance);
+        row permissions and blockers, not the count, decide which action is usable.
+        """
         role = self.request.user.role
-        if queue == 'my_requests':
+        if role:
             if role == User.ROLE_PROJECT_MANAGER:
                 return queryset.filter(status=PurchaseRequest.STATUS_PENDING).distinct()
             if role == User.ROLE_PROCUREMENT_OFFICER:
@@ -1503,7 +1519,29 @@ class PurchaseRequestViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet
                 return queryset.filter(status=PurchaseRequest.STATUS_STOCK_ISSUE_REQUESTED).distinct()
             if role == User.ROLE_ADMIN:
                 return queryset.filter(Q(status=PurchaseRequest.STATUS_PENDING) | Q(status=PurchaseRequest.STATUS_STOCK_ISSUE_REQUESTED) | Q(status=PurchaseRequest.STATUS_APPROVED, purchase_orders__isnull=True)).distinct()
-        return queryset
+            if role == User.ROLE_SITE_ENGINEER:
+                return queryset.filter(Q(status=PurchaseRequest.STATUS_RETURNED) | Q(budget_approval__status=BudgetApproval.STATUS_RETURNED), purchase_orders__isnull=True).distinct()
+        return queryset.none()
+
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        requests = self.filter_queryset(self.get_queryset()).order_by()
+        counts = dict(requests.values('status').annotate(count=Count('id', distinct=True)).values_list('status', 'count'))
+        data = {
+            'count': sum(counts.values()), 'statuses': counts,
+            'my_queue': self.my_queue(requests).count(),
+            'awaiting_approval': counts.get(PurchaseRequest.STATUS_PENDING, 0),
+            'urgent_approval': requests.filter(status=PurchaseRequest.STATUS_PENDING, priority=PurchaseRequest.PRIORITY_URGENT).count(),
+            'stock_queue': counts.get(PurchaseRequest.STATUS_STOCK_ISSUE_REQUESTED, 0) + counts.get(PurchaseRequest.STATUS_PARTIAL_STOCK_ISSUED, 0),
+            'stock_fulfilled': counts.get(PurchaseRequest.STATUS_STOCK_ISSUED, 0),
+        }
+        if request.user.role != User.ROLE_SITE_ENGINEER:
+            data['estimated_value'] = PurchaseRequestItem.objects.filter(
+                purchase_request__in=requests.exclude(status=PurchaseRequest.STATUS_REJECTED),
+            ).aggregate(
+                value=Sum(F('quantity') * F('material__unit_price')),
+            )['value'] or Decimal(0)
+        return Response(data)
 
     def perform_create(self, serializer):
         # Warehouse replenishment is a procurement-owned technical decision,
@@ -2128,7 +2166,7 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
     # prevents warehouse and direct-site POs being mixed across paginated pages.
     filterset_fields = ['purchase_request', 'project', 'status', 'delivery_destination']
     search_fields = ['number', 'supplier_name', 'purchase_request__number', 'project__name', 'notes']
-    ordering_fields = ['number', 'status', 'created_at', 'updated_at']
+    ordering_fields = ['id', 'number', 'status', 'created_at', 'updated_at', 'delivery_sort_date']
     ordering = ['-created_at']
 
     def get_serializer_class(self):
@@ -2149,7 +2187,7 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
         } for event in events])
 
     def get_permissions(self):
-        if self.action in {'list', 'retrieve', 'receive', 'three_way_summary', 'amendments', 'download'}:
+        if self.action in {'list', 'retrieve', 'receive', 'three_way_summary', 'amendments', 'download', 'summary', 'activity'}:
             permission_classes = [IsAuthenticatedCompanyUser]
         elif self.action in {'approve_amendment', 'reject_amendment', 'confirm_preapproval_edit'}:
             permission_classes = [FinanceAdminPermission]
@@ -2196,7 +2234,9 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
         company = self.get_company()
         if not company:
             return PurchaseOrder.objects.none()
-        queryset = purchase_orders_for_user(self.request.user)
+        queryset = purchase_orders_for_user(self.request.user).annotate(delivery_sort_date=Coalesce(
+            'revised_delivery_date', 'supplier_confirmed_delivery_date', 'expected_delivery_date',
+        ))
         if self.request.query_params.get('project_site'):
             queryset = queryset.filter(purchase_request__work_order_site__project_site_id=self.request.query_params['project_site'])
         queue = self.request.query_params.get('action_queue')
@@ -2209,6 +2249,33 @@ class PurchaseOrderViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
         if queue == 'po_progress':
             return queryset.filter(status__in=[PurchaseOrder.STATUS_DRAFT, PurchaseOrder.STATUS_PENDING])
         return queryset
+
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """Role/site-scoped register totals, independent of paginated page size."""
+        orders = self.filter_queryset(self.get_queryset()).order_by()
+        counts = dict(orders.values('status').annotate(count=Count('id')).values_list('status', 'count'))
+        waiting = [PurchaseOrder.STATUS_ORDERED, PurchaseOrder.STATUS_DISPATCH_CONFIRMED, PurchaseOrder.STATUS_PARTIAL]
+        receipts = GoodsReceivedNote.objects.filter(
+            company=request.user.company, purchase_order__in=orders,
+            status=GoodsReceivedNote.STATUS_ACCEPTED,
+        )
+        data = {
+            'count': sum(counts.values()), 'statuses': counts,
+            'awaiting_delivery': sum(counts.get(key, 0) for key in waiting),
+            'direct_to_site': orders.filter(delivery_destination=PurchaseOrder.DELIVERY_SITE).count(),
+            'warehouse_receipts': receipts.filter(purchase_order__delivery_destination=PurchaseOrder.DELIVERY_WAREHOUSE).count(),
+            'site_receipts': receipts.filter(purchase_order__delivery_destination=PurchaseOrder.DELIVERY_SITE).count(),
+            'warehouse_queue': orders.filter(delivery_destination=PurchaseOrder.DELIVERY_WAREHOUSE, status__in=[PurchaseOrder.STATUS_ORDERED, PurchaseOrder.STATUS_PARTIAL]).count(),
+            'site_queue': orders.filter(delivery_destination=PurchaseOrder.DELIVERY_SITE, status__in=[PurchaseOrder.STATUS_DISPATCH_CONFIRMED, PurchaseOrder.STATUS_PARTIAL]).count(),
+        }
+        if request.user.role != User.ROLE_SITE_ENGINEER:
+            # Drafts are not commitments; exclude cancelled orders and label this
+            # as order value, not committed or received value.
+            active = orders.exclude(status=PurchaseOrder.STATUS_CANCELLED)
+            data['order_value'] = active.aggregate(value=Sum(F('items__quantity') * F('items__unit_price')))['value'] or Decimal(0)
+            data['site_value'] = active.filter(delivery_destination=PurchaseOrder.DELIVERY_SITE).aggregate(value=Sum(F('items__quantity') * F('items__unit_price')))['value'] or Decimal(0)
+        return Response(data)
 
     def perform_create(self, serializer):
         purchase_order = create_purchase_order(serializer=serializer, user=self.request.user)

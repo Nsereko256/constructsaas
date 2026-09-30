@@ -17,10 +17,12 @@ import type {
   ProjectGoal,
   ProjectSite,
   PurchaseOrder,
+  PurchaseOrderRegisterSummary,
   PurchaseOrderAmendment,
   SiteTransfer,
   PurchaseOrderThreeWaySummary,
   PurchaseRequest,
+  PurchaseRequestRegisterSummary,
   StockMovement,
   Supplier,
   SupplierClaim,
@@ -122,6 +124,7 @@ export const api = {
   saveSupplier: (body: Partial<Supplier>, id?: number) =>
     apiRequest<Supplier>(id ? `/api/suppliers/${id}/` : '/api/suppliers/', { method: id ? 'PATCH' : 'POST', body }),
   purchaseRequests: (params = {}) => apiRequest<Paginated<PurchaseRequest>>(`/api/purchase-requests/${pageParams(params)}`),
+  purchaseRequestSummary: (params = {}) => apiRequest<PurchaseRequestRegisterSummary>(`/api/purchase-requests/summary/${pageParams(params)}`),
   downloadPurchaseRequests: (kind: 'pdf' | 'xlsx', params = {}) => apiDownload(`/api/purchase-requests/download/${kind}/${pageParams(params)}`, `purchase-request-register.${kind}`),
   workOrders: (params = {}) => apiRequest<Paginated<WorkOrder>>(`/api/work-orders/${pageParams(params)}`),
   workOrder: (id: number) => apiRequest<WorkOrder>(`/api/work-orders/${id}/`),
@@ -166,25 +169,26 @@ export const api = {
   approvePurchaseRequest: (id: number, body: { comments?: string; override_reason?: string } = {}) =>
     apiRequest<PurchaseRequest>(`/api/purchase-requests/${id}/approve/`, { method: 'POST', body }),
   approvePurchaseRequestStockIssue: (id: number) => apiRequest<PurchaseRequest>(`/api/purchase-requests/${id}/approve-stock-issue/`, { method: 'POST' }),
-  rejectPurchaseRequest: (id: number, rejection_reason: string) =>
-    apiRequest<PurchaseRequest>(`/api/purchase-requests/${id}/reject/`, { method: 'POST', body: { rejection_reason } }),
-  returnPurchaseRequestForCorrection: (id: number, comments: string) =>
-    apiRequest<PurchaseRequest>(`/api/purchase-requests/${id}/return-for-correction/`, { method: 'POST', body: { comments } }),
+  rejectPurchaseRequest: (id: number, rejection_reason: string, override_reason = '') =>
+    apiRequest<PurchaseRequest>(`/api/purchase-requests/${id}/reject/`, { method: 'POST', body: { rejection_reason, override_reason } }),
+  returnPurchaseRequestForCorrection: (id: number, comments: string, override_reason = '') =>
+    apiRequest<PurchaseRequest>(`/api/purchase-requests/${id}/return-for-correction/`, { method: 'POST', body: { comments, override_reason } }),
   requestStockIssue: (id: number) => apiRequest<PurchaseRequest>(`/api/purchase-requests/${id}/issue-stock/`, { method: 'POST' }),
   fulfillStockIssue: (id: number, body: { items: Array<{ purchase_request_item: number; quantity: string }> }) => apiRequest<PurchaseRequest>(`/api/purchase-requests/${id}/fulfill-stock/`, { method: 'POST', body }),
   submitPurchaseRequestFinance: (id: number, budget_line: number | null, comments = '') =>
     apiRequest(`/api/purchase-requests/${id}/submit-finance/`, { method: 'POST', body: { budget_line, comments } }),
-  financeApprovePurchaseRequest: (id: number, comments = '', override = false) =>
-    apiRequest(`/api/purchase-requests/${id}/finance-approve/`, { method: 'POST', body: { comments, override } }),
-  financeRejectPurchaseRequest: (id: number, comments: string) =>
-    apiRequest(`/api/purchase-requests/${id}/finance-reject/`, { method: 'POST', body: { comments } }),
-  financeReturnPurchaseRequest: (id: number, comments: string) =>
-    apiRequest(`/api/purchase-requests/${id}/finance-return/`, { method: 'POST', body: { comments } }),
+  financeApprovePurchaseRequest: (id: number, comments = '', override = false, override_reason = '') =>
+    apiRequest(`/api/purchase-requests/${id}/finance-approve/`, { method: 'POST', body: { comments, override, override_reason } }),
+  financeRejectPurchaseRequest: (id: number, comments: string, override_reason = '') =>
+    apiRequest(`/api/purchase-requests/${id}/finance-reject/`, { method: 'POST', body: { comments, override_reason } }),
+  financeReturnPurchaseRequest: (id: number, comments: string, override_reason = '') =>
+    apiRequest(`/api/purchase-requests/${id}/finance-return/`, { method: 'POST', body: { comments, override_reason } }),
   correctPurchaseRequest: (id: number, body: unknown) =>
     apiRequest<PurchaseRequest>(`/api/purchase-requests/${id}/correct/`, { method: 'POST', body }),
-  financeHoldPurchaseRequest: (id: number, comments: string) =>
-    apiRequest(`/api/purchase-requests/${id}/finance-hold/`, { method: 'POST', body: { comments } }),
+  financeHoldPurchaseRequest: (id: number, comments: string, override_reason = '') =>
+    apiRequest(`/api/purchase-requests/${id}/finance-hold/`, { method: 'POST', body: { comments, override_reason } }),
   purchaseOrders: (params = {}) => apiRequest<Paginated<PurchaseOrder>>(`/api/purchase-orders/${pageParams(params)}`),
+  purchaseOrderSummary: (params = {}) => apiRequest<PurchaseOrderRegisterSummary>(`/api/purchase-orders/summary/${pageParams(params)}`),
   downloadPurchaseOrders: (kind: 'pdf' | 'xlsx', params = {}) => apiDownload(`/api/purchase-orders/download/${kind}/${pageParams(params)}`, `purchase-order-register.${kind}`),
   purchaseOrder: (id: number) => apiRequest<PurchaseOrder>(`/api/purchase-orders/${id}/`),
   purchaseOrderActivity: (id: number) => apiRequest<import('./types').RecordActivity[]>(`/api/purchase-orders/${id}/activity/`),

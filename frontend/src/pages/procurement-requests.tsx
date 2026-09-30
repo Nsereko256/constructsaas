@@ -1,3 +1,4 @@
+import { ReasonDialog } from '@/components/common/reason-dialog';
 import { RegisterFilters } from '@/components/common/register-filters';
 import { Pagination } from '@/components/common/pagination';
 import { TableScroll } from '@/components/common/table-scroll';
@@ -38,15 +39,15 @@ export function ProcurementRequestsPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const list = useListState(
-    { status: '', priority: '', project: '', action_queue: '' },
+    { status: '', priority: '', project: '', action_queue: '', register_queue: '' },
     {
       syncKey: queryString,
       initialSearch: searchParams.get('search') || '',
-      initialFilters: { action_queue: searchParams.get('action_queue') || '' },
+      initialFilters: { action_queue: searchParams.get('action_queue') || '', register_queue: searchParams.get('register_queue') || '' },
     },
   );
-  const [queue, setQueue] = useState<'all' | 'mine' | 'awaiting' | 'stock' | 'completed'>(() => searchParams.get('action_queue') ? 'mine' : 'all');
-  useEffect(() => { setQueue(searchParams.get('action_queue') ? 'mine' : 'all'); }, [queryString, searchParams]);
+  const [queue, setQueue] = useState<'all' | 'mine' | 'awaiting' | 'stock' | 'completed'>(() => searchParams.get('register_queue') === 'stock' ? 'stock' : searchParams.get('action_queue') ? 'mine' : 'all');
+  useEffect(() => { setQueue(searchParams.get('register_queue') === 'stock' ? 'stock' : searchParams.get('action_queue') ? 'mine' : 'all'); }, [queryString, searchParams]);
   const [sort, setSort] = useState<'action' | 'newest'>('action');
   const [open, setOpen] = useState(() => searchParams.get('create') === '1' && can.submitPr(role));
   const [rejecting, setRejecting] = useState<PurchaseRequest | null>(null);
@@ -58,11 +59,28 @@ export function ProcurementRequestsPage() {
   const [stockIssueReview, setStockIssueReview] = useState<PurchaseRequest | null>(null);
   const [issuingStock, setIssuingStock] = useState<PurchaseRequest | null>(null);
   const [approvalOverride, setApprovalOverride] = useState<PurchaseRequest | null>(null);
-  const requestQuery = { ...list.query, page_size: 5 };
+  const actionId = Number(searchParams.get('review_finance') || searchParams.get('stock_issue') || searchParams.get('correct'));
+  const actionRequest = useQuery({ queryKey: ['purchase-request-detail', actionId], queryFn: () => api.purchaseRequest(actionId), enabled: actionId > 0 });
+  const [openedAction, setOpenedAction] = useState('');
+  useEffect(() => {
+    const record = actionRequest.data;
+    if (!record || openedAction === queryString) return;
+    const params = new URLSearchParams(queryString);
+    if (params.has('review_finance') && can.reviewPrFinance(role) && ['SUBMITTED', 'HOLD'].includes(record.finance_status)) setFinanceDecision(record);
+    if (params.has('stock_issue')) {
+      if (record.can_fulfill_from_stock && hasRole(role, ['storekeeper', 'admin'])) setIssuingStock(record);
+      else if (record.can_request_stock_issue && hasRole(role, ['procurement_officer', 'admin'])) setStockIssueReview(record);
+    }
+    if (params.has('correct') && record.can_correct_return) setCorrecting(record);
+    setOpenedAction(queryString);
+  }, [actionRequest.data, openedAction, queryString, role]);
+  const requestQuery = { ...list.query, page_size: 5, ordering: sort === 'action' ? 'queue_rank,created_at,id' : '-created_at,-id' };
   const requests = useQuery({ queryKey: list.filters.action_queue ? qk.purchaseRequestActionQueue(requestQuery) : qk.purchaseRequests(requestQuery), queryFn: () => api.purchaseRequests(requestQuery) });
-  const allRequests = useQuery({ queryKey: qk.purchaseRequests({ page_size: 100 }), queryFn: () => api.purchaseRequests({ page_size: 100 }) });
+  const summaryQuery = { search: list.search, project: list.filters.project, priority: list.filters.priority };
+  const summary = useQuery({ queryKey: ['purchase-requests', 'summary', summaryQuery], queryFn: () => api.purchaseRequestSummary(summaryQuery) });
   const projects = useQuery({ queryKey: qk.projects({ page_size: 100 }), queryFn: () => api.projects({ page_size: 100 }) });
   const refresh = () => {
+    for (const key of ['purchase-request-detail', 'purchase-request-activity', 'purchase-orders', 'purchase-order-detail']) void queryClient.invalidateQueries({ queryKey: [key] });
     void queryClient.invalidateQueries({ queryKey: ['purchase-requests'] });
     void queryClient.invalidateQueries({ queryKey: qk.dashboard });
     void queryClient.invalidateQueries({ queryKey: qk.workflowBadges });
@@ -79,12 +97,12 @@ export function ProcurementRequestsPage() {
     onError: (error: Error) => toast.push({ title: 'Could not approve stock issue', message: error.message, tone: 'danger' }),
   });
   const reject = useMutation({
-    mutationFn: ({ id, reason }: { id: number; reason: string }) => api.rejectPurchaseRequest(id, reason),
+    mutationFn: ({ id, reason, overrideReason }: { id: number; reason: string; overrideReason?: string }) => api.rejectPurchaseRequest(id, reason, overrideReason),
     onSuccess: () => { toast.push({ title: 'Material request rejected', tone: 'warning' }); setRejecting(null); refresh(); },
     onError: (error: Error) => toast.push({ title: 'Could not reject MR', message: error.message, tone: 'danger' }),
   });
   const returnForCorrection = useMutation({
-    mutationFn: ({ id, comments }: { id: number; comments: string }) => api.returnPurchaseRequestForCorrection(id, comments),
+    mutationFn: ({ id, comments, overrideReason }: { id: number; comments: string; overrideReason?: string }) => api.returnPurchaseRequestForCorrection(id, comments, overrideReason),
     onSuccess: () => { toast.push({ title: 'Material request returned for correction', tone: 'warning' }); setReturning(null); refresh(); },
     onError: (error: Error) => toast.push({ title: 'Could not return MR for correction', message: error.message, tone: 'danger' }),
   });
@@ -105,11 +123,11 @@ export function ProcurementRequestsPage() {
     onError: (error: Error) => toast.push({ title: 'Finance submission failed', message: error.message, tone: 'danger' }),
   });
   const reviewFinance = useMutation({
-    mutationFn: ({ id, decision, comments, override }: { id: number; decision: FinanceDecision; comments: string; override: boolean }) => {
-      if (decision === 'approve') return api.financeApprovePurchaseRequest(id, comments, override);
-      if (decision === 'reject') return api.financeRejectPurchaseRequest(id, comments);
-      if (decision === 'return') return api.financeReturnPurchaseRequest(id, comments);
-      return api.financeHoldPurchaseRequest(id, comments);
+    mutationFn: ({ id, decision, comments, override, overrideReason }: { id: number; decision: FinanceDecision; comments: string; override: boolean; overrideReason: string }) => {
+      if (decision === 'approve') return api.financeApprovePurchaseRequest(id, comments, override, overrideReason);
+      if (decision === 'reject') return api.financeRejectPurchaseRequest(id, comments, overrideReason);
+      if (decision === 'return') return api.financeReturnPurchaseRequest(id, comments, overrideReason);
+      return api.financeHoldPurchaseRequest(id, comments, overrideReason);
     },
     onSuccess: (_, variables) => { toast.push({ title: `Finance review completed: ${variables.decision}`, tone: 'success' }); setFinanceDecision(null); refresh(); },
     onError: (error: Error) => toast.push({ title: 'Finance review failed', message: error.message, tone: 'danger' }),
@@ -130,39 +148,9 @@ export function ProcurementRequestsPage() {
     onError: (error: Error) => toast.push({ title: 'Could not delete material request', message: error.message, tone: 'danger' }),
   });
 
-  // Operational queues should answer “what needs attention?” before showing
-  // older, already-progressed requests. Keep the API ordering intact for
-  // pagination, but make the current page scan in action-first order.
-  const requestNeedsAction = (request: PurchaseRequest) => [
-      request.can_approve_stock_issue,
-      request.can_request_stock_issue,
-      request.can_fulfill_from_stock,
-      request.can_issue_from_stock,
-      request.can_submit_finance,
-      request.can_create_purchase_order,
-      request.can_correct_return,
-      can.approvePr(role) && request.status === 'PENDING',
-      can.reviewPrFinance(role) && ['SUBMITTED', 'HOLD'].includes(request.finance_status),
-    ].some(Boolean);
-
-  const requestRows = [...(requests.data?.results || [])].sort((a, b) => {
-    if (sort === 'newest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    const actionScore = (request: PurchaseRequest) => request.stage_tracking.current_stage?.is_stalled ? 0 : requestNeedsAction(request) ? 1 : 2;
-    const score = actionScore(a) - actionScore(b);
-    const stageAge = (request: PurchaseRequest) => request.stage_tracking.current_stage?.duration_seconds || 0;
-    return score || stageAge(b) - stageAge(a) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
-
-  const allRows = allRequests.data?.results || [];
-  const totalValue = allRows.reduce((sum, request) => sum + Number(request.total_estimated_cost || 0), 0);
-  const actionRows = allRows.filter(requestNeedsAction);
-  const awaitingApproval = allRows.filter((request) => request.status === 'PENDING');
-  const stockIssueRows = allRows.filter((request) => [
-    'STOCK_ISSUE_REQUESTED', 'PARTIAL_STOCK_ISSUED', 'STOCK_ISSUED',
-  ].includes(request.status));
-  const readyForStockIssue = allRows.filter((request) => request.can_approve_stock_issue || request.can_request_stock_issue || request.can_fulfill_from_stock);
-  const stockIssueValue = stockIssueRows.reduce((sum, request) => sum + Number(request.total_estimated_cost || 0), 0);
-  const purchaseValue = Math.max(0, totalValue - stockIssueValue);
+  // Counts and ordering come from the same server scopes as the paginated list.
+  const requestRows = requests.data?.results || [];
+  const totals = summary.data;
   const projectOptions = projects.data?.results || [];
   const pageSize = 5;
   const stockAvailability = (request: PurchaseRequest) => {
@@ -176,13 +164,14 @@ export function ProcurementRequestsPage() {
   };
   const updateQueue = (value: typeof queue) => {
     setQueue(value);
+    list.setFilter('register_queue', value === 'stock' ? 'stock' : '');
     if (value === 'mine') {
       list.setFilter('status', '');
       list.setFilter('action_queue', 'my_requests');
       return;
     }
     list.setFilter('action_queue', '');
-    list.setFilter('status', value === 'awaiting' ? 'PENDING' : value === 'stock' ? 'STOCK_ISSUE_REQUESTED' : value === 'completed' ? 'STOCK_ISSUED' : '');
+    list.setFilter('status', value === 'awaiting' ? 'PENDING' : value === 'completed' ? 'STOCK_ISSUED' : '');
   };
   const openRequestDetail = (event: MouseEvent<HTMLTableRowElement> | KeyboardEvent<HTMLTableRowElement>, requestId: number) => {
     const target = event.target as HTMLElement;
@@ -209,32 +198,33 @@ export function ProcurementRequestsPage() {
         <div className="pr-titlebar">
           <div><h1>Material requests</h1><p>Create, review and fulfil project material requirements.</p></div>
           <div className="pr-title-actions">
-            {hasRole(role, ['storekeeper', 'admin']) ? <Button variant="secondary" asChild><Link to="/procurement/requests?action_queue=my_requests"><Box className="h-4 w-4" />Stock issue queue</Link></Button> : null}
+            {hasRole(role, ['storekeeper', 'admin']) ? <Button variant="secondary" asChild><Link to="/procurement/requests?register_queue=stock"><Box className="h-4 w-4" />Stock issue queue</Link></Button> : null}
             <details className="pr-export-menu"><summary><Download className="h-4 w-4" />Export <ChevronDown className="h-3.5 w-3.5" /></summary><div><button type="button" onClick={() => void api.downloadPurchaseRequests('pdf', { ...list.filters, search: list.search })}>PDF register</button><button type="button" onClick={() => void api.downloadPurchaseRequests('xlsx', { ...list.filters, search: list.search })}>Excel register</button></div></details>
             {can.submitPr(role) || can.submitWarehouseReplenishment(role) ? <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" />{can.submitWarehouseReplenishment(role) && !can.submitPr(role) ? 'Warehouse replenishment' : 'New MR'}</Button> : null}
           </div>
         </div>
         <ProcurementTabs />
       </section>
-      <section className="pr-guidance"><AlertCircle size={18} /><span><strong>Manager review required before approval</strong><small>Confirm project, justification, quantities, budget and warehouse availability.</small></span><Link to="/procurement/requests?action_queue=my_requests">View workflow <ChevronRight size={14} /></Link></section>
+      <section className="pr-guidance"><AlertCircle size={18} /><span><strong>Follow the next action on each request</strong><small>Site demand starts with Manager review; warehouse replenishment follows the PO and Finance route.</small></span><Link to="/procurement/requests?action_queue=my_requests">My queue <ChevronRight size={14} /></Link></section>
       <section className="pr-kpis">
-        <RequestKpi icon={FileText} tone="blue" label="Total requests" value={allRows.length} note="Across selected sites" />
-        <RequestKpi icon={AlertCircle} tone="amber" label="Needs action" value={actionRows.length} note="Assigned to your role" />
-        <RequestKpi icon={Clock3} tone="sky" label="Awaiting approval" value={awaitingApproval.length} note={awaitingApproval.filter((request) => request.priority === 'URGENT').length ? `${awaitingApproval.filter((request) => request.priority === 'URGENT').length} urgent` : 'No urgent requests'} />
-        <RequestKpi icon={Box} tone="green" label="Ready for stock issue" value={readyForStockIssue.length} note="Warehouse workflow" />
+        <RequestKpi icon={FileText} tone="blue" label="Total requests" value={totals?.count ?? '—'} note="Matching search, project and priority" />
+        <RequestKpi icon={AlertCircle} tone="amber" label="My queue" value={totals?.my_queue ?? '—'} note="Check each row for blockers" />
+        <RequestKpi icon={Clock3} tone="sky" label="Awaiting approval" value={totals?.awaiting_approval ?? '—'} note={totals ? `${totals.urgent_approval} urgent` : 'Loading summary'} />
+        <RequestKpi icon={Box} tone="green" label="Stock issue queue" value={totals?.stock_queue ?? '—'} note="Requested or partially issued" />
       </section>
+      {summary.isError ? <p role="alert" className="text-sm text-critical">Request totals could not be loaded. <Button variant="secondary" onClick={() => void summary.refetch()}>Retry totals</Button></p> : null}
       <section className="pr-workspace-grid">
         <div data-pagination-region className="pr-queue-panel">
           <div className="pr-panel-heading"><h2>Material request queue</h2></div>
           <div className="pr-queue-tabs">
-            {([['all', 'All', allRows.length], ['mine', 'My actions', actionRows.length], ['awaiting', 'Awaiting approval', awaitingApproval.length], ['stock', 'Stock issue', stockIssueRows.length], ['completed', 'Completed', allRows.filter((request) => ['STOCK_ISSUED', 'PO_CREATED', 'REJECTED'].includes(request.status)).length]] as const).map(([value, label, count]) => <button type="button" key={value} className={queue === value ? 'active' : ''} onClick={() => updateQueue(value)}>{label}<b>{count}</b></button>)}
+            {([['all', 'All', totals?.count], ['mine', 'My queue', totals?.my_queue], ['awaiting', 'Awaiting approval', totals?.awaiting_approval], ['stock', 'Stock issue', totals?.stock_queue], ['completed', 'Stock fulfilled', totals?.stock_fulfilled]] as const).map(([value, label, count]) => <button type="button" key={value} className={queue === value ? 'active' : ''} onClick={() => updateQueue(value)}>{label}<b>{count ?? '—'}</b></button>)}
           </div>
-          <RegisterFilters className="pr-filters" activeCount={[list.search, list.filters.project, list.filters.status, list.filters.priority].filter(Boolean).length} onClear={() => { list.setSearch(''); ['project', 'status', 'priority'].forEach((key) => list.setFilter(key, '')); }}>
+          <RegisterFilters className="pr-filters" activeCount={[list.search, list.filters.project, list.filters.status, list.filters.priority, list.filters.action_queue, list.filters.register_queue].filter(Boolean).length} onClear={() => { list.setSearch(''); setQueue('all'); ['project', 'status', 'priority', 'action_queue', 'register_queue'].forEach((key) => list.setFilter(key, '')); }}>
             <label><Search size={14} /><input aria-label="Search material requests" placeholder="Search MR, project or requester" value={list.search} onChange={(event) => list.setSearch(event.target.value)} /></label>
             <select aria-label="Filter material requests by project" className={inputClass} value={list.filters.project} onChange={(event) => list.setFilter('project', event.target.value)}><option value="">Project</option>{projectOptions.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>
-            <select aria-label="Filter material requests by status" className={inputClass} value={list.filters.status} onChange={(event) => { setQueue('all'); list.setFilter('action_queue', ''); list.setFilter('status', event.target.value); }}><option value="">Status</option><option value="PENDING">Pending</option><option value="APPROVED">Approved</option><option value="STOCK_ISSUE_REQUESTED">Issue requested</option><option value="PARTIAL_STOCK_ISSUED">Partially issued</option><option value="STOCK_ISSUED">Stock issued</option><option value="PO_CREATED">PO created</option><option value="REJECTED">Rejected</option></select>
+            <select aria-label="Filter material requests by status" className={inputClass} value={list.filters.status} onChange={(event) => { setQueue('all'); list.setFilter('action_queue', ''); list.setFilter('register_queue', ''); list.setFilter('status', event.target.value); }}><option value="">Status</option><option value="PENDING">Pending</option><option value="RETURNED">Returned for correction</option><option value="APPROVED">Approved</option><option value="STOCK_ISSUE_REQUESTED">Issue requested</option><option value="PARTIAL_STOCK_ISSUED">Partially issued</option><option value="STOCK_ISSUED">Stock issued</option><option value="PO_CREATED">PO created</option><option value="REJECTED">Rejected</option></select>
             <select aria-label="Filter material requests by priority" className={inputClass} value={list.filters.priority} onChange={(event) => list.setFilter('priority', event.target.value)}><option value="">Priority</option><option value="LOW">Low</option><option value="NORMAL">Normal</option><option value="HIGH">High</option><option value="URGENT">Urgent</option></select>
-            <select aria-label="Sort material requests" className={inputClass} value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="action">Sort: Action first</option><option value="newest">Sort: Newest first</option></select>
+            <select aria-label="Sort material requests" className={inputClass} value={sort} onChange={(event) => { setSort(event.target.value as typeof sort); list.setPage(1); }}><option value="action">Sort: My queue, oldest first</option><option value="newest">Sort: Newest first</option></select>
           </RegisterFilters>
           <TableScroll label="Material requests" className="pr-table-wrap"><table className="pr-table"><thead><tr><th>Request</th><th>Next action</th><th>Time at stage</th><th>Project / site</th><th>Requested by</th><th>Created</th><th>Estimate</th><th>Stock available</th><th>Priority</th><th>Status</th><th aria-label="Actions" /></tr></thead><tbody>
             {requestRows.map((request) => { const stock = stockAvailability(request); return <tr key={request.id} className="pr-record-row" tabIndex={0} onClick={(event) => openRequestDetail(event, request.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') openRequestDetail(event, request.id); }}><td data-label="Request"><Link to={`/procurement/requests/${request.id}/`}>{request.number}</Link><small>{request.title}</small></td><td data-label="Next action">{primaryAction(request)}</td><td data-label="Time at stage"><StageAge request={request} /></td><td data-label="Project / site">{request.project_name || 'Warehouse replenishment'}</td><td data-label="Requested by">{request.requested_by_username || 'System'}</td><td data-label="Created">{formatDate(request.created_at)}</td><td data-label="Estimate">{canSeeMaterialCosts ? formatUGX(request.total_estimated_cost) : 'Restricted'}</td><td data-label="Stock available"><span className={`pr-stock-dot ${stock.tone}`} />{stock.label}</td><td data-label="Priority"><Badge tone={statusTone(request.priority)}>{request.priority_display}</Badge></td><td data-label="Status"><Badge tone={statusTone(request.status)}>{request.status_display}</Badge></td><td data-label=""><details className="pr-row-menu"><summary aria-label={`More actions for ${request.number}`}><EllipsisVertical size={16} /></summary><div>{hasRole(role, ['admin', 'site_engineer', 'procurement_officer']) && request.status === 'PENDING' && (role === 'admin' || request.requested_by === user?.id) ? <><button type="button" onClick={() => setEditingDraft(request)}><Pencil size={13} />Edit draft</button><button type="button" onClick={() => { if (window.confirm(`Delete ${request.number}? This draft will be removed and audited.`)) deleteDraft.mutate(request.id); }}><Trash2 size={13} />Delete draft</button></> : null}{can.approvePr(role) && request.status === 'PENDING' ? <><button type="button" onClick={() => setReturning(request)}><CornerUpLeft size={13} />Return</button><button type="button" onClick={() => setRejecting(request)}><X size={13} />Reject</button></> : null}{request.can_correct_return ? <button type="button" onClick={() => setCorrecting(request)}><Pencil size={13} />Correct request</button> : null}{can.reviewPrFinance(role) && ['SUBMITTED', 'HOLD'].includes(request.finance_status) ? <button type="button" onClick={() => setFinanceDecision(request)}><CircleDollarSign size={13} />Finance review</button> : null}</div></details></td></tr>; })}
@@ -242,17 +232,17 @@ export function ProcurementRequestsPage() {
           <Pagination page={list.page} setPage={list.setPage} data={requests.data} pageSize={pageSize} loading={requests.isFetching} itemLabel="material requests" />
         </div>
         <aside className="pr-side-column">
-          {canSeeMaterialCosts ? <section className="pr-value-panel"><div className="pr-panel-heading"><h2>Request value</h2></div><div className="pr-value-body"><span>Total</span><strong>{formatUGX(totalValue)}</strong><i><b style={{ width: totalValue ? `${stockIssueValue / totalValue * 100}%` : '0%' }} /></i><div><span><em className="stock" />Stock issue <b>{formatUGX(stockIssueValue)}</b></span><span><em className="purchase" />To purchase <b>{formatUGX(purchaseValue)}</b></span></div></div></section> : null}
-          <section className="pr-flow-panel"><div className="pr-panel-heading"><h2>Approval flow</h2></div><ol><li className={awaitingApproval.length ? 'active' : ''}><b>1</b><span><strong>Manager review</strong><small>{awaitingApproval.length} awaiting decision</small></span></li><li><b>2</b><span><strong>Admin stock approval</strong><small>Technical and compliance gate</small></span></li><li><b>3</b><span><strong>Stock decision</strong><small>Issue from stock or source a PO</small></span></li><li><b>4</b><span><strong>Fulfilment</strong><small>Store issue or procurement handoff</small></span></li></ol></section>
-          <section className="pr-rules-panel"><div className="pr-panel-heading"><h2>Queue rules</h2></div><p><Check size={14} />Action first, then newest context.</p><p><Check size={14} />Warehouse replenishment uses a PO, not stock issue.</p></section>
+          {canSeeMaterialCosts ? <section className="pr-value-panel"><div className="pr-panel-heading"><h2>Estimated request value</h2></div><div className="pr-value-body"><span>Current catalogue rates · excludes rejected requests</span><strong>{totals?.estimated_value == null ? '—' : formatUGX(totals.estimated_value)}</strong><p className="text-sm text-muted">An estimate, not approved spending. Use the linked PO and invoice for agreed prices and payments.</p></div></section> : null}
+          <section className="pr-flow-panel"><div className="pr-panel-heading"><h2>Site request flow</h2></div><ol><li className={totals?.awaiting_approval ? 'active' : ''}><b>1</b><span><strong>Manager review</strong><small>{totals?.awaiting_approval ?? '—'} awaiting decision</small></span></li><li><b>2</b><span><strong>Stock decision</strong><small>Admin approval before a warehouse issue</small></span></li><li><b>3</b><span><strong>Procurement</strong><small>Issue stock or create a PO for the balance</small></span></li><li><b>4</b><span><strong>Fulfilment</strong><small>Finance clearance when enabled, then receipt</small></span></li></ol></section>
+          <section className="pr-rules-panel"><div className="pr-panel-heading"><h2>Queue rules</h2></div><p><Check size={14} />Your queue first, oldest requests first across all pages.</p><p><Check size={14} />Warehouse replenishment uses a PO, not stock issue.</p></section>
         </aside>
       </section>
       <RequestModal open={open} onClose={() => setOpen(false)} />
       <ControlledApprovalModal open={!!approvalOverride} recordNumber={approvalOverride?.number || ''} pending={approve.isPending} onClose={() => setApprovalOverride(null)} onApprove={(overrideReason) => approvalOverride && approve.mutate({ id: approvalOverride.id, overrideReason })} />
       <StockIssueReviewModal request={stockIssueReview} pending={issue.isPending} onClose={() => setStockIssueReview(null)} onSubmit={() => stockIssueReview && issue.mutate(stockIssueReview.id)} />
       <PartialStockIssueModal request={issuingStock} pending={fulfill.isPending} onClose={() => setIssuingStock(null)} onSubmit={(items) => issuingStock && fulfill.mutate({ id: issuingStock.id, body: { items } })} />
-      <RejectModal request={rejecting} onClose={() => setRejecting(null)} onReject={(reason) => rejecting && reject.mutate({ id: rejecting.id, reason })} />
-      <ReturnForCorrectionModal request={returning} pending={returnForCorrection.isPending} onClose={() => setReturning(null)} onSubmit={(comments) => returning && returnForCorrection.mutate({ id: returning.id, comments })} />
+      <ReasonDialog open={!!rejecting} title={`Reject ${rejecting?.number || "material request"}`} description="Explain why this material request cannot proceed." confirmLabel="Reject request" pending={reject.isPending} requireOverrideReason={rejecting?.technical_approval_requires_override_reason} error={reject.error?.message} onClose={() => setRejecting(null)} onConfirm={(reason, overrideReason) => rejecting && reject.mutate({ id: rejecting.id, reason, overrideReason })} />
+      <ReasonDialog open={!!returning} title={`Return ${returning?.number || "material request"}`} description="Explain what the requester must correct before resubmitting." confirmLabel="Return for correction" pending={returnForCorrection.isPending} requireOverrideReason={returning?.technical_approval_requires_override_reason} error={returnForCorrection.error?.message} onClose={() => setReturning(null)} onConfirm={(comments, overrideReason) => returning && returnForCorrection.mutate({ id: returning.id, comments, overrideReason })} />
       <FinanceSubmissionModal
         request={financeSubmission}
         pending={submitFinance.isPending}
@@ -260,11 +250,13 @@ export function ProcurementRequestsPage() {
         onSubmit={(budgetLine, comments) => financeSubmission && submitFinance.mutate({ id: financeSubmission.id, budgetLine, comments })}
       />
       <FinanceReviewModal
+        key={financeDecision?.id || 'finance-review-closed'}
         request={financeDecision}
+        error={reviewFinance.error?.message}
         pending={reviewFinance.isPending}
         role={role}
         onClose={() => setFinanceDecision(null)}
-        onSubmit={(decision, comments, override) => financeDecision && reviewFinance.mutate({ id: financeDecision.id, decision, comments, override })}
+        onSubmit={(decision, comments, override, overrideReason) => financeDecision && reviewFinance.mutate({ id: financeDecision.id, decision, comments, override, overrideReason })}
       />
       <CorrectionModal request={correcting} pending={correct.isPending} onClose={() => setCorrecting(null)} onSubmit={(body) => correcting && correct.mutate({ id: correcting.id, body })} />
       <CorrectionModal draft request={editingDraft} pending={editDraft.isPending} onClose={() => setEditingDraft(null)} onSubmit={(body) => editingDraft && editDraft.mutate({ id: editingDraft.id, body })} />
@@ -272,7 +264,7 @@ export function ProcurementRequestsPage() {
   );
 }
 
-function RequestKpi({ icon: Icon, tone, label, value, note }: { icon: typeof FileText; tone: string; label: string; value: number; note: string }) {
+function RequestKpi({ icon: Icon, tone, label, value, note }: { icon: typeof FileText; tone: string; label: string; value: number | string; note: string }) {
   return <article className="pr-kpi"><span className={`pr-kpi-icon ${tone}`}><Icon size={24} /></span><div><p>{label}</p><strong>{value}</strong><small>{note}</small></div></article>;
 }
 
@@ -495,24 +487,6 @@ function defaultDraft(): RequestDraft {
   };
 }
 
-function RejectModal({ request, onClose, onReject }: { request: PurchaseRequest | null; onClose: () => void; onReject: (reason: string) => void }) {
-  const [reason, setReason] = useState('');
-  return (
-    <FormModal open={!!request} title={`Reject ${request?.number || 'material request'}`} onClose={onClose}>
-      <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); onReject(reason); }}>
-        <Field label="Rejection reason" required><textarea className={inputClass} value={reason} onChange={(event) => setReason(event.target.value)} /></Field>
-        <Button variant="warning" disabled={!reason}>Reject request</Button>
-      </form>
-    </FormModal>
-  );
-}
-
-function ReturnForCorrectionModal({ request, pending, onClose, onSubmit }: { request: PurchaseRequest | null; pending: boolean; onClose: () => void; onSubmit: (comments: string) => void }) {
-  const [comments, setComments] = useState('');
-  useEffect(() => setComments(''), [request]);
-  return <FormModal open={!!request} title={`Return ${request?.number || 'material request'} for correction`} onClose={onClose}><form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); onSubmit(comments); }}><p className="text-sm text-muted">This keeps the request open. The original engineer must correct it before it returns to your approval queue.</p><Field label="Correction required" required><textarea className={inputClass} rows={4} value={comments} onChange={(event) => setComments(event.target.value)} placeholder="Explain exactly what the engineer needs to change." /></Field><Button variant="warning" loading={pending} loadingLabel="Returning request" disabled={!comments.trim()}>Return for correction</Button></form></FormModal>;
-}
-
 function CorrectionModal({ request, pending, onClose, onSubmit, draft = false }: { request: PurchaseRequest | null; pending: boolean; onClose: () => void; onSubmit: (body: unknown) => void; draft?: boolean }) {
   const projects = useQuery({ queryKey: qk.projects({ is_active: true }), queryFn: () => api.projects({ is_active: true, page_size: 100 }) });
   const [form, setForm] = useState<null | { project: string; title: string; priority: PurchaseRequest['priority']; justification: string; correction_summary: string; items: RequestDraft['items'] }>(null);
@@ -527,7 +501,7 @@ function CorrectionModal({ request, pending, onClose, onSubmit, draft = false }:
   const valid = Boolean(form?.title.trim() && (draft || form.correction_summary.trim()) && form.items.length && form.items.every((item) => item.material_id && item.quantity));
   return <FormModal open={!!request && !!form} title={`${draft ? 'Edit draft' : 'Correct'} ${request?.number || 'material request'}`} onClose={onClose}>
     <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); if (form && valid) { const body = { ...form, project: form.project ? Number(form.project) : null, items: form.items.map((item) => ({ material: Number(item.material_id), quantity: item.quantity, notes: item.notes })) }; if (draft) delete (body as { correction_summary?: string }).correction_summary; onSubmit(body); } }}>
-      <div className="border border-warning/35 bg-warning/5 p-3 text-sm"><strong>{draft ? 'Draft changes' : request?.status === 'RETURNED' ? 'Manager correction required' : 'Finance correction required'}</strong><p className="mt-1">{draft ? 'Only pending drafts can be edited. Submitted or approved requests must use the correction workflow.' : request?.technical_return_reason || request?.finance_return_reason || 'Changes are required before this request can be reconsidered.'}</p></div>
+      <div className="border border-warning/35 bg-warning/5 p-3 text-sm"><strong>{draft ? 'Draft changes' : request?.status === 'RETURNED' ? 'Manager correction required' : 'Finance correction required'}</strong><p className="mt-1">{draft ? 'Only pending drafts can be edited. Submitted or approved requests must use the correction workflow.' : request?.correction_guidance || request?.technical_return_reason || request?.finance_return_reason || 'Changes are required before this request can be reconsidered.'}</p></div>
       {form ? <><div className="grid gap-3 md:grid-cols-2"><Field label="Title" required><input className={inputClass} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></Field><Field label="Project"><select className={inputClass} value={form.project} onChange={(event) => setForm({ ...form, project: event.target.value })}><option value="">No project</option>{(projects.data?.results || []).map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></Field><Field label="Priority"><select className={inputClass} value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value as PurchaseRequest['priority'] })}><option value="LOW">Low</option><option value="NORMAL">Normal</option><option value="HIGH">High</option><option value="URGENT">Urgent</option></select></Field><Field label="Business justification"><input className={inputClass} value={form.justification} onChange={(event) => setForm({ ...form, justification: event.target.value })} /></Field></div><Card><CardHeader><CardTitle>{draft ? 'Line items' : 'Corrected line items'}</CardTitle></CardHeader><CardContent className="grid gap-3">{form.items.map((item, index) => <div key={index} className="grid gap-2 border border-border bg-background p-3 md:grid-cols-[1fr_120px_1fr_auto]"><Field label="Material" required><MaterialLookup label={item.material_label} materialId={item.material_id} required onChange={(id, label) => { updateItem(index, 'material_id', id); updateItem(index, 'material_label', label); }} /></Field><Field label="Quantity" required><input className={inputClass} type="number" min="0.01" step="0.01" value={item.quantity} onChange={(event) => updateItem(index, 'quantity', event.target.value)} /></Field><Field label="Line note"><input className={inputClass} value={item.notes} onChange={(event) => updateItem(index, 'notes', event.target.value)} /></Field><Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, items: form.items.filter((_, itemIndex) => itemIndex !== index) })}>Remove</Button></div>)}<Button type="button" variant="secondary" onClick={() => setForm({ ...form, items: [...form.items, { material_id: '', material_label: '', quantity: '', notes: '' }] })}>Add item</Button></CardContent></Card>{!draft ? <Field label="What was corrected" required><textarea className={inputClass} rows={3} value={form.correction_summary} onChange={(event) => setForm({ ...form, correction_summary: event.target.value })} placeholder="Explain how the requested correction was addressed." /></Field> : null}<Button loading={pending} loadingLabel={draft ? 'Saving draft' : 'Saving correction'} disabled={!valid}>{draft ? 'Save draft changes' : 'Save correction'}</Button></> : null}
     </form>
   </FormModal>;
@@ -581,7 +555,7 @@ function PartialStockIssueModal({ request, pending, onClose, onSubmit }: { reque
 
 type FinanceDecision = 'approve' | 'reject' | 'return' | 'hold';
 
-function FinanceReviewModal({ request, pending, role, onClose, onSubmit }: { request: PurchaseRequest | null; pending: boolean; role: string | null; onClose: () => void; onSubmit: (decision: FinanceDecision, comments: string, override: boolean) => void }) {
+export function FinanceReviewModal({ request, pending, role, error, onClose, onSubmit }: { request: PurchaseRequest | null; pending: boolean; role: string | null; error?: string; onClose: () => void; onSubmit: (decision: FinanceDecision, comments: string, override: boolean, overrideReason: string) => void }) {
   const budgets = useQuery({
     queryKey: qk.financeBudgets({ project: request?.project, status: 'APPROVED' }),
     queryFn: () => financeApi.budgets({ project: request!.project, status: 'APPROVED', page_size: 20 }),
@@ -590,16 +564,23 @@ function FinanceReviewModal({ request, pending, role, onClose, onSubmit }: { req
   const [decision, setDecision] = useState<FinanceDecision>('approve');
   const [comments, setComments] = useState('');
   const [override, setOverride] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
+  const adminReasonRequired = !!request?.finance_admin_override_required && decision !== 'hold';
   const commentsRequired = decision !== 'approve' || override;
   const budgetLine = budgets.data?.results.flatMap((budget) => budget.lines.map((line) => ({ budget, line }))).find(({ line }) => line.id === request?.finance_budget_line);
-  const requestAmount = Number(request?.total_estimated_cost || 0);
-  const lineAvailableAfter = budgetLine ? Number(budgetLine.line.available_balance) - requestAmount : null;
-  const projectAvailableAfter = budgetLine ? Number(budgetLine.budget.available_balance) - requestAmount : null;
+  const requestAmount = request?.finance_requested_amount == null ? null : Number(request.finance_requested_amount);
+  const policy = useQuery({ queryKey: ['finance', 'settings'], queryFn: financeApi.settings, enabled: !!request });
+  const policyBlocks = policy.data?.results[0]?.budget_control_mode === 'block';
+  const budgetUnavailable = Boolean(request?.project) && (budgets.isLoading || budgets.isError);
+  const independentReviewerRequired = !!request?.finance_review_requires_independent_reviewer;
+  const dataUnavailable = requestAmount === null || budgetUnavailable || policy.isLoading || policy.isError;
+  const lineAvailableAfter = budgetLine && requestAmount !== null ? Number(budgetLine.line.available_balance) - requestAmount : null;
+  const projectAvailableAfter = budgetLine && requestAmount !== null ? Number(budgetLine.budget.available_balance) - requestAmount : null;
   const needsOverride = !budgetLine || (lineAvailableAfter !== null && lineAvailableAfter < 0);
   const canAuthorizeOverride = role === 'finance_manager' || role === 'admin';
-  return <FormModal open={!!request} title={`Finance review / ${request?.number || 'request'}`} onClose={onClose}>
-    <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); onSubmit(decision, comments, override); }}>
-      <div className="grid gap-2 border border-border bg-background p-3 text-sm md:grid-cols-2"><span>Project <strong className="block">{request?.project_name || 'No project'}</strong></span><span>Quoted PO total <strong className="block">{formatUGX(request?.total_estimated_cost)}</strong></span></div>
+  return <FormModal open={!!request} title={`Finance review / ${request?.number || 'request'}`} onClose={() => { if (!pending) onClose(); }}>
+    <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); onSubmit(decision, comments, override, overrideReason.trim()); }}>
+      <div className="grid gap-2 border border-border bg-background p-3 text-sm md:grid-cols-2"><span>Project <strong className="block">{request?.project_name || 'No project'}</strong></span><span>Submitted amount <strong className="block">{requestAmount === null ? 'Unavailable — reload this record' : formatUGX(String(requestAmount))}</strong></span></div>
       {budgets.isLoading ? <p className="border border-border bg-background p-3 text-sm text-muted">Loading approved project budget position…</p> : null}
       {!budgets.isLoading && budgetLine ? <section className="grid gap-3 border border-primary/25 bg-primary/5 p-3">
         <div><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">Approval impact</p><strong>{budgetLine.budget.name} / {budgetLine.line.category_name}</strong><p className="text-xs text-muted">This is the approved project budget and selected authorization line for this request.</p></div>
@@ -608,10 +589,15 @@ function FinanceReviewModal({ request, pending, role, onClose, onSubmit }: { req
       </section> : null}
       {!budgets.isLoading && !budgetLine ? <p className="border border-warning/30 bg-warning/5 p-3 text-sm text-foreground">No approved budget line is attached to this request. Approval requires a documented Finance Manager override.</p> : null}
       <Field label="Decision" required><select className={inputClass} value={decision} onChange={(event) => { setDecision(event.target.value as FinanceDecision); setOverride(false); }}><option value="approve">Approve</option><option value="return">Return for correction</option><option value="hold">Place on hold</option><option value="reject">Reject</option></select></Field>
-      {decision === 'approve' && canAuthorizeOverride ? <label className={`flex items-center gap-2 border p-3 text-sm font-semibold ${needsOverride ? 'border-warning/40 bg-warning/5' : 'border-border'}`}><input type="checkbox" checked={override} onChange={(event) => setOverride(event.target.checked)} />{needsOverride ? 'Authorize required budget override and document the reason' : 'Authorize budget override if the available balance is insufficient'}</label> : null}
+      {decision === 'approve' && canAuthorizeOverride && !policyBlocks ? <label className={`flex items-center gap-2 border p-3 text-sm font-semibold ${needsOverride ? 'border-warning/40 bg-warning/5' : 'border-border'}`}><input type="checkbox" checked={override} onChange={(event) => setOverride(event.target.checked)} />{needsOverride ? 'Authorize required budget override and document the reason' : 'Authorize budget override if the available balance is insufficient'}</label> : null}
+      {decision === 'approve' && needsOverride && policyBlocks ? <p role="alert" className="border border-warning/30 bg-warning/5 p-3 text-sm">Company policy blocks approval without sufficient approved budget. Return the request for budget correction or place it on hold.</p> : null}
+      {independentReviewerRequired ? <p role="alert" className="border border-warning/30 bg-warning/5 p-3 text-sm">You submitted this Finance request. Company maker-checker policy requires a different Finance reviewer, including for Admin decisions.</p> : null}
+      {dataUnavailable ? <p role="alert" className="text-sm text-critical">Approval data is unavailable or still loading. Reload this record before approving.</p> : null}
+      {error ? <p role="alert" className="text-sm text-critical">{error}</p> : null}
       {decision === 'approve' && needsOverride && !canAuthorizeOverride ? <p className="border border-warning/30 bg-warning/5 p-3 text-sm">This request exceeds available budget. A Finance Manager or Admin must authorize the exception.</p> : null}
       <Field label="Review comments" required={commentsRequired}><textarea className={inputClass} rows={4} value={comments} onChange={(event) => setComments(event.target.value)} /></Field>
-      <Button loading={pending} loadingLabel="Recording decision" variant={decision === 'reject' ? 'warning' : 'default'} disabled={(commentsRequired && !comments.trim()) || (decision === 'approve' && needsOverride && (!override || !canAuthorizeOverride))}>Confirm finance decision</Button>
+      {adminReasonRequired ? <><p className="text-sm text-muted">As Admin, explain why you are making this Finance decision. This is recorded separately from the budget exception.</p><Field label="Admin override reason" required><textarea className={inputClass} rows={3} minLength={10} disabled={pending} value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} /></Field></> : null}
+      <Button loading={pending} loadingLabel="Recording decision" variant={decision === 'reject' ? 'warning' : 'default'} disabled={pending || independentReviewerRequired || (adminReasonRequired && overrideReason.trim().length < 10) || (commentsRequired && !comments.trim()) || (decision === 'approve' && (dataUnavailable || (needsOverride && (policyBlocks || !override || !canAuthorizeOverride))))}>Confirm finance decision</Button>
     </form>
   </FormModal>;
 }

@@ -10,6 +10,7 @@ from django.utils import timezone
 from apps.finance.models import BudgetApproval, FinanceAuditEvent, WorkflowConfirmation
 
 from .models import PurchaseOrder, PurchaseRequest
+from .progress import order_follow_up
 
 
 @dataclass(frozen=True)
@@ -60,7 +61,7 @@ def _stage_payload(
     finish = ended_at or timezone.now()
     duration_seconds = max(0, int((finish - started_at).total_seconds()))
     target_seconds = definition.target_hours * 3600
-    is_current = ended_at is None
+    is_current = ended_at is None and status == 'CURRENT'
     exceeded_target = bool(target_seconds and duration_seconds > target_seconds)
     return {
         'key': key,
@@ -129,20 +130,34 @@ def material_request_stage_tracking(material_request: PurchaseRequest) -> dict:
     ]
     history.extend(_legacy_stage_history(material_request, orders, history))
     history.sort(key=lambda entry: entry['started_at'])
+    terminal_at = None
+    terminal = material_request.status in {PurchaseRequest.STATUS_STOCK_ISSUED, PurchaseRequest.STATUS_REJECTED}
+    if terminal:
+        terminal_at = next((task.decided_at for task in reversed(tasks) if task.decided_at), material_request.updated_at)
+    elif orders and material_request.status == PurchaseRequest.STATUS_PO_CREATED:
+        follow_up = order_follow_up(max(orders, key=lambda order: order.pk))
+        terminal = follow_up['stage'] is None
+        terminal_at = follow_up['completed_at'] if terminal else None
     pending = [entry for entry in history if entry['is_current']]
     if pending:
         current = pending[-1]
-    else:
+        terminal_at = None
+    elif not terminal:
         key, started_at = _inferred_current_stage(material_request, orders, tasks)
         current = _stage_payload(key=key, started_at=started_at) if key else None
         if current:
             history.append(current)
+    else:
+        current = None
+
+    elapsed = ((terminal_at or timezone.now()) - material_request.created_at).total_seconds()
 
     return {
         'current_stage': current,
         'history': history,
-        'total_age_seconds': max(0, int((timezone.now() - material_request.created_at).total_seconds())),
-        'total_age_display': _duration_display((timezone.now() - material_request.created_at).total_seconds()),
+        'completed_at': terminal_at,
+        'total_age_seconds': max(0, int(elapsed)),
+        'total_age_display': _duration_display(elapsed),
     }
 
 
@@ -169,7 +184,7 @@ def _legacy_stage_history(material_request, orders, recorded_history):
                 ended_at=manager_event.created_at, status='COMPLETED',
             ))
 
-    order = orders[-1] if orders else None
+    order = max(orders, key=lambda order: order.pk) if orders else None
     if order and 'procurement_decision' not in recorded_keys:
         manager_end = next((
             entry['ended_at'] for entry in reversed(inferred + recorded_history)
@@ -203,13 +218,14 @@ def _legacy_stage_history(material_request, orders, recorded_history):
         ))
 
     if order:
-        invoices = list(order.supplier_invoices.all())
-        latest_invoice = max(invoices, key=lambda invoice: invoice.pk) if invoices else None
-        if latest_invoice and latest_invoice.status == latest_invoice.STATUS_PAID:
-            inferred.append(_stage_payload(
-                key='invoice_payment', started_at=latest_invoice.created_at,
-                ended_at=latest_invoice.updated_at, status='COMPLETED',
-            ))
+        follow_up = order_follow_up(order)
+        if follow_up['stage'] is None and follow_up['completed_at'] and order.status == PurchaseOrder.STATUS_RECEIVED:
+            first_invoice = order.supplier_invoices.order_by('created_at').first()
+            if first_invoice:
+                inferred.append(_stage_payload(
+                    key='invoice_payment', started_at=first_invoice.created_at,
+                    ended_at=follow_up['completed_at'], status='COMPLETED',
+                ))
     return inferred
 
 
@@ -254,7 +270,7 @@ def _inferred_current_stage(material_request, orders, tasks):
     if material_request.status == PurchaseRequest.STATUS_REJECTED:
         return None, None
     if material_request.status == PurchaseRequest.STATUS_PO_CREATED:
-        order = orders[-1] if orders else None
+        order = max(orders, key=lambda order: order.pk) if orders else None
         if order is None:
             return 'procurement_progress', material_request.updated_at
         if order.status in {PurchaseOrder.STATUS_DRAFT, PurchaseOrder.STATUS_PENDING}:
@@ -264,10 +280,9 @@ def _inferred_current_stage(material_request, orders, tasks):
         if order.status == PurchaseOrder.STATUS_DISPATCH_CONFIRMED:
             key = 'site_receipt' if order.delivery_destination == PurchaseOrder.DELIVERY_SITE else 'warehouse_receipt'
             return key, order.dispatch_confirmed_at or stage_started
-        if order.status in {PurchaseOrder.STATUS_PARTIAL, PurchaseOrder.STATUS_RECEIVED}:
-            invoices = list(order.supplier_invoices.all())
-            latest_invoice = max(invoices, key=lambda invoice: invoice.pk) if invoices else None
-            if latest_invoice and latest_invoice.status == latest_invoice.STATUS_PAID:
-                return None, None
-            return 'invoice_payment', order.received_at or order.updated_at
+        if order.status == PurchaseOrder.STATUS_PARTIAL:
+            key = 'site_receipt' if order.delivery_destination == PurchaseOrder.DELIVERY_SITE else 'warehouse_receipt'
+            return key, order.received_at or order.updated_at
+        if order.status == PurchaseOrder.STATUS_RECEIVED:
+            return order_follow_up(order)['stage'], order.received_at or order.updated_at
     return None, None

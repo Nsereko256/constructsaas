@@ -1,6 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from .external_transfers import ExternalMoveOrderViewSet
+from .readiness import CompanyReadinessAPIView
 
 from .views import (
     CategoryViewSet,
@@ -61,6 +62,7 @@ router.register('chat-rooms', ChatRoomViewSet, basename='chat-room')
 router.register('chat-messages', ChatMessageViewSet, basename='chat-message')
 
 urlpatterns = [
+    path('company-readiness/', CompanyReadinessAPIView.as_view(), name='company-readiness'),
     path('register-company/', CompanyRegistrationAPIView.as_view(), name='register-company'),
     path('password-reset/', PasswordResetRequestAPIView.as_view(), name='password-reset-request'),
     path('password-reset/confirm/', PasswordResetConfirmAPIView.as_view(), name='password-reset-confirm'),

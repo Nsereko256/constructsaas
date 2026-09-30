@@ -2,6 +2,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, Plus } from 'lucide-react';
 import { FormEvent, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { api } from '@/api/services';
 import type { StockMovement } from '@/api/types';
 import { qk } from '@/api/queryKeys';
@@ -26,13 +27,14 @@ import { formatDate, formatNumber, formatUGX } from '@/lib/utils';
 export function InventoryMovementsPage() {
   const { role } = useAuth();
   const canSeeMaterialCosts = role !== 'site_engineer';
-  const list = useListState({ movement_type: '', project: '', material: '', date_from: '', date_to: '' });
+  const location = useLocation();
+  const list = useListState({ movement_type: '', project: '', material: '', purchase_request: '', purchase_order: '', date_from: '', date_to: '' }, { syncKey: location.search, initialSearch: new URLSearchParams(location.search).get('search') || '', initialFilters: { purchase_request: new URLSearchParams(location.search).get('purchase_request') || '', purchase_order: new URLSearchParams(location.search).get('purchase_order') || '' } });
   const [open, setOpen] = useState(false);
   const movements = useQuery({ queryKey: qk.movements(list.query), queryFn: () => api.movements(list.query) });
   const allowed = can.createMovement(role);
   const toast = useToast();
   const download = async (kind: 'pdf' | 'xlsx') => {
-    try { await (kind === 'pdf' ? api.downloadMovementsPdf(list.filters) : api.downloadMovementsXlsx(list.filters)); toast.push({ title: `Movement ${kind === 'xlsx' ? 'Excel' : 'PDF'} prepared`, tone: 'success' }); }
+    try { await (kind === 'pdf' ? api.downloadMovementsPdf({ ...list.filters, search: list.search }) : api.downloadMovementsXlsx({ ...list.filters, search: list.search })); toast.push({ title: `Movement ${kind === 'xlsx' ? 'Excel' : 'PDF'} prepared`, tone: 'success' }); }
     catch (error) { toast.push({ title: 'Movement export failed', message: (error as Error).message, tone: 'danger' }); }
   };
   const columns: ColumnDef<StockMovement>[] = [

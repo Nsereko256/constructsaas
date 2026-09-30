@@ -305,6 +305,7 @@ export type RequestStageTracking = {
 };
 
 export type PurchaseRequest = {
+  correction_guidance?: string;
   id: number;
   project: number | null;
   project_name: string | null;
@@ -340,6 +341,9 @@ export type PurchaseRequest = {
   finance_status_display: string;
   finance_review_reason: string;
   finance_return_reason: string;
+  finance_requested_amount?: string | null;
+  finance_review_requires_independent_reviewer?: boolean;
+  finance_admin_override_required?: boolean;
   finance_budget_line: number | null;
   can_submit_finance: boolean;
   can_correct_finance_return: boolean;
@@ -351,7 +355,39 @@ export type PurchaseRequest = {
   updated_at?: string;
 };
 
+export type PurchaseRequestRegisterSummary = {
+  count: number;
+  statuses: Record<string, number>;
+  my_queue: number;
+  awaiting_approval: number;
+  urgent_approval: number;
+  stock_queue: number;
+  stock_fulfilled: number;
+  estimated_value?: string;
+};
+
+export type PurchaseOrderRegisterSummary = {
+  count: number;
+  statuses: Record<string, number>;
+  awaiting_delivery: number;
+  direct_to_site: number;
+  warehouse_receipts: number;
+  site_receipts: number;
+  warehouse_queue: number;
+  site_queue: number;
+  order_value?: string;
+  site_value?: string;
+};
+
 export type PurchaseOrder = {
+  next_step?: { owner: string; message: string; finance_review_required: boolean; action: {
+    key: string; label: string; href: string | null;
+  } | null };
+  receipt_summary?: {
+    percent: number; basis: string; complete: boolean; receipt_count: number;
+    latest_receipt_number: string | null; latest_receipt_at: string | null;
+    lines: Array<{ purchase_order_item: number; accepted: string; exceptions: string; outstanding: string }>;
+  };
   id: number;
   purchase_request: number | null;
   purchase_request_number: string | null;

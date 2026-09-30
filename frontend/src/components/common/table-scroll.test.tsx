@@ -25,4 +25,13 @@ describe('TableScroll', () => {
     expect(screen.getByRole('button', { name: 'Scroll orders right' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Scroll orders left' })).toBeEnabled();
   });
+
+  it('positions the pinned action column using the rendered identity width', () => {
+    const { container } = render(<TableScroll><table><thead><tr><th>Request</th><th>Next action</th></tr></thead></table></TableScroll>);
+    const viewport = container.querySelector<HTMLElement>('.table-scroll-viewport')!;
+    const identity = container.querySelector('th')!;
+    vi.spyOn(identity, 'getBoundingClientRect').mockReturnValue({ width: 158.5 } as DOMRect);
+    fireEvent.scroll(viewport);
+    expect(viewport.style.getPropertyValue('--register-identity-width')).toBe('158.5px');
+  });
 });

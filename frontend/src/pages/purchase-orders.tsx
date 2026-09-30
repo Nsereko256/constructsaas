@@ -1,3 +1,4 @@
+import { PurchaseOrderFinanceHandoffModal } from '@/components/common/purchase-order-finance-handoff';
 import { RegisterFilters } from '@/components/common/register-filters';
 import { Pagination } from '@/components/common/pagination';
 import { TableScroll } from '@/components/common/table-scroll';
@@ -49,7 +50,7 @@ export function PurchaseOrdersPage() {
     {
       syncKey: queryString,
       initialSearch: searchParams.get('search') || '',
-      initialFilters: { action_queue: searchParams.get('action_queue') || '' },
+      initialFilters: { action_queue: searchParams.get('action_queue') || '', purchase_request: searchParams.get('purchase_request') || '' },
     },
   );
   const [open, setOpen] = useState(Boolean(requestedPurchaseRequestId));
@@ -60,12 +61,11 @@ export function PurchaseOrdersPage() {
   const [reviewingPreapproval, setReviewingPreapproval] = useState<{ order: PurchaseOrder; amendment: PurchaseOrderAmendment; canConfirm: boolean } | null>(null);
   const [queue, setQueue] = useState<'all' | 'draft' | 'awaiting' | 'issued' | 'partial' | 'received' | 'closed'>('all');
   const [sort, setSort] = useState<'delivery' | 'newest'>('delivery');
-  const orderQuery = { ...list.query, page_size: 5 };
+  const orderQuery = { ...list.query, page_size: 5, ordering: sort === 'delivery' ? 'delivery_sort_date,id' : '-created_at,-id' };
   const orders = useQuery({ queryKey: list.filters.action_queue ? qk.purchaseOrderActionQueue(orderQuery) : qk.purchaseOrders(orderQuery), queryFn: () => api.purchaseOrders(orderQuery) });
-  const allOrders = useQuery({ queryKey: qk.purchaseOrders({ page_size: 100 }), queryFn: () => api.purchaseOrders({ page_size: 100 }) });
+  const allOrders = useQuery({ queryKey: ['purchase-orders', 'summary'], queryFn: () => api.purchaseOrderSummary() });
   const financeSettings = useQuery({ queryKey: ['finance', 'settings', 'purchase-orders'], queryFn: financeApi.settings, enabled: can.createPo(role) });
   const projects = useQuery({ queryKey: qk.projects({ page_size: 100 }), queryFn: () => api.projects({ page_size: 100 }) });
-  const receipts = useQuery({ queryKey: qk.goodsReceivedNotes({ page_size: 100 }), queryFn: () => api.goodsReceivedNotes({ page_size: 100 }) });
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
     void queryClient.invalidateQueries({ queryKey: ['purchase-requests'] });
@@ -96,45 +96,37 @@ export function PurchaseOrdersPage() {
     onSuccess: () => { toast.push({ title: 'Draft purchase order deleted', tone: 'success' }); refresh(); },
     onError: (error: Error) => toast.push({ title: 'Could not delete purchase order', message: error.message, tone: 'danger' }),
   });
-  const amendments = useQuery({ queryKey: ['purchase-order-amendments'], queryFn: async () => {
+  const amendments = useQuery({ queryKey: ['purchase-order-amendments', (orders.data?.results || []).map((order) => order.id)], queryFn: async () => {
     const rows = orders.data?.results || [];
     const results = await Promise.all(rows.map(async (order) => [order.id, await api.purchaseOrderAmendments(order.id)] as const));
     return new Map(results);
   }, enabled: Boolean(orders.data?.results?.length) });
 
-  const orderNeedsAction = (order: PurchaseOrder) => (
-    (can.createPo(role) && ['DRAFT', 'PENDING'].includes(order.status))
-    || (can.createPo(role) && order.delivery_destination === 'SITE' && ['ORDERED', 'PARTIAL'].includes(order.status))
-    || canReceivePurchaseOrder(role, order)
-    || (can.createPo(role) && !['RECEIVED', 'CANCELLED'].includes(order.status))
-    || (hasRole(role, ['procurement_officer', 'admin']) && ['DRAFT', 'PENDING', 'ORDERED'].includes(order.status))
-    || Boolean(order.pending_preapproval_edit && hasRole(role, ['finance_officer', 'finance_manager', 'admin']))
-  );
-  const allRows = allOrders.data?.results || [];
-  const receiptRows = receipts.data?.results || [];
-  const receiptRowsByOrder = new Map<number, typeof receiptRows>();
-  receiptRows.forEach((receipt) => receiptRowsByOrder.set(receipt.purchase_order, [...(receiptRowsByOrder.get(receipt.purchase_order) || []), receipt]));
-  const receiptProgress = (order: PurchaseOrder) => {
-    const ordered = order.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-    const linkedReceipts = receiptRowsByOrder.get(order.id) || [];
-    const accepted = linkedReceipts.flatMap((receipt) => receipt.items).reduce((sum, item) => sum + Number(item.accepted_quantity || 0), 0);
-    const percent = ordered ? Math.min(100, Math.round((accepted / ordered) * 100)) : order.status === 'RECEIVED' ? 100 : 0;
-    const latest = [...linkedReceipts].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
-    return { percent, number: latest?.number || (order.status === 'RECEIVED' ? 'Receipt complete' : 'Awaiting receipt') };
-  };
+  const actionId = Number(searchParams.get('edit') || searchParams.get('review_edit'));
+  const actionOrder = useQuery({ queryKey: ['purchase-order-detail', actionId], queryFn: () => api.purchaseOrder(actionId), enabled: actionId > 0 });
+  const actionEdits = useQuery({ queryKey: ['purchase-order-amendments', actionId], queryFn: () => api.purchaseOrderAmendments(actionId), enabled: actionId > 0 && searchParams.has('review_edit') && hasRole(role, ['finance_officer', 'finance_manager', 'admin']) });
+  const [openedAction, setOpenedAction] = useState('');
+  useEffect(() => {
+    if (!actionOrder.data || openedAction === queryString) return;
+    const params = new URLSearchParams(queryString);
+    if (params.has('edit') && can.createPo(role) && ['DRAFT', 'PENDING', 'ORDERED'].includes(actionOrder.data.status)) {
+      setAmending(actionOrder.data); setOpenedAction(queryString);
+    } else if (params.has('review_edit') && actionEdits.data && hasRole(role, ['finance_officer', 'finance_manager', 'admin'])) {
+      const amendment = actionEdits.data.find((item) => item.status === 'SUBMITTED' && item.amendment_type === 'PRE_APPROVAL_EDIT');
+      if (amendment) setReviewingPreapproval({ order: actionOrder.data, amendment, canConfirm: hasRole(role, ['finance_manager', 'admin']) });
+      setOpenedAction(queryString);
+    }
+  }, [actionOrder.data, actionEdits.data, openedAction, queryString, role]);
+  const totals = allOrders.data;
+  const statusCount = (status: string) => totals?.statuses[status] || 0;
+  const awaitingDelivery = totals?.awaiting_delivery || 0;
+  const receivedOrders = statusCount('RECEIVED');
+  const receiptRate = totals?.count ? Math.round(receivedOrders / totals.count * 100) : 0;
+  const receiptProgress = (order: PurchaseOrder) => ({
+    percent: order.receipt_summary?.percent ?? 0,
+    number: order.receipt_summary ? order.receipt_summary.latest_receipt_number || 'Awaiting receipt' : 'Receipt evidence unavailable',
+  });
   const deliveryDate = (order: PurchaseOrder) => order.revised_delivery_date || order.supplier_confirmed_delivery_date || order.expected_delivery_date;
-  const totalValue = allRows.reduce((sum, order) => sum + Number(order.total_cost || 0), 0);
-  const awaitingDelivery = allRows.filter((order) => ['ORDERED', 'DISPATCH_CONFIRMED', 'PARTIAL'].includes(order.status));
-  const receivedOrders = allRows.filter((order) => order.status === 'RECEIVED');
-  const directToSiteOrders = allRows.filter((order) => order.delivery_destination === 'SITE');
-  const directToSiteValue = directToSiteOrders.reduce((sum, order) => sum + Number(order.total_cost || 0), 0);
-  const warehouseReceipts = receiptRows.filter((receipt) => allRows.find((order) => order.id === receipt.purchase_order)?.delivery_destination === 'WAREHOUSE');
-  const siteReceipts = receiptRows.filter((receipt) => allRows.find((order) => order.id === receipt.purchase_order)?.delivery_destination === 'SITE');
-  const partialOrders = allRows.filter((order) => order.status === 'PARTIAL');
-  const onTimeReceived = receivedOrders.filter((order) => !deliveryDate(order) || !order.received_at || Date.parse(order.received_at) <= Date.parse(deliveryDate(order)!)).length;
-  const onTimeRate = receivedOrders.length ? Math.round((onTimeReceived / receivedOrders.length) * 100) : 0;
-  const receiptRate = allRows.length ? Math.round((receivedOrders.length / allRows.length) * 100) : 0;
-  const averageLeadTime = receivedOrders.length ? Math.round(receivedOrders.reduce((sum, order) => sum + Math.max(0, (Date.parse(order.received_at || order.created_at) - Date.parse(order.created_at)) / 86400000), 0) / receivedOrders.length * 10) / 10 : 0;
   const projectOptions = projects.data?.results || [];
   const financeReviewEnabled = Boolean(user?.soft_finance_enabled) && financeSettings.data?.results?.[0]?.budget_control_mode !== 'off';
   const pageSize = 5;
@@ -149,6 +141,20 @@ export function PurchaseOrdersPage() {
     navigate(`/procurement/purchase-orders/${orderId}/`);
   };
   const rowAction = (order: PurchaseOrder) => {
+    if (order.next_step) {
+      const action = order.next_step.action;
+      const edit = can.createPo(role) && ['DRAFT', 'PENDING'].includes(order.status) && action?.key !== 'edit'
+        ? <Button size="sm" variant="secondary" onClick={() => setAmending(order)}>Edit PO</Button> : null;
+      let primary;
+      if (action?.key === 'send_finance') primary = <Button size="sm" onClick={() => setFinanceHandoffOrder(order)}>{action.label}</Button>;
+      else if (action?.key === 'approve') primary = <Button size="sm" loading={approve.isPending && approve.variables === order.id} disabled={approve.isPending} onClick={() => approve.mutate(order.id)}>{action.label}</Button>;
+      else if (action?.key === 'dispatch') primary = <Button size="sm" loading={confirmDispatch.isPending && confirmDispatch.variables === order.id} disabled={confirmDispatch.isPending} onClick={() => confirmDispatch.mutate(order.id)}>{action.label}</Button>;
+      else if (action?.key === 'edit') primary = <Button size="sm" variant="secondary" onClick={() => setAmending(order)}>{action.label}</Button>;
+      else if (action?.href) primary = <Button size="sm" variant="secondary" asChild><Link to={action.href}>{action.label}</Link></Button>;
+      else primary = <span className="po-next-message" title={order.next_step.message}>{order.next_step.owner === '—' ? 'No action' : `Awaiting ${order.next_step.owner}`}</span>;
+      return <div className="po-row-actions">{primary}{edit}</div>;
+    }
+
     // Once a PO is issued, amendment remains available from the overflow menu,
     // but it is no longer the operational next step.
     const canEdit = hasRole(role, ['procurement_officer', 'admin']) && ['DRAFT', 'PENDING'].includes(order.status);
@@ -168,14 +174,14 @@ export function PurchaseOrdersPage() {
     if (order.pending_preapproval_edit && hasRole(role, ['finance_officer', 'finance_manager', 'admin'])) return <Button size="sm" variant="warning" className="po-next-action" onClick={() => { const amendment = (amendments.data?.get(order.id) || []).find((item) => item.status === 'SUBMITTED'); if (amendment) setReviewingPreapproval({ order, amendment, canConfirm: hasRole(role, ['finance_manager', 'admin']) }); }}>Review edit</Button>;
     return <span className="po-next-message" title={poNextAction(order, role)}>{poNextAction(order, role)}</span>;
   };
-  const orderRows = [...(orders.data?.results || [])].sort((a, b) => sort === 'newest' ? Date.parse(b.created_at) - Date.parse(a.created_at) : Number(orderNeedsAction(b)) - Number(orderNeedsAction(a)));
+  const orderRows = orders.data?.results || [];
 
   return (
     <div className={`purchase-orders-reference${canSeeMaterialCosts ? '' : ' costs-hidden'}`}>
       <section className="po-top"><div className="po-titlebar"><div><h1>Purchase orders</h1><p>Track supplier orders, deliveries and material receipt.</p></div><div className="po-title-actions"><details className="po-export-menu"><summary><Download size={15} />Export <ChevronDown size={13} /></summary><div><button type="button" onClick={() => void api.downloadPurchaseOrders('pdf', { ...list.filters, search: list.search })}>PDF register</button><button type="button" onClick={() => void api.downloadPurchaseOrders('xlsx', { ...list.filters, search: list.search })}>Excel register</button></div></details>{can.createPo(role) ? <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" />New PO</Button> : null}</div></div><ProcurementTabs /></section>
-      {allOrders.data ? <section className={`po-guidance ${awaitingDelivery.length ? 'attention' : 'complete'}`}><CheckCircle2 size={17} /><span><strong>{awaitingDelivery.length ? `${awaitingDelivery.length} purchase order${awaitingDelivery.length === 1 ? '' : 's'} await delivery or receipt.` : allRows.length ? 'All purchase orders have been received.' : 'No purchase orders yet.'}</strong><small>{awaitingDelivery.length ? 'Keep supplier dispatch and receipt evidence up to date.' : 'Verify receipt documents before closing.'}</small></span><Link to="/procurement/grns">Open receipts <ChevronRight size={14} /></Link></section> : <section className="po-guidance" role={allOrders.isError ? 'alert' : 'status'}><span><strong>{allOrders.isError ? 'Order summary could not be loaded.' : 'Loading order summary…'}</strong><small>Your purchase order register remains available below.</small></span>{allOrders.isError ? <Button size="sm" variant="secondary" onClick={() => void allOrders.refetch()}>Retry summary</Button> : null}</section>}
-      {allOrders.data ? <section className="po-kpis"><PurchaseOrderKpi icon={FileText} tone="blue" label="Total orders" value={allRows.length} note="Across selected sites" /><PurchaseOrderKpi icon={Truck} tone="amber" label="Awaiting delivery" value={awaitingDelivery.length} note={awaitingDelivery.length ? 'Follow-up required' : 'All orders received'} /><PurchaseOrderKpi icon={Box} tone="green" label="Received" value={receivedOrders.length} note={`${receiptRate}% receipt completion`} />{canSeeMaterialCosts ? <PurchaseOrderKpi icon={CircleDollarSign} tone="indigo" label="Order value" value={formatUGX(totalValue)} note="Committed purchase value" /> : null}<PurchaseOrderKpi icon={MapPin} tone="violet" label="Direct to site" value={directToSiteOrders.length} note={canSeeMaterialCosts ? formatUGX(directToSiteValue) : 'Site deliveries'} /></section> : null}
-      <section className="po-workspace-grid"><div data-pagination-region className="po-register-panel"><div className="po-panel-heading"><h2>Purchase order register</h2></div><div className="po-queue-tabs">{([['all', 'All', allRows.length], ['draft', 'Draft', allRows.filter((order) => order.status === 'DRAFT').length], ['awaiting', 'Awaiting Finance review', allRows.filter((order) => order.status === 'PENDING').length], ['issued', 'Issued', allRows.filter((order) => order.status === 'ORDERED').length], ['partial', 'Part received', partialOrders.length], ['received', 'Received', receivedOrders.length], ['closed', 'Closed', allRows.filter((order) => order.status === 'CANCELLED').length]] as const).map(([value, label, count]) => <button type="button" key={value} className={queue === value ? 'active' : ''} onClick={() => updateQueue(value)}>{label}<b>{count}</b></button>)}</div><RegisterFilters className="po-filters" activeCount={[list.search, list.filters.project, list.filters.delivery_destination, list.filters.status].filter(Boolean).length} onClear={() => { list.setSearch(''); ['project', 'delivery_destination', 'status'].forEach((key) => list.setFilter(key, '')); }}><label><Search size={14} /><input aria-label="Search purchase orders" placeholder="Search PO, supplier or project" value={list.search} onChange={(event) => list.setSearch(event.target.value)} /></label><select aria-label="Filter purchase orders by project" className={inputClass} value={list.filters.project} onChange={(event) => list.setFilter('project', event.target.value)}><option value="">Project</option>{projectOptions.map((project) => <option value={project.id} key={project.id}>{project.name}</option>)}</select><select aria-label="Filter purchase orders by destination" className={inputClass} value={list.filters.delivery_destination} onChange={(event) => list.setFilter('delivery_destination', event.target.value)}><option value="">Destination</option><option value="WAREHOUSE">Main warehouse</option><option value="SITE">Direct to site</option></select><select aria-label="Filter purchase orders by status" className={inputClass} value={list.filters.status} onChange={(event) => { setQueue('all'); list.setFilter('action_queue', ''); list.setFilter('status', event.target.value); }}><option value="">Status</option><option value="DRAFT">Draft</option><option value="PENDING">Pending</option><option value="ORDERED">Ordered</option><option value="DISPATCH_CONFIRMED">Dispatch confirmed</option><option value="PARTIAL">Part received</option><option value="RECEIVED">Received</option><option value="CANCELLED">Cancelled</option></select><select aria-label="Sort purchase orders" className={inputClass} value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="delivery">Sort: Delivery date</option><option value="newest">Sort: Newest first</option></select></RegisterFilters><TableScroll label="Purchase orders" className="po-table-wrap"><table className="po-table"><thead><tr><th>Purchase order</th><th>Next action</th><th>Supplier</th><th>Project / site</th><th>Destination</th><th>Ordered</th><th>Delivery date</th><th>Receipt progress</th><th>Total</th><th>Status</th><th aria-label="Actions" /></tr></thead><tbody>{orderRows.map((order) => { const receipt = receiptProgress(order); const commitmentDate = deliveryDate(order); return <tr key={order.id} className="po-record-row" tabIndex={0} onClick={(event) => openPurchaseOrderDetail(event, order.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') openPurchaseOrderDetail(event, order.id); }}><td data-label="Purchase order"><Link to={`/procurement/purchase-orders/${order.id}/`}>{order.number}</Link><small>{order.purchase_request_number || 'Manual PO'}</small></td><td data-label="Next action">{rowAction(order)}</td><td data-label="Supplier">{order.supplier_name || 'Unassigned'}</td><td data-label="Project / site">{order.project_name || 'Warehouse'}<small>{order.project_name ? 'Project order' : 'No project'}</small></td><td data-label="Destination"><Badge tone={order.delivery_destination === 'SITE' ? 'info' : 'success'}>{order.delivery_destination_display}</Badge></td><td data-label="Ordered">{formatDate(order.created_at)}</td><td data-label="Delivery date" className={order.is_overdue ? 'overdue' : ''}>{commitmentDate ? formatDate(commitmentDate) : 'Not committed'}{order.is_overdue ? <small>Overdue</small> : null}</td><td data-label="Receipt progress"><div className="po-receipt-progress"><span><b style={{ width: `${receipt.percent}%` }} /></span><strong>{receipt.percent}%</strong><small>{receipt.number}</small></div></td><td data-label="Total">{formatUGX(order.total_cost)}</td><td data-label="Status"><Badge tone={statusTone(order.status)}>{order.status_display}</Badge>{order.pending_preapproval_edit ? <small className="po-finance-flag">Finance review</small> : null}</td><td data-label=""><details className="po-row-menu"><summary aria-label={`More actions for ${order.number}`}><EllipsisVertical size={16} /></summary><div>{can.createPo(role) && !['RECEIVED', 'CANCELLED'].includes(order.status) ? <button type="button" onClick={() => setCancelling(order)}><X size={13} />Cancel</button> : null}{hasRole(role, ['procurement_officer', 'admin']) && ['DRAFT', 'PENDING', 'ORDERED'].includes(order.status) ? <button type="button" onClick={() => setAmending(order)}><FilePenLine size={13} />{['DRAFT', 'PENDING'].includes(order.status) ? 'Edit PO' : 'Amend PO'}</button> : null}{hasRole(role, ['procurement_officer', 'admin']) && order.status === 'DRAFT' ? <button type="button" onClick={() => { if (window.confirm(`Delete ${order.number}? This draft will be removed and audited.`)) deleteDraft.mutate(order.id); }}><Trash2 size={13} />Delete draft</button> : null}{hasRole(role, ['finance_officer', 'finance_manager', 'admin']) ? (amendments.data?.get(order.id) || []).filter((item) => item.status === 'SUBMITTED').map((item) => item.amendment_type === 'PRE_APPROVAL_EDIT' ? <button type="button" key={item.id} onClick={() => setReviewingPreapproval({ order, amendment: item, canConfirm: hasRole(role, ['finance_manager', 'admin']) })}><FilePenLine size={13} />{hasRole(role, ['finance_manager', 'admin']) ? 'Review edited PO' : 'View edited PO'}</button> : hasRole(role, ['finance_manager', 'admin']) ? <button type="button" key={item.id} onClick={() => setDecidingAmendment({ order, amendment: item, approve: true })}><Check size={13} />Review v{item.version}</button> : null) : null}{hasRole(role, ['finance_officer', 'finance_manager', 'admin']) && order.status === 'PENDING' && order.purchase_request_number ? <button type="button" onClick={() => navigate(`/procurement/requests?search=${encodeURIComponent(order.purchase_request_number || '')}`)}><Check size={13} />Finance review</button> : null}</div></details></td></tr>; })}</tbody></table>{!orderRows.length ? <p className="po-empty">{orders.isLoading ? 'Loading purchase orders…' : 'No purchase orders match this view.'}</p> : null}</TableScroll><Pagination page={list.page} setPage={list.setPage} data={orders.data} pageSize={pageSize} loading={orders.isFetching} itemLabel="purchase orders" /></div><aside className="po-side-column">{allOrders.data && receipts.data ? <><section className="po-summary-panel"><div className="po-panel-heading"><h2>Receiving summary</h2></div><Link to="/procurement/deliveries?action_queue=warehouse_receipts"><Box size={17} /><span>Warehouse receipts<small>{warehouseReceipts.length} recorded</small></span><strong>{formatUGX(warehouseReceipts.reduce((sum, receipt) => sum + Number(allRows.find((order) => order.id === receipt.purchase_order)?.total_cost || 0), 0))}</strong></Link><Link to="/procurement/deliveries?action_queue=site_receipts"><Truck size={17} /><span>Direct-to-site receipts<small>{siteReceipts.length} recorded</small></span><strong>{formatUGX(siteReceipts.reduce((sum, receipt) => sum + Number(allRows.find((order) => order.id === receipt.purchase_order)?.total_cost || 0), 0))}</strong></Link><div><Clock3 size={17} /><span>Partial receipts<small>Require follow-up</small></span><strong>{partialOrders.length}</strong></div><div><X size={17} /><span>Cancelled orders<small>Commitment released</small></span><strong>{allRows.filter((order) => order.status === 'CANCELLED').length}</strong></div></section><section className="po-steps-panel"><div className="po-panel-heading"><h2>Next steps</h2><Link to="/procurement/deliveries">View all <ChevronRight size={13} /></Link></div><Link to="/procurement/deliveries?action_queue=warehouse_receipts"><PackageCheck size={17} /><span>GRNs to verify<small>Warehouse receiving queue</small></span><strong>{allRows.filter((order) => order.delivery_destination === 'WAREHOUSE' && ['ORDERED', 'PARTIAL'].includes(order.status)).length}</strong></Link><Link to="/procurement/deliveries?action_queue=site_receipts"><Truck size={17} /><span>Site receipts to confirm<small>Direct-to-site queue</small></span><strong>{allRows.filter((order) => order.delivery_destination === 'SITE' && ['DISPATCH_CONFIRMED', 'PARTIAL'].includes(order.status)).length}</strong></Link><Link to="/finance/payables"><CircleDollarSign size={17} /><span>Ready for invoice matching<small>Finance payables workspace</small></span><strong>{receivedOrders.length}</strong></Link></section><section className="po-performance-panel"><div className="po-panel-heading"><h2>Supplier delivery</h2><Link to="/suppliers">View all <ChevronRight size={13} /></Link></div><strong>{allRows[0]?.supplier_name || 'No supplier data'}</strong><PurchaseOrderPerformance label="On-time delivery" value={onTimeRate} suffix="%" /><PurchaseOrderPerformance label="Receipt completion" value={receiptRate} suffix="%" /><PurchaseOrderPerformance label="Average lead time" value={averageLeadTime} suffix=" days" /></section></> : <section className="po-summary-panel p-4 text-sm text-muted" role={allOrders.isError || receipts.isError ? 'alert' : 'status'}>{allOrders.isError || receipts.isError ? <><p>Receiving summary is unavailable.</p><Button size="sm" variant="secondary" onClick={() => { void allOrders.refetch(); void receipts.refetch(); }}>Retry summary</Button></> : 'Loading receiving summary…'}</section>}</aside></section>
+      {allOrders.data ? <section className={`po-guidance ${awaitingDelivery ? 'attention' : 'complete'}`}><CheckCircle2 size={17} /><span><strong>{awaitingDelivery ? `${awaitingDelivery} purchase order${awaitingDelivery === 1 ? '' : 's'} await delivery or receipt.` : (statusCount('DRAFT') + statusCount('PENDING') > 0) ? 'Some purchase orders still await approval or issue.' : receivedOrders ? 'Issued purchase orders have completed receiving.' : (totals?.count || 0) ? 'No open purchase orders.' : 'No purchase orders yet.'}</strong><small>{awaitingDelivery ? 'Keep supplier dispatch and receipt evidence up to date.' : 'Verify receipt documents before closing.'}</small></span><Link to="/procurement/grns">Open receipts <ChevronRight size={14} /></Link></section> : <section className="po-guidance" role={allOrders.isError ? 'alert' : 'status'}><span><strong>{allOrders.isError ? 'Order summary could not be loaded.' : 'Loading order summary…'}</strong><small>Your purchase order register remains available below.</small></span>{allOrders.isError ? <Button size="sm" variant="secondary" onClick={() => void allOrders.refetch()}>Retry summary</Button> : null}</section>}
+      {allOrders.data ? <section className="po-kpis"><PurchaseOrderKpi icon={FileText} tone="blue" label="Total orders" value={(totals?.count || 0)} note="Across selected sites" /><PurchaseOrderKpi icon={Truck} tone="amber" label="Awaiting delivery" value={awaitingDelivery} note={awaitingDelivery ? 'Follow-up required' : 'No issued orders awaiting receipt'} /><PurchaseOrderKpi icon={Box} tone="green" label="Received" value={receivedOrders} note={`${receiptRate}% of all orders received`} />{canSeeMaterialCosts ? <PurchaseOrderKpi icon={CircleDollarSign} tone="indigo" label="Order value" value={formatUGX(totals?.order_value)} note="Non-cancelled orders, including drafts" /> : null}<PurchaseOrderKpi icon={MapPin} tone="violet" label="Direct to site" value={totals?.direct_to_site || 0} note={canSeeMaterialCosts ? formatUGX(totals?.site_value) : 'Site deliveries'} /></section> : null}
+      <section className="po-workspace-grid"><div data-pagination-region className="po-register-panel"><div className="po-panel-heading"><h2>Purchase order register</h2></div><div className="po-queue-tabs">{([['all', 'All', (totals?.count || 0)], ['draft', 'Draft', statusCount('DRAFT')], ['awaiting', 'Awaiting approval', statusCount('PENDING')], ['issued', 'Issued', statusCount('ORDERED')], ['partial', 'Part received', statusCount('PARTIAL')], ['received', 'Received', receivedOrders], ['closed', 'Cancelled', statusCount('CANCELLED')]] as const).map(([value, label, count]) => <button type="button" key={value} className={queue === value ? 'active' : ''} onClick={() => updateQueue(value)}>{label}<b>{count}</b></button>)}</div><RegisterFilters className="po-filters" activeCount={[list.search, list.filters.project, list.filters.delivery_destination, list.filters.status].filter(Boolean).length} onClear={() => { list.setSearch(''); ['project', 'delivery_destination', 'status'].forEach((key) => list.setFilter(key, '')); }}><label><Search size={14} /><input aria-label="Search purchase orders" placeholder="Search PO, supplier or project" value={list.search} onChange={(event) => list.setSearch(event.target.value)} /></label><select aria-label="Filter purchase orders by project" className={inputClass} value={list.filters.project} onChange={(event) => list.setFilter('project', event.target.value)}><option value="">Project</option>{projectOptions.map((project) => <option value={project.id} key={project.id}>{project.name}</option>)}</select><select aria-label="Filter purchase orders by destination" className={inputClass} value={list.filters.delivery_destination} onChange={(event) => list.setFilter('delivery_destination', event.target.value)}><option value="">Destination</option><option value="WAREHOUSE">Main warehouse</option><option value="SITE">Direct to site</option></select><select aria-label="Filter purchase orders by status" className={inputClass} value={list.filters.status} onChange={(event) => { setQueue('all'); list.setFilter('action_queue', ''); list.setFilter('status', event.target.value); }}><option value="">Status</option><option value="DRAFT">Draft</option><option value="PENDING">Pending</option><option value="ORDERED">Ordered</option><option value="DISPATCH_CONFIRMED">Dispatch confirmed</option><option value="PARTIAL">Part received</option><option value="RECEIVED">Received</option><option value="CANCELLED">Cancelled</option></select><select aria-label="Sort purchase orders" className={inputClass} value={sort} onChange={(event) => { setSort(event.target.value as typeof sort); list.setPage(1); }}><option value="delivery">Sort: Delivery date</option><option value="newest">Sort: Newest first</option></select></RegisterFilters><TableScroll label="Purchase orders" className="po-table-wrap"><table className="po-table"><thead><tr><th>Purchase order</th><th>Next action</th><th>Supplier</th><th>Project / site</th><th>Destination</th><th>Ordered</th><th>Delivery date</th><th>Receipt progress</th><th>Total</th><th>Status</th><th aria-label="Actions" /></tr></thead><tbody>{orderRows.map((order) => { const receipt = receiptProgress(order); const commitmentDate = deliveryDate(order); return <tr key={order.id} className="po-record-row" tabIndex={0} onClick={(event) => openPurchaseOrderDetail(event, order.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') openPurchaseOrderDetail(event, order.id); }}><td data-label="Purchase order"><Link to={`/procurement/purchase-orders/${order.id}/`}>{order.number}</Link><small>{order.purchase_request_number || 'Manual PO'}</small></td><td data-label="Next action">{rowAction(order)}</td><td data-label="Supplier">{order.supplier_name || 'Unassigned'}</td><td data-label="Project / site">{order.project_name || 'Warehouse'}<small>{order.project_name ? 'Project order' : 'No project'}</small></td><td data-label="Destination"><Badge tone={order.delivery_destination === 'SITE' ? 'info' : 'success'}>{order.delivery_destination_display}</Badge></td><td data-label="Ordered">{formatDate(order.created_at)}</td><td data-label="Delivery date" className={order.is_overdue ? 'overdue' : ''}>{commitmentDate ? formatDate(commitmentDate) : 'Not committed'}{order.is_overdue ? <small>Overdue</small> : null}</td><td data-label="Receipt progress"><div className="po-receipt-progress"><span><b style={{ width: `${receipt.percent}%` }} /></span><strong>{receipt.percent}%</strong><small>{receipt.number}</small></div></td><td data-label="Total">{formatUGX(order.total_cost)}</td><td data-label="Status"><Badge tone={statusTone(order.status)}>{order.status_display}</Badge>{order.pending_preapproval_edit ? <small className="po-finance-flag">Finance review</small> : null}</td><td data-label=""><details className="po-row-menu"><summary aria-label={`More actions for ${order.number}`}><EllipsisVertical size={16} /></summary><div>{can.createPo(role) && !['RECEIVED', 'CANCELLED'].includes(order.status) ? <button type="button" onClick={() => setCancelling(order)}><X size={13} />Cancel</button> : null}{hasRole(role, ['procurement_officer', 'admin']) && ['DRAFT', 'PENDING', 'ORDERED'].includes(order.status) ? <button type="button" onClick={() => setAmending(order)}><FilePenLine size={13} />{['DRAFT', 'PENDING'].includes(order.status) ? 'Edit PO' : 'Amend PO'}</button> : null}{hasRole(role, ['procurement_officer', 'admin']) && order.status === 'DRAFT' ? <button type="button" onClick={() => { if (window.confirm(`Delete ${order.number}? This draft will be removed and audited.`)) deleteDraft.mutate(order.id); }}><Trash2 size={13} />Delete draft</button> : null}{hasRole(role, ['finance_officer', 'finance_manager', 'admin']) ? (amendments.data?.get(order.id) || []).filter((item) => item.status === 'SUBMITTED').map((item) => item.amendment_type === 'PRE_APPROVAL_EDIT' ? <button type="button" key={item.id} onClick={() => setReviewingPreapproval({ order, amendment: item, canConfirm: hasRole(role, ['finance_manager', 'admin']) })}><FilePenLine size={13} />{hasRole(role, ['finance_manager', 'admin']) ? 'Review edited PO' : 'View edited PO'}</button> : hasRole(role, ['finance_manager', 'admin']) ? <button type="button" key={item.id} onClick={() => setDecidingAmendment({ order, amendment: item, approve: true })}><Check size={13} />Review v{item.version}</button> : null) : null}{hasRole(role, ['finance_officer', 'finance_manager', 'admin']) && order.status === 'PENDING' && order.purchase_request_number ? <button type="button" onClick={() => navigate(`/procurement/requests?search=${encodeURIComponent(order.purchase_request_number || '')}`)}><Check size={13} />Finance review</button> : null}</div></details></td></tr>; })}</tbody></table>{!orderRows.length ? <p className="po-empty">{orders.isLoading ? 'Loading purchase orders…' : 'No purchase orders match this view.'}</p> : null}</TableScroll><Pagination page={list.page} setPage={list.setPage} data={orders.data} pageSize={pageSize} loading={orders.isFetching} itemLabel="purchase orders" /></div><aside className="po-side-column">{totals ? <><section className="po-summary-panel"><div className="po-panel-heading"><h2>Receiving summary</h2></div><Link to="/procurement/grns"><Box size={17} /><span>Warehouse receipts<small>Accepted GRNs</small></span><strong>{totals.warehouse_receipts}</strong></Link><Link to="/procurement/grns"><Truck size={17} /><span>Direct-to-site receipts<small>Accepted GRNs</small></span><strong>{totals.site_receipts}</strong></Link><div><Clock3 size={17} /><span>Part-received orders<small>Require follow-up</small></span><strong>{statusCount('PARTIAL')}</strong></div></section><section className="po-steps-panel"><div className="po-panel-heading"><h2>Next steps</h2></div><Link to="/procurement/deliveries?action_queue=warehouse_receipts"><PackageCheck size={17} /><span>Warehouse receiving<small>Orders awaiting receipt</small></span><strong>{totals.warehouse_queue}</strong></Link><Link to="/procurement/deliveries?action_queue=site_receipts"><Truck size={17} /><span>Site confirmations<small>Orders awaiting receipt</small></span><strong>{totals.site_queue}</strong></Link>{user?.soft_finance_enabled && hasRole(role, ['admin', 'finance_officer', 'finance_manager']) ? <Link to="/finance/payables"><CircleDollarSign size={17} /><span>Invoice follow-up<small>Review the Finance queue</small></span><ChevronRight size={15} /></Link> : null}</section></> : <section className="po-summary-panel p-4 text-sm text-muted" role={allOrders.isError ? 'alert' : 'status'}>{allOrders.isError ? <><p>Receiving summary is unavailable.</p><Button size="sm" variant="secondary" onClick={() => void allOrders.refetch()}>Retry summary</Button></> : 'Loading receiving summary…'}</section>}</aside></section>
       {hasRole(role, ['procurement_officer', 'admin']) ? <PurchaseOrderModal open={open} onClose={() => setOpen(false)} onCreated={setFinanceHandoffOrder} initialPurchaseRequestId={requestedPurchaseRequestId} /> : null}
       <PurchaseOrderFinanceHandoffModal order={financeHandoffOrder} onClose={() => setFinanceHandoffOrder(null)} />
       <CancelPurchaseOrderModal order={cancelling} pending={cancel.isPending} onClose={() => setCancelling(null)} onCancel={(comments) => cancelling && cancel.mutate({ id: cancelling.id, comments })} />
@@ -188,11 +194,6 @@ export function PurchaseOrdersPage() {
 
 function PurchaseOrderKpi({ icon: Icon, tone, label, value, note }: { icon: typeof FileText; tone: string; label: string; value: string | number; note: string }) {
   return <article className="po-kpi"><span className={`po-kpi-icon ${tone}`}><Icon size={23} /></span><div><p>{label}</p><strong>{value}</strong><small>{note}</small></div></article>;
-}
-
-function PurchaseOrderPerformance({ label, value, suffix }: { label: string; value: number; suffix: string }) {
-  const width = suffix === ' days' ? Math.min(100, value ? 100 / Math.max(value, 1) * 3 : 0) : value;
-  return <div className="po-performance-row"><span>{label}</span><i><b style={{ width: `${width}%` }} /></i><strong>{value}{suffix}</strong></div>;
 }
 
 function poNextAction(order: PurchaseOrder, role: ReturnType<typeof useAuth>['role']) {
@@ -359,60 +360,6 @@ function PurchaseOrderModal({ open, onClose, onCreated, initialPurchaseRequestId
   );
 }
 
-function PurchaseOrderFinanceHandoffModal({ order, onClose }: { order: PurchaseOrder | null; onClose: () => void }) {
-  const [comments, setComments] = useState('');
-  const [budgetLine, setBudgetLine] = useState('');
-  const queryClient = useQueryClient();
-  const toast = useToast();
-
-  const budgets = useQuery({
-    queryKey: ['finance', 'budgets', 'purchase-order-handoff', order?.purchase_request],
-    queryFn: () => financeApi.budgets({ project: order?.project, status: 'APPROVED', page_size: 20 }),
-    enabled: Boolean(order?.purchase_request && order?.project),
-  });
-  const budgetLines = budgets.data?.results.flatMap((budget) => budget.lines.map((line) => ({ ...line, budgetName: budget.name }))) || [];
-
-  useEffect(() => {
-    if (order) {
-      setComments('Please review the purchase order value and confirm budget clearance.');
-      setBudgetLine('');
-    }
-  }, [order]);
-
-  const submit = useMutation({
-    mutationFn: () => {
-      if (!order) throw new Error('Select a purchase order to send to Finance.');
-      return api.submitPurchaseOrderToFinance(order.id, budgetLine ? Number(budgetLine) : null, comments.trim());
-    },
-    onSuccess: () => {
-      toast.push({ title: 'Sent to Finance', message: `${order?.number} is now in the Finance review queue.`, tone: 'success' });
-      void queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
-      void queryClient.invalidateQueries({ queryKey: ['purchase-requests'] });
-      onClose();
-    },
-    onError: (error: Error) => toast.push({ title: 'Finance handoff failed', message: error.message, tone: 'danger' }),
-  });
-
-  return <FormModal open={!!order} title={`Send ${order?.number || 'purchase order'} to Finance`} onClose={onClose}>
-    <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); submit.mutate(); }}>
-      <p className="text-sm text-slate-600">Finance will review the order value and budget clearance before Procurement commits the order to the supplier.</p>
-      {order?.project ? <Field label="Budget authorization">
-        <select className={inputClass} value={budgetLine} onChange={(event) => setBudgetLine(event.target.value)}>
-          <option value="">Unbudgeted request — Finance Manager override required</option>
-          {budgetLines.map((line) => <option key={line.id} value={line.id}>{line.budgetName} / {line.category_name || line.category_code} / available {formatUGX(line.available_balance)}</option>)}
-        </select>
-        {budgets.isLoading ? <small className="text-muted">Loading approved budget lines…</small> : null}
-      </Field> : <p className="border border-info/20 bg-info/5 p-3 text-sm text-muted">This is a warehouse replenishment. Finance will review it as an unbudgeted stock purchase.</p>}
-      <Field label="Finance review note" required>
-        <textarea className={inputClass} rows={4} value={comments} onChange={(event) => setComments(event.target.value)} placeholder="Explain what Finance should check" required />
-      </Field>
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="secondary" onClick={onClose}>Keep pending</Button>
-        <Button type="submit" loading={submit.isPending} loadingLabel="Sending" disabled={!comments.trim() || (Boolean(order?.project) && budgets.isLoading)}>Send to Finance</Button>
-      </div>
-    </form>
-  </FormModal>;
-}
 
 function CancelPurchaseOrderModal({ order, pending, onClose, onCancel }: { order: PurchaseOrder | null; pending: boolean; onClose: () => void; onCancel: (comments: string) => void }) {
   const [comments, setComments] = useState('');

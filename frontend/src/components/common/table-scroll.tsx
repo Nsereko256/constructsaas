@@ -11,6 +11,8 @@ export function TableScroll({ children, className, label = 'Records' }: { childr
     const element = viewport.current;
     if (!element) return;
     const measure = () => {
+      const identityWidth = element.querySelector('table tr > :first-child')?.getBoundingClientRect().width;
+      if (identityWidth) element.style.setProperty('--register-identity-width', `${identityWidth}px`);
       const remaining = element.scrollWidth - element.clientWidth;
       const next = { overflow: remaining > 2, start: element.scrollLeft <= 2, end: element.scrollLeft >= remaining - 2 };
       setEdges((previous) => previous.overflow === next.overflow && previous.start === next.start && previous.end === next.end ? previous : next);

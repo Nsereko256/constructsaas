@@ -14,7 +14,7 @@ class StockMovementFilter(django_filters.FilterSet):
     class Meta:
         model = StockMovement
         fields = [
-            'material', 'warehouse', 'movement_type', 'transaction_type', 'project',
+            'material', 'warehouse', 'movement_type', 'transaction_type', 'project', 'purchase_request', 'purchase_order',
             'date_from', 'date_to',
             'project_site',
         ]

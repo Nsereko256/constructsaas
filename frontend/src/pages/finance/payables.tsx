@@ -31,8 +31,8 @@ export function FinancePayablesPage() {
   const [searchParams] = useSearchParams();
   const queryString = searchParams.toString();
   const list = useListState(
-    { status: '', supplier: '', project: '' },
-    { syncKey: queryString, initialSearch: searchParams.get('search') || '' },
+    { status: '', supplier: '', project: '', purchase_order: '' },
+    { syncKey: queryString, initialSearch: searchParams.get('search') || '', initialFilters: { purchase_order: searchParams.get('purchase_order') || '' } },
   );
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<SupplierInvoice | null>(null);

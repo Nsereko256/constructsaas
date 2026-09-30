@@ -19,6 +19,7 @@ from apps.procurement.models import (
     SupplierClaim,
 )
 from apps.procurement.stage_tracking import material_request_stage_tracking
+from apps.procurement.progress import order_follow_up, receipt_summary, purchase_order_next_step
 from apps.projects.access import accessible_projects
 from apps.projects.models import ApprovalDelegation, ChatMessage, ChatRoom, Project, ProjectGoal, ProjectSite, ProjectStaffAssignment
 from apps.suppliers.models import Supplier
@@ -856,7 +857,7 @@ class PurchaseRequestItemSerializer(HideMaterialCostsFromSiteEngineersMixin, ser
 class PurchaseRequestSerializer(HideMaterialCostsFromSiteEngineersMixin, serializers.ModelSerializer):
     site_engineer_cost_fields = (
         'total_estimated_cost', 'finance_budget_line', 'finance_review_reason',
-        'finance_return_reason',
+        'finance_return_reason', 'finance_requested_amount',
     )
     project_name = serializers.CharField(source='project.name', read_only=True)
     preferred_supplier_name = serializers.CharField(source='preferred_supplier.name', read_only=True)
@@ -879,7 +880,11 @@ class PurchaseRequestSerializer(HideMaterialCostsFromSiteEngineersMixin, seriali
     finance_status = serializers.SerializerMethodField()
     finance_status_display = serializers.SerializerMethodField()
     finance_review_reason = serializers.SerializerMethodField()
+    finance_requested_amount = serializers.SerializerMethodField()
+    finance_review_requires_independent_reviewer = serializers.SerializerMethodField()
+    finance_admin_override_required = serializers.SerializerMethodField()
     finance_return_reason = serializers.SerializerMethodField()
+    correction_guidance = serializers.SerializerMethodField()
     can_correct_return = serializers.SerializerMethodField()
     finance_budget_line = serializers.SerializerMethodField()
     can_submit_finance = serializers.SerializerMethodField()
@@ -927,7 +932,8 @@ class PurchaseRequestSerializer(HideMaterialCostsFromSiteEngineersMixin, seriali
             'finance_status',
             'finance_status_display',
             'finance_review_reason',
-            'finance_return_reason',
+            'finance_return_reason', 'finance_requested_amount', 'finance_review_requires_independent_reviewer', 'finance_admin_override_required',
+            'correction_guidance',
             'finance_budget_line',
             'can_submit_finance',
             'can_correct_finance_return',
@@ -962,7 +968,7 @@ class PurchaseRequestSerializer(HideMaterialCostsFromSiteEngineersMixin, seriali
             'finance_status',
             'finance_status_display',
             'finance_review_reason',
-            'finance_return_reason',
+            'finance_return_reason', 'finance_requested_amount',
             'finance_budget_line',
             'can_submit_finance',
             'can_correct_finance_return',
@@ -1139,41 +1145,18 @@ class PurchaseRequestSerializer(HideMaterialCostsFromSiteEngineersMixin, seriali
             return 'Awaiting Procurement to choose warehouse issue or create a purchase order.'
         if obj.status == PurchaseRequest.STATUS_PO_CREATED:
             purchase_order = obj.purchase_orders.order_by('-id').first()
-            invoice = purchase_order.supplier_invoices.order_by('-id').first() if purchase_order else None
-            if invoice and invoice.status == invoice.STATUS_PAID:
-                return 'Fulfilment complete: materials were received and the supplier invoice is paid.'
-            if invoice and invoice.status in {invoice.STATUS_POSTED, invoice.STATUS_PARTIALLY_PAID}:
-                return 'Materials received; Finance is completing supplier payment.'
-            if purchase_order and purchase_order.status == PurchaseOrder.STATUS_RECEIVED:
-                return 'Materials received; Finance can capture and match the supplier invoice.'
-            approval = self._finance_approval(obj)
-            if approval is None:
-                return 'Awaiting Procurement to send the purchase order to Finance.'
-            if approval.status in {BudgetApproval.STATUS_SUBMITTED, BudgetApproval.STATUS_HOLD}:
-                return 'Awaiting Finance review of the purchase order and budget impact.'
-            if approval.status == BudgetApproval.STATUS_RETURNED:
-                return 'Finance returned this purchase order for correction and resubmission.'
-            if approval.status in {BudgetApproval.STATUS_APPROVED, BudgetApproval.STATUS_OVERRIDDEN}:
-                return 'Finance approved this purchase order; Procurement can progress it.'
-            if approval.status == BudgetApproval.STATUS_REJECTED:
-                return 'Finance rejected this purchase order; review the finance comments.'
-            return 'Follow up the purchase order finance review.'
+            if purchase_order:
+                return PurchaseOrderSerializer(context=self.context).get_next_step(purchase_order)['message']
+            return 'No linked purchase order was found. Ask Procurement to review this request.'
         return 'No further action is currently required.'
 
     def get_lifecycle_status_display(self, obj):
         if obj.status != PurchaseRequest.STATUS_PO_CREATED:
             return obj.get_status_display()
         purchase_order = obj.purchase_orders.order_by('-id').first()
-        invoice = purchase_order.supplier_invoices.order_by('-id').first() if purchase_order else None
-        if invoice and invoice.status == invoice.STATUS_PAID:
-            return 'Completed / paid'
-        if invoice and invoice.status == invoice.STATUS_PARTIALLY_PAID:
-            return 'Partially paid'
-        if invoice and invoice.status in {invoice.STATUS_POSTED, invoice.STATUS_APPROVED, invoice.STATUS_VERIFIED, invoice.STATUS_MATCHED}:
-            return 'Invoiced'
-        if purchase_order and purchase_order.status == PurchaseOrder.STATUS_RECEIVED:
-            return 'Received'
-        return obj.get_status_display()
+        if purchase_order and purchase_order.status in {PurchaseOrder.STATUS_PENDING, PurchaseOrder.STATUS_DRAFT}:
+            return 'PO awaiting issue' if purchase_order.status == PurchaseOrder.STATUS_PENDING else 'PO draft'
+        return order_follow_up(purchase_order)['label'] if purchase_order else obj.get_status_display()
 
     def get_status_display(self, obj):
         return self.get_lifecycle_status_display(obj)
@@ -1200,9 +1183,56 @@ class PurchaseRequestSerializer(HideMaterialCostsFromSiteEngineersMixin, seriali
         approval = self._finance_approval(obj)
         return approval.review_reason if approval else ''
 
+    def get_finance_requested_amount(self, obj):
+        approval = self._finance_approval(obj)
+        return str(approval.requested_amount) if approval else None
+
+    def _finance_review_controls(self, obj):
+        from apps.finance.configuration_services import ensure_finance_settings
+        from apps.finance.models import WorkflowConfirmation
+        from django.db.models import Q
+        cache = getattr(self, '_finance_control_cache', {})
+        if obj.pk in cache:
+            return cache[obj.pk]
+        approval = self._finance_approval(obj)
+        user = getattr(self.context.get('request'), 'user', None)
+        independent, override = False, False
+        if approval and user and ensure_finance_settings(obj.company).maker_checker_enforced:
+            independent = approval.created_by_id == user.id
+            self_task = WorkflowConfirmation.objects.filter(
+                company=obj.company, submitted_by=user, stage=WorkflowConfirmation.STAGE_FINANCE,
+                status=WorkflowConfirmation.STATUS_PENDING,
+            ).filter(
+                Q(document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_REQUEST, object_id=str(obj.pk))
+                | Q(document_type=WorkflowConfirmation.DOCUMENT_PURCHASE_ORDER, object_id__in=[str(order.pk) for order in obj.purchase_orders.all()])
+            ).exists()
+            override = self_task and user.role == User.ROLE_ADMIN and not independent
+            independent = independent or (self_task and user.role != User.ROLE_ADMIN)
+        cache[obj.pk] = (independent, override)
+        self._finance_control_cache = cache
+        return cache[obj.pk]
+
+    def get_finance_review_requires_independent_reviewer(self, obj):
+        return self._finance_review_controls(obj)[0]
+
+    def get_finance_admin_override_required(self, obj):
+        return self._finance_review_controls(obj)[1]
+
     def get_finance_return_reason(self, obj):
         approval = self._finance_approval(obj)
         return approval.return_reason if approval else ''
+
+    def get_correction_guidance(self, obj):
+        if obj.status == PurchaseRequest.STATUS_RETURNED:
+            return obj.technical_return_reason
+        approval = self._finance_approval(obj)
+        if not approval or approval.status != BudgetApproval.STATUS_RETURNED:
+            return ''
+        user = getattr(self.context.get('request'), 'user', None)
+        if getattr(user, 'role', None) == User.ROLE_SITE_ENGINEER:
+            return ('Finance requested a correction. Confirm the material quantities and site justification '
+                    'with your Project Manager. Procurement and Finance handle supplier prices and budget details.')
+        return approval.return_reason
 
     def get_finance_budget_line(self, obj):
         approval = self._finance_approval(obj)
@@ -1377,6 +1407,8 @@ class PurchaseOrderSerializer(HideMaterialCostsFromSiteEngineersMixin, serialize
     finance_status = serializers.SerializerMethodField()
     finance_status_display = serializers.SerializerMethodField()
     lifecycle_status_display = serializers.SerializerMethodField()
+    receipt_summary = serializers.SerializerMethodField()
+    next_step = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseOrder
@@ -1395,6 +1427,8 @@ class PurchaseOrderSerializer(HideMaterialCostsFromSiteEngineersMixin, serialize
             'status',
             'status_display',
             'lifecycle_status_display',
+            'receipt_summary',
+            'next_step',
             'expected_delivery_date',
             'supplier_confirmed_delivery_date',
             'revised_delivery_date',
@@ -1494,16 +1528,16 @@ class PurchaseOrderSerializer(HideMaterialCostsFromSiteEngineersMixin, serialize
         return approval.get_status_display() if approval else 'Not submitted'
 
     def get_lifecycle_status_display(self, obj):
-        invoice = obj.supplier_invoices.order_by('-id').first()
-        if invoice and invoice.status == invoice.STATUS_PAID:
-            return 'Paid / complete'
-        if invoice and invoice.status == invoice.STATUS_PARTIALLY_PAID:
-            return 'Partially paid'
-        if invoice and invoice.status in {invoice.STATUS_POSTED, invoice.STATUS_APPROVED, invoice.STATUS_VERIFIED, invoice.STATUS_MATCHED}:
-            return 'Invoiced'
-        if obj.status == PurchaseOrder.STATUS_RECEIVED:
-            return 'Received / ready to invoice'
-        return obj.get_status_display()
+        return order_follow_up(obj)['label']
+
+    def get_receipt_summary(self, obj):
+        return receipt_summary(obj)
+
+    def get_next_step(self, obj):
+        return purchase_order_next_step(
+            obj, getattr(self.context.get('request'), 'user', None), self._finance_approval(obj),
+            pending_edit=bool(self.get_pending_preapproval_edit(obj)),
+        )
 
     def get_status_display(self, obj):
         return self.get_lifecycle_status_display(obj)
