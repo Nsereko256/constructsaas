@@ -2,6 +2,7 @@ import hashlib
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
@@ -1213,7 +1214,7 @@ class WarehouseViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
     filterset_fields = ['is_active', 'is_default', 'project_site']
     search_fields = ['name', 'code', 'location']
     ordering_fields = ['name', 'code', 'created_at']
-    ordering = ['name']
+    ordering = ['name', 'id']
 
     def get_permissions(self):
         permission_classes = [IsAuthenticatedCompanyUser] if self.request.method in {'GET', 'HEAD', 'OPTIONS'} else [IsAdminOnly]
@@ -1224,7 +1225,24 @@ class WarehouseViewSet(CompanyScopedReadOnlyViewSet, viewsets.ModelViewSet):
         return Warehouse.objects.for_company(company) if company else Warehouse.objects.none()
 
     def perform_create(self, serializer):
-        serializer.save(company=self.request.user.company)
+        self.save_warehouse(serializer)
+
+    def perform_update(self, serializer):
+        self.save_warehouse(serializer)
+
+    def save_warehouse(self, serializer):
+        try:
+            with transaction.atomic():
+                company = Company.objects.select_for_update().get(pk=self.request.user.company_id)
+                if serializer.validated_data.get('is_default'):
+                    Warehouse.objects.filter(company=company, is_default=True).exclude(
+                        pk=getattr(serializer.instance, 'pk', None),
+                    ).update(is_default=False)
+                serializer.save(company=company)
+        except DjangoValidationError as exc:
+            raise ValidationError(exc.message_dict if hasattr(exc, 'message_dict') else exc.messages) from exc
+        except IntegrityError as exc:
+            raise ValidationError({'code': ['Warehouse settings changed. Refresh and check the code and default warehouse.']}) from exc
 
 
 class InventoryValuationAPIView(APIView):

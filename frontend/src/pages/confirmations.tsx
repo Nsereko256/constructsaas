@@ -11,6 +11,7 @@ import { Badge, statusTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Field, inputClass } from '@/components/ui/field';
+import { OpeningStockSnapshot } from '@/components/inventory/opening-stock-snapshot';
 import { useToast } from '@/components/ui/toast';
 import { formatDate } from '@/lib/utils';
 import './operations-reference.css';
@@ -85,7 +86,8 @@ export function ConfirmationsPage() {
       <Pagination page={page} setPage={setPage} data={query.data} />
     </section>
 
-    <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}><DialogContent title={decision === 'approve' ? 'Confirm opening stock' : 'Return opening stock'} description={decision === 'approve' ? 'Compare the immutable snapshot with the signed onboarding count before posting.' : 'Explain exactly what the preparer must correct before resubmitting.'} variant="form">
+    <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && !approve.isPending && !returnTask.isPending && setSelected(null)}><DialogContent title={decision === 'approve' ? 'Confirm opening stock' : 'Return opening stock'} description={decision === 'approve' ? 'Compare the immutable snapshot with the signed onboarding count before posting.' : 'Explain exactly what the preparer must correct before resubmitting.'} variant="form" className="max-w-4xl">
+      {selected ? <OpeningStockSnapshot snapshot={selected.submitted_snapshot} /> : null}
       {selected ? <div className="grid gap-4"><div className="rounded-md border border-border bg-surface p-3 text-sm"><strong>{selected.object_label}</strong><p className="mt-1 text-xs text-muted">Prepared by {selected.submitted_by_name} · {String((selected.submitted_snapshot.rows as unknown[] | undefined)?.length || 0)} rows · opening date {String(selected.submitted_snapshot.opening_date || '—')}</p></div><Field label={decision === 'approve' ? 'Confirmation note' : 'Correction required'} required><textarea className={inputClass} rows={3} value={comments} onChange={(event) => setComments(event.target.value)} /></Field>{role === 'admin' && selected.submitted_by === user?.id ? <div><Field label="Admin override reason" required><textarea className={inputClass} rows={2} value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} /></Field><p className="mt-1 text-xs text-muted">Required because you prepared this submission.</p></div> : null}<div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setSelected(null)}>Cancel</Button><Button disabled={approve.isPending || returnTask.isPending || comments.trim().length < 5 || (selected.submitted_by === user?.id && overrideReason.trim().length < 10)} onClick={() => decision === 'approve' ? approve.mutate(selected) : returnTask.mutate(selected)}>{decision === 'approve' ? (approve.isPending ? 'Posting…' : 'Confirm and post stock') : (returnTask.isPending ? 'Returning…' : 'Return for correction')}</Button></div></div> : null}
     </DialogContent></Dialog>
   </div>;

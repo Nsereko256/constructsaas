@@ -14,6 +14,7 @@ const InventoryMovementsPage = lazy(() => import('@/pages/inventory-movements').
 const ExternalTransfersPage = lazy(() => import('@/pages/external-transfers').then((module) => ({ default: module.ExternalTransfersPage })));
 const ExternalTransferDetailPage = lazy(() => import('@/pages/external-transfers').then((module) => ({ default: module.ExternalTransferDetailPage })));
 const BinLocationsPage = lazy(() => import('@/pages/bin-locations').then((module) => ({ default: module.BinLocationsPage })));
+const WarehousesPage = lazy(() => import('@/pages/warehouses').then((module) => ({ default: module.WarehousesPage })));
 const LoginPage = lazy(() => import('@/pages/login').then((module) => ({ default: module.LoginPage })));
 const RegisterCompanyPage = lazy(() => import('@/pages/register-company').then((module) => ({ default: module.RegisterCompanyPage })));
 const NotFoundPage = lazy(() => import('@/pages/not-found').then((module) => ({ default: module.NotFoundPage })));
@@ -83,6 +84,7 @@ export function App() {
             <Route path="/inventory/external-transfers/:id" element={<ExternalTransferDetailPage />} />
             <Route path="/inventory/site-custody" element={<Navigate to="/inventory/movements" replace />} />
             <Route path="/inventory/bin-locations" element={<BinLocationsPage />} />
+            <Route path="/inventory/warehouses" element={<WarehousesPage />} />
             <Route path="/suppliers" element={<SuppliersPage />} />
             <Route path="/messages" element={<DeferredWorkspacePage kind="messages" />} />
             <Route path="/notifications" element={<NotificationsPage />} />

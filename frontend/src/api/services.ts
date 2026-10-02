@@ -86,6 +86,8 @@ export const api = {
   projectGoals: (params = {}) => apiRequest<Paginated<ProjectGoal>>(`/api/project-goals/${pageParams(params)}`),
   saveProjectGoal: (body: Partial<ProjectGoal>, id?: number) => apiRequest<ProjectGoal>(id ? `/api/project-goals/${id}/` : '/api/project-goals/', { method: id ? 'PATCH' : 'POST', body }),
   warehouses: (params = {}) => apiRequest<Paginated<Warehouse>>(`/api/warehouses/${pageParams(params)}`),
+  companyWarehouses: (params = {}) => apiRequestWithoutSiteScope<Paginated<Warehouse>>(`/api/warehouses/${pageParams(params)}`),
+  saveWarehouse: (body: Pick<Warehouse, 'name' | 'code' | 'location' | 'is_default' | 'is_active'>, id?: number) => apiRequestWithoutSiteScope<Warehouse>(id ? `/api/warehouses/${id}/` : '/api/warehouses/', { method: id ? 'PATCH' : 'POST', body }),
   binLocations: (params = {}) => apiRequest<Paginated<BinLocation>>(`/api/bin-locations/${pageParams(params)}`),
   saveBinLocation: (body: unknown, id?: number) => apiRequest<BinLocation>(id ? `/api/bin-locations/${id}/` : '/api/bin-locations/', { method: id ? 'PATCH' : 'POST', body }),
   project: (id: string | number) => apiRequest<Project>(`/api/projects/${id}/`),

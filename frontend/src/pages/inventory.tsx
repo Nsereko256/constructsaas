@@ -3,7 +3,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Boxes, Coins, Eye, MoreHorizontal, PackageCheck, PackageOpen, Pencil, Plus, Route, Trash2, TrendingUp } from 'lucide-react';
 import { FormEvent, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '@/api/services';
 import type { Material } from '@/api/types';
 import { qk } from '@/api/queryKeys';
@@ -28,6 +28,7 @@ const units = ['bag', 'ton', 'kg', 'litre', 'piece', 'metre', 'sqm', 'cbm'];
 
 export function InventoryPage() {
   const { role } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
   const queryClient = useQueryClient();
   const list = useListState({ category: '', low_stock: '', is_active: 'true' });
@@ -103,7 +104,7 @@ export function InventoryPage() {
       <Dialog open={!!selected} onOpenChange={(value) => !value && setSelected(null)}><DialogContent title={selected?.name || 'Material details'} description={selected ? `${selected.code} · ${selected.category_name}` : undefined} className="material-inspector sm:max-w-lg">{selected ? <div className="grid gap-1"><OpsRow icon={Boxes} label="On hand" value={`${formatNumber(selected.current_stock)} ${selected.unit_display}`} /><OpsRow icon={AlertTriangle} label="Minimum" value={`${formatNumber(selected.min_stock_level)} ${selected.unit_display}`} />{canSeeMaterialCosts ? <OpsRow icon={Coins} label="Stock value" value={formatUGX(selected.stock_value)} /> : null}<OpsRow icon={Route} label="Latest location" value={latestLocation || 'Not recorded'} />{allowed ? <Button className="mt-4" variant="secondary" onClick={() => { setSelected(null); setMaterialOpen(selected); }}><Pencil className="h-4 w-4" />Edit material</Button> : null}</div> : null}</DialogContent></Dialog>
       <MaterialModal key={materialOpen && materialOpen !== true ? materialOpen.id : materialOpen ? 'new' : 'closed'} open={!!materialOpen} material={materialOpen === true ? null : materialOpen} onClose={() => setMaterialOpen(null)} />
       <CategoryModal open={categoryOpen} onClose={() => setCategoryOpen(false)} />
-      <OpeningStockImportModal open={importOpen} onClose={() => setImportOpen(false)} />
+      <OpeningStockImportModal open={['admin', 'storekeeper'].includes(role || '') && (importOpen || searchParams.get('import') === 'opening-stock')} onClose={() => { setImportOpen(false); const next = new URLSearchParams(searchParams); next.delete('import'); setSearchParams(next, { replace: true }); }} />
     </div>
   );
 }

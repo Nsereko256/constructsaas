@@ -640,6 +640,32 @@ class StockMovementSerializer(HideMaterialCostsFromSiteEngineersMixin, serialize
 class WarehouseSerializer(serializers.ModelSerializer):
     project_name = serializers.CharField(source='project.name', read_only=True)
     project_site_name = serializers.CharField(source='project_site.name', read_only=True)
+
+    def validate_code(self, value):
+        code = value.strip().upper()
+        company = self.context['request'].user.company
+        matches = Warehouse.objects.filter(company=company, code__iexact=code)
+        if self.instance:
+            matches = matches.exclude(pk=self.instance.pk)
+        if matches.exists():
+            raise serializers.ValidationError('This warehouse code is already used in your company. Choose another code.')
+        return code
+
+    def validate(self, attrs):
+        company = self.context['request'].user.company
+        current = lambda name, default=None: attrs.get(name, getattr(self.instance, name, default))
+        project, site = current('project'), current('project_site')
+        if project and project.company_id != company.pk:
+            raise serializers.ValidationError({'project': 'Select a project in your company.'})
+        if site and site.project.company_id != company.pk:
+            raise serializers.ValidationError({'project_site': 'Select a project site in your company.'})
+        if current('is_default', False):
+            if not current('is_active', True):
+                raise serializers.ValidationError({'is_active': 'The default warehouse must be active.'})
+            if project or site:
+                raise serializers.ValidationError({'is_default': 'A site store cannot be the default warehouse.'})
+        return attrs
+
     class Meta:
         model = Warehouse
         fields = [
@@ -647,6 +673,9 @@ class WarehouseSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'company', 'project_name', 'project_site_name', 'created_at', 'updated_at']
+        # Company is supplied by the view. Validate company/code explicitly above;
+        # the default switch is serialised on the company row before saving.
+        validators = []
 
 
 class BinLocationSerializer(serializers.ModelSerializer):

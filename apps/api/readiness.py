@@ -61,7 +61,7 @@ class CompanyReadinessAPIView(APIView):
 
         warehouse = Warehouse.objects.filter(company=company, is_active=True, is_default=True, project__isnull=True).exists()
         add('warehouse', 'Receiving warehouse', warehouse,
-            'An active default warehouse is configured.' if warehouse else 'Set an active default warehouse before importing or receiving stock.', '/inventory/bin-locations')
+            'An active default warehouse is configured.' if warehouse else 'Register an active default warehouse, then use its code in the opening-stock workbook.', '/inventory/warehouses')
         materials = Material.objects.filter(company=company, is_active=True).count()
         add('materials', 'Material catalogue', materials > 0, f'{materials} active materials. Use Excel import to onboard existing stock.', '/inventory')
         suppliers = Supplier.objects.filter(company=company, is_active=True).count()

@@ -257,7 +257,7 @@ export type StockMovement = {
   purchase_order_number: string | null;
 };
 
-export type Warehouse = { id: number; name: string; code: string; location: string; project: number | null; project_name: string | null; is_default: boolean; is_active: boolean };
+export type Warehouse = { id: number; name: string; code: string; location: string; project: number | null; project_name: string | null; project_site?: number | null; is_default: boolean; is_active: boolean };
 export type BinLocation = { id: number; warehouse: number; warehouse_name: string; code: string; description: string; is_active: boolean };
 export type SiteTransfer = { id: number; project: number; project_name: string; material: number; material_name: string; source_warehouse: number; source_warehouse_name: string; destination_store: number; destination_store_name: string; quantity: string; status: 'DISPATCHED' | 'ACKNOWLEDGED'; reason: string; dispatched_by: number; dispatched_at: string; acknowledged_by: number | null; acknowledged_at: string | null; outbound_movement: number; inbound_movement: number | null };
 export type ProjectStaffAssignment = { id: number; project: number; project_name: string; user: number; username: string; user_name: string; role: 'MANAGER' | 'ENGINEER' | 'SITE_CONTACT'; is_primary_contact: boolean; allocation_percent: string; start_date: string | null; end_date: string | null; is_active: boolean };

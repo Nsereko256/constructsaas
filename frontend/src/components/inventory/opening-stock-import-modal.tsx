@@ -9,6 +9,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Field, inputClass } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
 import { formatNumber, formatUGX } from '@/lib/utils';
+import { ImportWarehouseSetup } from './import-warehouse-setup';
 
 function localDate() {
   const now = new Date();
@@ -104,6 +105,7 @@ export function OpeningStockImportModal({ open, onClose }: { open: boolean; onCl
               <Button variant="secondary" className="shrink-0" onClick={() => void downloadTemplate()}><Download className="h-4 w-4" />Download template</Button>
             </div>
 
+            {open ? <ImportWarehouseSetup onCreated={() => setPreview(null)} /> : null}
             <section aria-label="Excel import requirements" className="rounded-lg border border-border bg-white p-3">
               <div className="mb-2 flex items-start gap-2">
                 <FileSpreadsheet className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
